@@ -12,19 +12,20 @@ export default defineConfig({
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'Open Source Friday',
-        short_name: 'OSFriday',
-        description: 'Registrations for Open Source Friday',
-        theme_color: '#ffffff',
+        short_name: 'OS Friday',
+        description: 'Dashboard for Open Source Friday registrations',
+        theme_color: '#863bff',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: '/dos_logo.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: '/dos_logo.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       }
