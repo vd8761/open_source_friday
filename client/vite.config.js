@@ -14,15 +14,15 @@ export default defineConfig({
         name: 'Open Source Friday',
         short_name: 'OS Friday',
         description: 'Dashboard for Open Source Friday registrations',
-        theme_color: '#863bff',
+        theme_color: '#07a97b',
         icons: [
           {
-            src: '/dos_logo.png',
+            src: '/favicon.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/dos_logo.png',
+            src: '/favicon.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
