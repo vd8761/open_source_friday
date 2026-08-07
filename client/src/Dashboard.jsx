@@ -50,7 +50,8 @@ export default function Dashboard() {
     setChangingPassword(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await fetch('http://localhost:5000/api/change-password', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_URL}/api/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +94,8 @@ export default function Dashboard() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/episodes', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_URL}/api/episodes`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
