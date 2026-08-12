@@ -412,6 +412,26 @@ app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, asyn
   }
 });
 
+// Admin: Delete a registration for a specific episode (PROTECTED ROUTE)
+app.delete('/api/admin/episodes/:episode_id/registrations/:student_id', authenticateToken, async (req, res) => {
+  try {
+    const query = `
+      DELETE FROM episode_registrations 
+      WHERE episode_id = $1 AND student_id = $2
+      RETURNING *
+    `;
+    const result = await pool.query(query, [req.params.episode_id, req.params.student_id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Registration not found' });
+    }
+    
+    res.json({ success: true, message: 'Registration deleted successfully' });
+  } catch (error) {
+    console.error('Delete registration error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

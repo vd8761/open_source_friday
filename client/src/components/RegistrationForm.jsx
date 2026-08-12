@@ -211,7 +211,7 @@ const RegistrationForm = () => {
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full flex flex-col lg:flex-row gap-8 items-start">
 
         {/* Left Column - Episode Details */}
-        <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden sticky top-24">
+        <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden lg:sticky lg:top-24">
           <div className="h-48 bg-gradient-to-br from-dos to-dos-dark relative overflow-hidden flex items-center justify-center">
             <div className="h-64 sm:h-80 relative overflow-hidden bg-slate-900">
               {(!episodeDetails.is_active && episodeDetails.past_cover_photo_url) || episodeDetails.cover_photo_url ? (

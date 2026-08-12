@@ -145,6 +145,71 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteRegistration = async (studentId) => {
+    if (!window.confirm('Are you sure you want to delete this registration?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_URL}/api/admin/episodes/${activeEpisodeId}/registrations/${studentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        // Remove from state
+        setRegistrations(prev => prev.filter(r => r.id !== studentId));
+      } else {
+        alert(result.error || 'Failed to delete registration');
+      }
+    } catch (error) {
+      console.error('Failed to delete registration:', error);
+      alert('An error occurred while deleting.');
+    }
+  };
+
+  const handleDownloadCSV = () => {
+    if (registrations.length === 0) return;
+    
+    const headers = ['Full Name', 'Email', 'WhatsApp', 'Gender', 'College', 'Degree', 'Department', 'Year of Study', 'DOS Member', 'Topic', 'Registered At'];
+    
+    const csvRows = [headers.join(',')];
+    
+    registrations.forEach(row => {
+      const values = [
+        `"${row.full_name || ''}"`,
+        `"${row.email || ''}"`,
+        `"${row.whatsapp_number || ''}"`,
+        `"${row.gender || ''}"`,
+        `"${row.college || ''}"`,
+        `"${row.degree || ''}"`,
+        `"${row.department || ''}"`,
+        `"${row.year_of_study || ''}"`,
+        `"${row.is_dos_club_member || ''}"`,
+        `"${(row.excited_topic || '').replace(/"/g, '""')}"`,
+        `"${row.registered_at ? new Date(row.registered_at).toLocaleString() : ''}"`
+      ];
+      csvRows.push(values.join(','));
+    });
+    
+    const csvData = csvRows.join('\n');
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', `episode_${activeEpisode}_registrations.csv`);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   useEffect(() => {
     fetchEpisodes();
   }, []);
@@ -395,9 +460,18 @@ export default function Dashboard() {
                 </button>
                 <h3 className="text-lg font-bold text-slate-900">Episode {activeEpisode} Roster</h3>
               </div>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                {registrations.length} Participants
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleDownloadCSV}
+                  disabled={registrations.length === 0}
+                  className="inline-flex items-center px-3 py-1.5 border border-slate-200 shadow-sm text-xs font-bold rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Download CSV
+                </button>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                  {registrations.length} Participants
+                </span>
+              </div>
             </div>
             
             <div className="p-0">
@@ -411,7 +485,10 @@ export default function Dashboard() {
                   <p className="text-slate-500 font-medium">No registrations for this episode yet.</p>
                 </div>
               ) : (
-                <RegistrationTable data={registrations} />
+                <RegistrationTable 
+                  data={registrations} 
+                  onDeleteRegistration={handleDeleteRegistration} 
+                />
               )}
             </div>
           </div>

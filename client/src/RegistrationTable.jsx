@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Mail, GraduationCap, BookOpen, Phone, Search, UserX } from 'lucide-react';
+import { Mail, GraduationCap, BookOpen, Phone, Search, UserX, Trash2 } from 'lucide-react';
 
-export default function RegistrationTable({ data }) {
+export default function RegistrationTable({ data, onDeleteRegistration }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   if (!data || data.length === 0) {
@@ -53,6 +53,7 @@ export default function RegistrationTable({ data }) {
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Academic Info</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Interests & Club</th>
+              <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-slate-100">
@@ -112,6 +113,16 @@ export default function RegistrationTable({ data }) {
                         {row.excited_topic}
                       </div>
                     </div>
+                  </td>
+
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <button
+                      onClick={() => onDeleteRegistration && onDeleteRegistration(row.id)}
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="Delete Registration"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </td>
                 </tr>
               ))
