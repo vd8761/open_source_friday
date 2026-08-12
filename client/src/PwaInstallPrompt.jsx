@@ -50,10 +50,8 @@ const PwaInstallPrompt = () => {
         </button>
         
         <div className="flex items-start gap-4 mb-6 mt-2">
-          <div className="w-16 h-16 bg-dos rounded-[1.25rem] flex items-center justify-center flex-shrink-0 shadow-inner text-white">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
+          <div className="w-16 h-16 bg-white border border-slate-100 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 shadow-sm p-2">
+             <img src="/dos_logo.png" alt="DOS Logo" className="w-full h-full object-contain" />
           </div>
           <div className="pt-1">
             <h3 className="text-xl font-extrabold text-slate-900 mb-1 tracking-tight">Install App</h3>
