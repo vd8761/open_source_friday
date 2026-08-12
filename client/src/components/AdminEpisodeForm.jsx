@@ -488,7 +488,7 @@ const AdminEpisodeForm = () => {
                   <textarea
                     name="meta_description"
                     value={formData.meta_description}
-                    onChange={handleInputChange}
+                    onChange={handleChange}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos focus:border-dos transition-all outline-none resize-none"
                     rows="2"
                     placeholder="E.g., Join our Open Source Friday session on AI Leadership and discover how to advance your career..."
