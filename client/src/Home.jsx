@@ -39,14 +39,7 @@ const Home = () => {
               </h1>
             </div>
             
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/login')}
-                className="flex items-center justify-center px-4 py-2 border border-slate-200 shadow-sm text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95"
-              >
-                Admin Login
-              </button>
-            </div>
+
           </div>
         </div>
       </nav>
