@@ -33,7 +33,8 @@ const AdminEpisodeForm = () => {
     description: '',
     presenter_name: '',
     presenter_designation: '',
-    presenter_photo_url: ''
+    presenter_photo_url: '',
+    cover_photo_url: ''
   });
   const [eventDate, setEventDate] = useState(null);
   const [startTime, setStartTime] = useState(null);
@@ -64,7 +65,8 @@ const AdminEpisodeForm = () => {
               description: ep.description,
               presenter_name: ep.presenter_name,
               presenter_designation: ep.presenter_designation,
-              presenter_photo_url: ep.presenter_photo_url || ''
+              presenter_photo_url: ep.presenter_photo_url || '',
+              cover_photo_url: ep.cover_photo_url || ''
             });
             if (ep.event_date) setEventDate(new Date(ep.event_date));
             if (ep.event_time) {
@@ -87,19 +89,20 @@ const AdminEpisodeForm = () => {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [isCropping, setIsCropping] = useState(false);
-
+  const [croppingType, setCroppingType] = useState('none'); // 'profile' or 'cover'
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
   };
 
-  const handlePhotoChange = (e) => {
+  const handlePhotoChange = (e, type) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       const reader = new FileReader();
       reader.addEventListener('load', () => {
         setImageSrc(reader.result);
+        setCroppingType(type);
         setIsCropping(true);
       });
       reader.readAsDataURL(file);
@@ -113,19 +116,27 @@ const AdminEpisodeForm = () => {
   const showCroppedImage = useCallback(async () => {
     try {
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
-      setFormData(prev => ({ ...prev, presenter_photo_url: croppedImage }));
+      setFormData(prev => ({ 
+        ...prev, 
+        [croppingType === 'profile' ? 'presenter_photo_url' : 'cover_photo_url']: croppedImage 
+      }));
       setIsCropping(false);
       setImageSrc(null);
+      setCroppingType('none');
     } catch (e) {
       console.error(e);
       alert('Failed to crop image.');
     }
-  }, [imageSrc, croppedAreaPixels, formData]);
+  }, [imageSrc, croppedAreaPixels, formData, croppingType]);
 
   const cancelCrop = () => {
     setIsCropping(false);
     setImageSrc(null);
-    document.getElementById('photo-upload').value = '';
+    setCroppingType('none');
+    const el1 = document.getElementById('photo-upload');
+    const el2 = document.getElementById('cover-upload');
+    if (el1) el1.value = '';
+    if (el2) el2.value = '';
   };
 
   const handleNext = () => {
@@ -211,9 +222,6 @@ const AdminEpisodeForm = () => {
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 cursor-pointer" onClick={() => navigate('/dashboard')}>
               <img src="/dos_logo.png" alt="DOS Logo" className="h-8 sm:h-10 w-auto object-contain drop-shadow-sm" />
-              <h1 className="hidden sm:block text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-dos to-dos-dark whitespace-nowrap">
-                Open Source Friday
-              </h1>
             </div>
             
             <div className="flex items-center gap-4">
@@ -236,15 +244,15 @@ const AdminEpisodeForm = () => {
           {isCropping && (
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 flex flex-col animate-in fade-in zoom-in-95 duration-200">
-                <h3 className="text-xl font-bold mb-4 text-slate-900">Crop Profile Picture</h3>
+                <h3 className="text-xl font-bold mb-4 text-slate-900">Crop {croppingType === 'profile' ? 'Profile Picture' : 'Cover Photo'}</h3>
                 <div className="relative w-full h-64 sm:h-96 bg-slate-900 rounded-xl overflow-hidden mb-4">
                   <Cropper
                     image={imageSrc}
                     crop={crop}
                     zoom={zoom}
-                    aspect={1}
-                    cropShape="round"
-                    showGrid={false}
+                    aspect={croppingType === 'profile' ? 1 : 16 / 9}
+                    cropShape={croppingType === 'profile' ? "round" : "rect"}
+                    showGrid={croppingType === 'cover'}
                     onCropChange={setCrop}
                     onCropComplete={onCropComplete}
                     onZoomChange={setZoom}
@@ -403,30 +411,44 @@ const AdminEpisodeForm = () => {
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos focus:border-dos transition-all outline-none text-slate-700" />
                   </div>
                 </div>
-                <div className="mt-6">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Photo</label>
-                  
-                  {!formData.presenter_photo_url || isCropping ? (
-                    <div className="relative border-2 border-dashed border-slate-300 rounded-2xl hover:border-dos hover:bg-slate-50/50 transition-all bg-slate-50 flex justify-center items-center overflow-hidden p-8">
-                      <input type="file" id="photo-upload" accept="image/*" onChange={handlePhotoChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                      <div className="text-center pointer-events-none">
-                        <svg className="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <p className="mt-3 text-sm font-bold text-dos">Click to upload <span className="font-medium text-slate-500">or drag and drop</span></p>
-                        <p className="text-xs text-slate-500 mt-1">PNG, JPG, GIF up to 5MB</p>
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Profile Photo */}
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Profile Photo</label>
+                    {!formData.presenter_photo_url || (isCropping && croppingType === 'profile') ? (
+                      <div className="relative border-2 border-dashed border-slate-300 rounded-2xl hover:border-dos hover:bg-slate-50/50 transition-all bg-slate-50 flex justify-center items-center overflow-hidden p-8 h-48">
+                        <input type="file" id="photo-upload" accept="image/*" onChange={(e) => handlePhotoChange(e, 'profile')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                        <div className="text-center pointer-events-none">
+                          <svg className="mx-auto h-8 w-8 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          <p className="mt-2 text-xs font-bold text-dos">Profile Photo (1:1)</p>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="relative group p-6 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center justify-center">
-                      <div className="relative">
-                        <img src={formData.presenter_photo_url} alt="Preview" className="w-32 h-32 rounded-full object-cover shadow-lg border-4 border-white" />
+                    ) : (
+                      <div className="relative group p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center justify-center h-48">
+                        <img src={formData.presenter_photo_url} alt="Profile" className="w-24 h-24 rounded-full object-cover shadow-md border-4 border-white" />
+                        <button type="button" onClick={() => { setFormData(prev => ({...prev, presenter_photo_url: ''})); setTimeout(() => { const el = document.getElementById('photo-upload'); if(el) el.value = ''; }, 0); }} className="mt-3 px-4 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 transition-colors">Change Photo</button>
                       </div>
-                      <button type="button" onClick={() => { setFormData(prev => ({...prev, presenter_photo_url: ''})); setTimeout(() => { const el = document.getElementById('photo-upload'); if(el) el.value = ''; }, 0); }} className="mt-4 px-5 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 transition-colors">
-                        Change Photo
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
+
+                  {/* Cover Photo */}
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Cover Photo</label>
+                    {!formData.cover_photo_url || (isCropping && croppingType === 'cover') ? (
+                      <div className="relative border-2 border-dashed border-slate-300 rounded-2xl hover:border-dos hover:bg-slate-50/50 transition-all bg-slate-50 flex justify-center items-center overflow-hidden p-8 h-48">
+                        <input type="file" id="cover-upload" accept="image/*" onChange={(e) => handlePhotoChange(e, 'cover')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                        <div className="text-center pointer-events-none">
+                          <svg className="mx-auto h-8 w-8 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          <p className="mt-2 text-xs font-bold text-dos">Cover Photo (16:9)</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative group p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center justify-center h-48">
+                        <img src={formData.cover_photo_url} alt="Cover" className="w-full h-24 rounded-lg object-cover shadow-md border-4 border-white" />
+                        <button type="button" onClick={() => { setFormData(prev => ({...prev, cover_photo_url: ''})); setTimeout(() => { const el = document.getElementById('cover-upload'); if(el) el.value = ''; }, 0); }} className="mt-3 px-4 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 transition-colors">Change Cover</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

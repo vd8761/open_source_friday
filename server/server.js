@@ -28,6 +28,9 @@ async function initDB() {
       )
     `);
 
+    // Ensure the episodes table has the cover_photo_url column
+    await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS cover_photo_url TEXT`);
+
     // Check if any admin exists
     const result = await pool.query('SELECT COUNT(*) FROM admins');
     if (parseInt(result.rows[0].count) === 0) {
@@ -139,14 +142,25 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
 
 // Lookup Student Endpoint
 app.post('/api/students/lookup', async (req, res) => {
-  const { identifier } = req.body; // Can be email or whatsapp_number
+  const { identifier, episode_id } = req.body; // Can be email or whatsapp_number
   try {
     const result = await pool.query(
       'SELECT id, full_name, email, whatsapp_number FROM students WHERE email = $1 OR whatsapp_number = $1',
       [identifier]
     );
     if (result.rows.length > 0) {
-      res.json({ success: true, student: result.rows[0] });
+      const student = result.rows[0];
+      let already_registered = false;
+      
+      if (episode_id) {
+        const regCheck = await pool.query(
+          'SELECT id FROM episode_registrations WHERE student_id = $1 AND episode_id = $2',
+          [student.id, episode_id]
+        );
+        already_registered = regCheck.rows.length > 0;
+      }
+      
+      res.json({ success: true, student, already_registered });
     } else {
       res.json({ success: false, message: 'Student not found' });
     }
@@ -158,16 +172,16 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Admin: Create Episode (Protected)
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url } = req.body;
+  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url } = req.body;
   
   try {
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      (episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `;
-    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url];
+    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url];
     const result = await pool.query(query, values);
     res.status(201).json({ success: true, episode: result.rows[0] });
   } catch (error) {
@@ -178,17 +192,17 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode (Protected)
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url } = req.body;
+  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url } = req.body;
   const { id } = req.params;
   
   try {
     const query = `
       UPDATE episodes 
-      SET episode_number = $1, title = $2, description = $3, event_date = $4, event_time = $5, presenter_name = $6, presenter_designation = $7, presenter_photo_url = $8
-      WHERE id = $9
+      SET episode_number = $1, title = $2, description = $3, event_date = $4, event_time = $5, presenter_name = $6, presenter_designation = $7, presenter_photo_url = $8, cover_photo_url = $9
+      WHERE id = $10
       RETURNING *
     `;
-    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, id];
+    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, id];
     const result = await pool.query(query, values);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Episode not found' });
@@ -219,9 +233,8 @@ app.get('/api/admin/episodes/:id', authenticateToken, async (req, res) => {
 app.get('/api/episodes', async (req, res) => {
   try {
     const query = `
-      SELECT id, episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url
+      SELECT id, episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, is_active
       FROM episodes 
-      WHERE is_active = TRUE
       ORDER BY episode_number DESC
     `;
     const result = await pool.query(query);
@@ -264,15 +277,34 @@ app.post('/api/register', async (req, res) => {
     let currentStudentId = student_id;
 
     if (!is_existing) {
-      // Create new student
-      const studentQuery = `
-        INSERT INTO students (email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING id
-      `;
-      const studentValues = [email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic];
-      const studentResult = await pool.query(studentQuery, studentValues);
-      currentStudentId = studentResult.rows[0].id;
+      // Check if student actually already exists by email or whatsapp
+      const existingCheck = await pool.query('SELECT id FROM students WHERE email = $1 OR whatsapp_number = $2', [email, whatsapp_number]);
+      
+      if (existingCheck.rows.length > 0) {
+        // Auto-link existing student
+        currentStudentId = existingCheck.rows[0].id;
+      } else {
+        // Create new student
+        const studentQuery = `
+          INSERT INTO students (email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          RETURNING id
+        `;
+        const studentValues = [email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic];
+        const studentResult = await pool.query(studentQuery, studentValues);
+        currentStudentId = studentResult.rows[0].id;
+      }
+    }
+
+    // Check for duplicate registration before inserting
+    const duplicateCheck = await pool.query(
+      'SELECT id FROM episode_registrations WHERE student_id = $1 AND episode_id = $2',
+      [currentStudentId, episode_id]
+    );
+
+    if (duplicateCheck.rows.length > 0) {
+      await pool.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: 'You are already registered for this episode.' });
     }
 
     // Register for episode

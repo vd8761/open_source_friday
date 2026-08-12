@@ -4,7 +4,8 @@ import { Calendar, Clock, User, CheckCircle2, ChevronRight, ArrowLeft } from 'lu
 import 'react-quill-new/dist/quill.snow.css';
 
 const RegistrationForm = () => {
-  const { episode_number: episodeNumber } = useParams();
+  const { episode_number: episodeParam } = useParams();
+  const episodeNumber = episodeParam ? (episodeParam.startsWith('episode-') ? episodeParam.replace('episode-', '') : episodeParam) : null;
   const navigate = useNavigate();
 
   const [episodeDetails, setEpisodeDetails] = useState(null);
@@ -57,21 +58,45 @@ const RegistrationForm = () => {
     fetchEpisode();
   }, [episodeNumber]);
 
+  const [registerError, setRegisterError] = useState('');
+  const [lookupError, setLookupError] = useState('');
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setStudentData(prev => ({ ...prev, [name]: value }));
+    setRegisterError('');
+  };
+
+  const handleIdentifierChange = (e) => {
+    setIdentifier(e.target.value);
+    setLookupError('');
+  };
+
   const handleLookup = async (e) => {
     e.preventDefault();
     if (!identifier) return;
     setIsSubmitting(true);
+    setLookupError('');
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const res = await fetch(`${API_URL}/api/students/lookup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier })
+        body: JSON.stringify({ 
+          identifier,
+          episode_id: episodeDetails?.id 
+        })
       });
       const data = await res.json();
 
       if (data.success) {
+        if (data.already_registered) {
+          setLookupError('You are already registered for this episode!');
+          setIsSubmitting(false);
+          return;
+        }
+
         setStudentFound(true);
         setStudentData(data.student);
         if (identifier.includes('@')) {
@@ -101,20 +126,18 @@ const RegistrationForm = () => {
       }
       setStep(2);
     } catch (err) {
-      alert('Error looking up student');
+      setLookupError('Error looking up student');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setStudentData(prev => ({ ...prev, [name]: value }));
-  };
+
 
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
     setIsSubmitting(true);
+    setRegisterError('');
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const res = await fetch(`${API_URL}/api/register`, {
@@ -132,10 +155,10 @@ const RegistrationForm = () => {
       if (data.success) {
         setStep(3);
       } else {
-        alert(data.error || 'Registration failed');
+        setRegisterError(data.error || 'Registration failed');
       }
     } catch (err) {
-      alert('Error submitting registration');
+      setRegisterError('Error submitting registration');
     } finally {
       setIsSubmitting(false);
     }
@@ -172,9 +195,6 @@ const RegistrationForm = () => {
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 cursor-pointer" onClick={() => navigate('/')}>
               <img src="/dos_logo.png" alt="DOS Logo" className="h-8 sm:h-10 w-auto object-contain drop-shadow-sm" />
-              <h1 className="hidden sm:block text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-dos to-dos-dark whitespace-nowrap">
-                Open Source Friday
-              </h1>
             </div>
 
             <button
@@ -194,11 +214,11 @@ const RegistrationForm = () => {
         <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden sticky top-24">
           <div className="h-48 bg-gradient-to-br from-dos to-dos-dark relative overflow-hidden flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40 z-10"></div>
-            {episodeDetails.presenter_photo_url ? (
+            {episodeDetails.cover_photo_url ? (
               <img
-                src={episodeDetails.presenter_photo_url}
-                alt={episodeDetails.presenter_name}
-                className="w-full h-full object-cover opacity-80"
+                src={episodeDetails.cover_photo_url}
+                alt={episodeDetails.title}
+                className="w-full h-full object-cover"
               />
             ) : (
               <User className="h-20 w-20 text-white/50 z-20" />
@@ -245,8 +265,8 @@ const RegistrationForm = () => {
             <div className="w-full">
               <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">About this Episode</h4>
               <div
-                className="prose prose-sm max-w-none text-slate-600 w-full [&_*]:!whitespace-normal [&_*]:!break-words [&_p]:!mb-4"
-                dangerouslySetInnerHTML={{ __html: episodeDetails.description }}
+                className="editor-content text-slate-600 w-full break-words text-justify"
+                dangerouslySetInnerHTML={{ __html: episodeDetails.description ? episodeDetails.description.replace(/&nbsp;/g, ' ') : '' }}
               />
             </div>
           </div>
@@ -301,6 +321,11 @@ const RegistrationForm = () => {
                     {isSubmitting ? 'Checking...' : 'Continue'}
                     {!isSubmitting && <ChevronRight className="ml-2 h-5 w-5" />}
                   </button>
+                  {lookupError && (
+                    <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-100 text-center">
+                      {lookupError}
+                    </div>
+                  )}
                 </form>
               </div>
             )}
@@ -328,6 +353,11 @@ const RegistrationForm = () => {
                     {isSubmitting ? 'Confirming...' : 'Confirm Registration'}
                   </button>
                 </div>
+                {registerError && (
+                  <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-100">
+                    {registerError}
+                  </div>
+                )}
               </div>
             )}
 
@@ -419,11 +449,17 @@ const RegistrationForm = () => {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="sm:w-2/3 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-dos hover:bg-dos-dark transition-all disabled:opacity-70"
+                      className="w-full py-4 px-4 border border-transparent rounded-xl shadow-sm text-base font-bold text-white bg-dos hover:bg-dos-dark transition-all disabled:opacity-70"
                     >
-                      {isSubmitting ? 'Submitting...' : 'Complete Registration'}
+                      {isSubmitting ? 'Registering...' : 'Complete Registration'}
                     </button>
                   </div>
+
+                  {registerError && (
+                    <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-100 text-center">
+                      {registerError}
+                    </div>
+                  )}
                 </form>
               </div>
             )}
