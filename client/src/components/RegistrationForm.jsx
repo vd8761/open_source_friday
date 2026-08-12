@@ -60,11 +60,15 @@ const RegistrationForm = () => {
 
   const [registerError, setRegisterError] = useState('');
   const [lookupError, setLookupError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setStudentData(prev => ({ ...prev, [name]: value }));
     setRegisterError('');
+    if (validationErrors[name]) {
+      setValidationErrors(prev => ({ ...prev, [name]: null }));
+    }
   };
 
   const handleIdentifierChange = (e) => {
@@ -134,8 +138,44 @@ const RegistrationForm = () => {
 
 
 
+  const validateForm = () => {
+    const errors = {};
+    const requiredFields = [
+      { key: 'full_name', label: 'Full Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'whatsapp_number', label: 'WhatsApp Number' },
+      { key: 'gender', label: 'Gender' },
+      { key: 'college', label: 'College Name' },
+      { key: 'degree', label: 'Degree' },
+      { key: 'department', label: 'Department / Branch' },
+      { key: 'year_of_study', label: 'Year of Study' },
+      { key: 'is_dos_club_member', label: 'DOS CLUB member' },
+      { key: 'excited_topic', label: 'Excited topic' }
+    ];
+    
+    requiredFields.forEach(field => {
+      if (!studentData[field.key] || studentData[field.key].trim() === '') {
+        errors[field.key] = 'This field is required';
+      }
+    });
+
+    if (studentData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
+    
+    if (step === 2 && !studentFound) {
+      if (!validateForm()) {
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setRegisterError('');
     try {
@@ -392,54 +432,61 @@ const RegistrationForm = () => {
                 <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Tell us about yourself</h3>
                 <p className="text-slate-500 mb-8">We need a few details to complete your profile.</p>
 
-                <form onSubmit={handleRegister} className="space-y-5">
+                <form onSubmit={handleRegister} className="space-y-5" noValidate>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
-                    <input type="text" name="full_name" value={studentData.full_name} onChange={handleFormChange} placeholder="e.g. John Doe" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required />
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Full Name<span className="text-red-500 ml-1">*</span></label>
+                    <input type="text" name="full_name" value={studentData.full_name} onChange={handleFormChange} placeholder="e.g. John Doe" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.full_name ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                    {validationErrors.full_name && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.full_name}</p>}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
-                      <input type="email" name="email" value={studentData.email} onChange={handleFormChange} placeholder="e.g. john@example.com" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required />
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Email<span className="text-red-500 ml-1">*</span></label>
+                      <input type="email" name="email" value={studentData.email} onChange={handleFormChange} placeholder="e.g. john@example.com" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.email ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      {validationErrors.email && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.email}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp Number</label>
-                      <input type="text" name="whatsapp_number" value={studentData.whatsapp_number} onChange={handleFormChange} placeholder="e.g. 9876543210" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required />
+                      <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp Number<span className="text-red-500 ml-1">*</span></label>
+                      <input type="text" name="whatsapp_number" value={studentData.whatsapp_number} onChange={handleFormChange} placeholder="e.g. 9876543210" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.whatsapp_number ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      {validationErrors.whatsapp_number && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.whatsapp_number}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Gender</label>
-                      <select name="gender" value={studentData.gender} onChange={handleFormChange} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Gender<span className="text-red-500 ml-1">*</span></label>
+                      <select name="gender" value={studentData.gender} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.gender ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}>
                         <option value="">Select...</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                         <option value="Other">Other</option>
                       </select>
+                      {validationErrors.gender && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.gender}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">College Name</label>
-                      <input type="text" name="college" value={studentData.college} onChange={handleFormChange} placeholder="e.g. Descience Institute of Technology" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Degree</label>
-                      <input type="text" name="degree" value={studentData.degree} onChange={handleFormChange} placeholder="e.g. B.Tech" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Department / Branch</label>
-                      <input type="text" name="department" placeholder="e.g. Computer Science" value={studentData.department} onChange={handleFormChange} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required />
+                      <label className="block text-sm font-bold text-slate-700 mb-1">College Name<span className="text-red-500 ml-1">*</span></label>
+                      <input type="text" name="college" value={studentData.college} onChange={handleFormChange} placeholder="e.g. Descience Institute of Technology" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.college ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      {validationErrors.college && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.college}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Year of Study</label>
-                      <select name="year_of_study" value={studentData.year_of_study} onChange={handleFormChange} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Degree<span className="text-red-500 ml-1">*</span></label>
+                      <input type="text" name="degree" value={studentData.degree} onChange={handleFormChange} placeholder="e.g. B.Tech" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.degree ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      {validationErrors.degree && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.degree}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Department / Branch<span className="text-red-500 ml-1">*</span></label>
+                      <input type="text" name="department" placeholder="e.g. Computer Science" value={studentData.department} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.department ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      {validationErrors.department && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.department}</p>}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Year of Study<span className="text-red-500 ml-1">*</span></label>
+                      <select name="year_of_study" value={studentData.year_of_study} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.year_of_study ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}>
                         <option value="">Select...</option>
                         <option value="1st Year">1st Year</option>
                         <option value="2nd Year">2nd Year</option>
@@ -447,20 +494,23 @@ const RegistrationForm = () => {
                         <option value="4th Year">4th Year</option>
                         <option value="Passed Out">Passed Out</option>
                       </select>
+                      {validationErrors.year_of_study && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.year_of_study}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Are you a DOS CLUB member?</label>
-                      <select name="is_dos_club_member" value={studentData.is_dos_club_member} onChange={handleFormChange} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Are you a DOS CLUB member?<span className="text-red-500 ml-1">*</span></label>
+                      <select name="is_dos_club_member" value={studentData.is_dos_club_member} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.is_dos_club_member ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}>
                         <option value="">Select...</option>
                         <option value="Yes">Yes</option>
                         <option value="No">No</option>
                       </select>
+                      {validationErrors.is_dos_club_member && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.is_dos_club_member}</p>}
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">What tech stack or topic are you currently most excited about?</label>
-                    <textarea name="excited_topic" value={studentData.excited_topic} onChange={handleFormChange} rows="2" placeholder="e.g. Artificial Intelligence, Web Development" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" required></textarea>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">What tech stack or topic are you currently most excited about?<span className="text-red-500 ml-1">*</span></label>
+                    <textarea name="excited_topic" value={studentData.excited_topic} onChange={handleFormChange} rows="2" placeholder="e.g. Artificial Intelligence, Web Development" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.excited_topic ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}></textarea>
+                    {validationErrors.excited_topic && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.excited_topic}</p>}
                   </div>
 
                   <div className="pt-4 flex flex-col sm:flex-row gap-4">
