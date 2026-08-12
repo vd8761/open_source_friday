@@ -48,11 +48,11 @@ const Home = () => {
       <div className="h-48 relative">
         {/* Background Image Container */}
         <div className="absolute inset-0 overflow-hidden rounded-t-2xl">
-          {episode.cover_photo_url ? (
+          {(isCompleted && episode.past_cover_photo_url) || episode.cover_photo_url ? (
             <img 
-              src={episode.cover_photo_url} 
+              src={isCompleted && episode.past_cover_photo_url ? episode.past_cover_photo_url : episode.cover_photo_url} 
               alt={episode.title} 
-              className={`w-full h-full object-cover transition-transform duration-500 ${isCompleted ? '' : 'group-hover:scale-105'}`}
+              className={`w-full h-full object-cover transition-all duration-500 ${isCompleted && !episode.past_cover_photo_url ? 'grayscale opacity-80' : isCompleted ? '' : 'group-hover:scale-105'}`}
             />
           ) : (
             <div className={`w-full h-full flex items-center justify-center ${isCompleted ? 'bg-slate-200' : 'bg-gradient-to-br from-dos to-dos-dark'}`}>

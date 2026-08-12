@@ -49,7 +49,18 @@ export default async function handler(req, res) {
       const rawDescription = ep.description ? ep.description.replace(/<[^>]*>?/gm, '') : '';
       const description = rawDescription.substring(0, 160) + (rawDescription.length > 160 ? '...' : '');
       
-      const imageUrl = ep.cover_photo_url || ep.presenter_photo_url || 'https://osf.descienceosclub.com/dos_logo.png';
+      // Set image URL to the new dynamic backend endpoint that serves the binary image
+      // WhatsApp and other social media scrapers do not support Base64 images in og:image
+      let imageUrl = 'https://osf.descienceosclub.com/dos_logo.png';
+      if (ep.cover_photo_url) {
+        imageUrl = `${API_URL}/api/episodes/${ep.episode_number}/cover`;
+      } else if (ep.presenter_photo_url) {
+        // Fallback to presenter photo if they have one but no cover
+        // (Assuming presenter photo isn't Base64 either, or if it is we might need an endpoint for it too)
+        imageUrl = ep.presenter_photo_url.startsWith('data:image') 
+          ? 'https://osf.descienceosclub.com/dos_logo.png' 
+          : ep.presenter_photo_url;
+      }
       
       // String replace the meta tags
       html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);

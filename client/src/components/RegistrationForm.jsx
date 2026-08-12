@@ -213,16 +213,17 @@ const RegistrationForm = () => {
         {/* Left Column - Episode Details */}
         <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden sticky top-24">
           <div className="h-48 bg-gradient-to-br from-dos to-dos-dark relative overflow-hidden flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40 z-10"></div>
-            {episodeDetails.cover_photo_url ? (
-              <img
-                src={episodeDetails.cover_photo_url}
-                alt={episodeDetails.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <User className="h-20 w-20 text-white/50 z-20" />
-            )}
+            <div className="h-64 sm:h-80 relative overflow-hidden bg-slate-900">
+              {(!episodeDetails.is_active && episodeDetails.past_cover_photo_url) || episodeDetails.cover_photo_url ? (
+                <img 
+                  src={(!episodeDetails.is_active && episodeDetails.past_cover_photo_url) ? episodeDetails.past_cover_photo_url : episodeDetails.cover_photo_url} 
+                  alt={episodeDetails.title} 
+                  className={`w-full h-full object-cover transition-all duration-700 ${!episodeDetails.is_active && !episodeDetails.past_cover_photo_url ? 'grayscale opacity-75 mix-blend-luminosity' : ''}`}
+                />
+              ) : (
+                <User className="h-20 w-20 text-white/50 z-20" />
+              )}
+            </div>
             <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-dos shadow-sm">
               Episode {episodeDetails.episode_number}
             </div>
@@ -276,31 +277,53 @@ const RegistrationForm = () => {
         <div className="w-full lg:w-2/3">
           <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 sm:p-10 relative overflow-hidden">
             {/* Step Indicators */}
-            <div className="flex items-center justify-between mb-10 relative z-10">
-              {[1, 2, 3].map((s) => (
-                <div key={s} className="flex flex-col items-center flex-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${step >= s ? 'bg-dos text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>
-                    {s === 3 && step === 3 ? <CheckCircle2 className="h-5 w-5" /> : s}
+            {episodeDetails.is_active && (
+              <div className="flex items-center justify-between mb-10 relative z-10">
+                {[1, 2, 3].map((s) => (
+                  <div key={s} className="flex flex-col items-center flex-1">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${step >= s ? 'bg-dos text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>
+                      {s === 3 && step === 3 ? <CheckCircle2 className="h-5 w-5" /> : s}
+                    </div>
+                    <span className={`text-xs mt-2 font-medium ${step >= s ? 'text-dos' : 'text-slate-400'}`}>
+                      {s === 1 ? 'Identify' : s === 2 ? 'Details' : 'Done'}
+                    </span>
                   </div>
-                  <span className={`text-xs mt-2 font-medium ${step >= s ? 'text-dos' : 'text-slate-400'}`}>
-                    {s === 1 ? 'Identify' : s === 2 ? 'Details' : 'Done'}
-                  </span>
+                ))}
+                {/* Connecting Lines */}
+                <div className="absolute top-5 left-[15%] right-[15%] h-[2px] bg-slate-100 -z-10">
+                  <div
+                    className="h-full bg-dos transition-all duration-500"
+                    style={{ width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }}
+                  ></div>
                 </div>
-              ))}
-              {/* Connecting Lines */}
-              <div className="absolute top-5 left-[15%] right-[15%] h-[2px] bg-slate-100 -z-10">
-                <div
-                  className="h-full bg-dos transition-all duration-500"
-                  style={{ width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }}
-                ></div>
               </div>
-            </div>
+            )}
 
-            {/* Step 1: Lookup */}
+            {/* Step 1: Lookup or Inactive Message */}
             {step === 1 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Welcome! Let's get started.</h3>
-                <p className="text-slate-500 mb-8">Enter your email or WhatsApp number to begin registration.</p>
+                {!episodeDetails.is_active ? (
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-3">Episode Concluded</h3>
+                    <p className="text-slate-500 mb-8 max-w-md mx-auto">
+                      Registration is closed because this episode has already been completed. Thank you for your interest!
+                    </p>
+                    <button
+                      onClick={() => navigate('/')}
+                      className="inline-flex items-center justify-center py-3 px-6 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
+                    >
+                      Browse Upcoming Episodes
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Welcome! Let's get started.</h3>
+                    <p className="text-slate-500 mb-8">Enter your email or WhatsApp number to begin registration.</p>
                 <form onSubmit={handleLookup} className="space-y-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">Email or WhatsApp Number</label>
@@ -327,6 +350,8 @@ const RegistrationForm = () => {
                     </div>
                   )}
                 </form>
+                </>
+                )}
               </div>
             )}
 

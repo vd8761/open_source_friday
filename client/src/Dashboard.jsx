@@ -329,8 +329,10 @@ export default function Dashboard() {
                             #{episode.episode_number}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-bold text-slate-900">{episode.title}</div>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-bold text-slate-900 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg line-clamp-2" title={episode.title}>
+                            {episode.title}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm font-medium text-slate-900">

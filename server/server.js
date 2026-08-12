@@ -172,16 +172,16 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Admin: Create Episode (Protected)
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url } = req.body;
+  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
   
   try {
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      (episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
-    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url];
+    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url];
     const result = await pool.query(query, values);
     res.status(201).json({ success: true, episode: result.rows[0] });
   } catch (error) {
@@ -192,17 +192,17 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode (Protected)
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url } = req.body;
+  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
   const { id } = req.params;
   
   try {
     const query = `
       UPDATE episodes 
-      SET episode_number = $1, title = $2, description = $3, event_date = $4, event_time = $5, presenter_name = $6, presenter_designation = $7, presenter_photo_url = $8, cover_photo_url = $9
-      WHERE id = $10
+      SET episode_number = $1, title = $2, description = $3, event_date = $4, event_time = $5, presenter_name = $6, presenter_designation = $7, presenter_photo_url = $8, cover_photo_url = $9, past_cover_photo_url = $10
+      WHERE id = $11
       RETURNING *
     `;
-    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, id];
+    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, id];
     const result = await pool.query(query, values);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Episode not found' });
@@ -248,14 +248,57 @@ app.get('/api/episodes', async (req, res) => {
 // Public: Get specific episode details
 app.get('/api/episodes/:episode_number', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM episodes WHERE episode_number = $1 AND is_active = TRUE', [req.params.episode_number]);
+    let episodeNum = req.params.episode_number;
+    if (episodeNum.startsWith('episode-')) {
+      episodeNum = episodeNum.replace('episode-', '');
+    }
+    
+    const result = await pool.query('SELECT * FROM episodes WHERE episode_number = $1', [episodeNum]);
     if (result.rows.length > 0) {
       res.json({ success: true, episode: result.rows[0] });
     } else {
-      res.status(404).json({ success: false, error: 'Episode not found or inactive' });
+      res.status(404).json({ success: false, error: 'Episode not found' });
     }
   } catch (error) {
     console.error('Fetch episode error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Public: Get specific episode cover image (for Open Graph Social Media Previews)
+app.get('/api/episodes/:episode_number/cover', async (req, res) => {
+  try {
+    let episodeNum = req.params.episode_number;
+    if (episodeNum.startsWith('episode-')) {
+      episodeNum = episodeNum.replace('episode-', '');
+    }
+    
+    const result = await pool.query('SELECT cover_photo_url FROM episodes WHERE episode_number = $1', [episodeNum]);
+    if (result.rows.length > 0 && result.rows[0].cover_photo_url) {
+      const coverUrl = result.rows[0].cover_photo_url;
+      
+      // If it's a Base64 string, parse and serve it as binary
+      if (coverUrl.startsWith('data:image')) {
+        const matches = coverUrl.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const type = matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          res.setHeader('Content-Type', `image/${type}`);
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(buffer);
+        }
+      }
+      
+      // If it's a regular URL, just redirect to it
+      if (coverUrl.startsWith('http')) {
+        return res.redirect(coverUrl);
+      }
+    }
+    
+    // Default fallback if no cover image is found
+    res.status(404).json({ success: false, error: 'Cover photo not found' });
+  } catch (error) {
+    console.error('Fetch episode cover error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -272,6 +315,12 @@ app.post('/api/register', async (req, res) => {
   } = req.body;
 
   try {
+    // Check if episode is active
+    const epCheck = await pool.query('SELECT is_active FROM episodes WHERE id = $1', [episode_id]);
+    if (epCheck.rows.length === 0 || !epCheck.rows[0].is_active) {
+      return res.status(400).json({ success: false, error: 'Registration is closed for this episode.' });
+    }
+
     await pool.query('BEGIN');
 
     let currentStudentId = student_id;
