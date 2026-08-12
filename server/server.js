@@ -7,7 +7,8 @@ require('dotenv').config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -136,66 +137,196 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
   }
 });
 
-// Webhook to receive data from Google Apps Script
-app.post('/api/webhook', async (req, res) => {
+// Lookup Student Endpoint
+app.post('/api/students/lookup', async (req, res) => {
+  const { identifier } = req.body; // Can be email or whatsapp_number
   try {
-    // Security Check: Verify the secret token
-    const authHeader = req.headers['x-webhook-secret'];
-    if (!process.env.WEBHOOK_SECRET || authHeader !== process.env.WEBHOOK_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized: Invalid webhook secret' });
+    const result = await pool.query(
+      'SELECT id, full_name, email, whatsapp_number FROM students WHERE email = $1 OR whatsapp_number = $1',
+      [identifier]
+    );
+    if (result.rows.length > 0) {
+      res.json({ success: true, student: result.rows[0] });
+    } else {
+      res.json({ success: false, message: 'Student not found' });
     }
+  } catch (error) {
+    console.error('Lookup error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
 
-    const {
-      timestamp, email, full_name, gender, college,
-      year_of_study, department, whatsapp_number,
-      is_dos_club_member, excited_topic, degree
-    } = req.body;
-
-    if (!timestamp || !email) {
-      return res.status(400).json({ error: 'Timestamp and email are required' });
-    }
-
-    const episode_number = getEpisodeNumber(timestamp);
-
+// Admin: Create Episode (Protected)
+app.post('/api/episodes', authenticateToken, async (req, res) => {
+  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url } = req.body;
+  
+  try {
     const query = `
-      INSERT INTO registrations 
-      (timestamp, email, full_name, gender, college, year_of_study, department, whatsapp_number, is_dos_club_member, excited_topic, degree, episode_number) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING id
+      INSERT INTO episodes 
+      (episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
     `;
-    
-    const values = [
-      new Date(timestamp), email, full_name, gender, college, year_of_study, 
-      department, whatsapp_number, is_dos_club_member, excited_topic, degree, episode_number
-    ];
-
+    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url];
     const result = await pool.query(query, values);
-    res.status(201).json({ success: true, id: result.rows[0].id, episode: episode_number });
+    res.status(201).json({ success: true, episode: result.rows[0] });
+  } catch (error) {
+    console.error('Create episode error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Admin: Update Episode (Protected)
+app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
+  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url } = req.body;
+  const { id } = req.params;
+  
+  try {
+    const query = `
+      UPDATE episodes 
+      SET episode_number = $1, title = $2, description = $3, event_date = $4, event_time = $5, presenter_name = $6, presenter_designation = $7, presenter_photo_url = $8
+      WHERE id = $9
+      RETURNING *
+    `;
+    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, id];
+    const result = await pool.query(query, values);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Episode not found' });
+    }
+    res.json({ success: true, episode: result.rows[0] });
+  } catch (error) {
+    console.error('Update episode error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Admin: Get specific episode details by ID (Protected)
+app.get('/api/admin/episodes/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM episodes WHERE id = $1', [req.params.id]);
+    if (result.rows.length > 0) {
+      res.json({ success: true, episode: result.rows[0] });
+    } else {
+      res.status(404).json({ success: false, error: 'Episode not found' });
+    }
+  } catch (error) {
+    console.error('Fetch episode error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Public: Get all active episodes
+app.get('/api/episodes', async (req, res) => {
+  try {
+    const query = `
+      SELECT id, episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url
+      FROM episodes 
+      WHERE is_active = TRUE
+      ORDER BY episode_number DESC
+    `;
+    const result = await pool.query(query);
+    res.json({ success: true, episodes: result.rows });
+  } catch (error) {
+    console.error('Fetch episodes error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Public: Get specific episode details
+app.get('/api/episodes/:episode_number', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM episodes WHERE episode_number = $1 AND is_active = TRUE', [req.params.episode_number]);
+    if (result.rows.length > 0) {
+      res.json({ success: true, episode: result.rows[0] });
+    } else {
+      res.status(404).json({ success: false, error: 'Episode not found or inactive' });
+    }
+  } catch (error) {
+    console.error('Fetch episode error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Public: Register for an episode
+app.post('/api/register', async (req, res) => {
+  const {
+    episode_id,
+    is_existing,
+    student_id,
+    email, full_name, gender, college,
+    degree, department, year_of_study, 
+    whatsapp_number, is_dos_club_member, excited_topic
+  } = req.body;
+
+  try {
+    await pool.query('BEGIN');
+
+    let currentStudentId = student_id;
+
+    if (!is_existing) {
+      // Create new student
+      const studentQuery = `
+        INSERT INTO students (email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id
+      `;
+      const studentValues = [email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic];
+      const studentResult = await pool.query(studentQuery, studentValues);
+      currentStudentId = studentResult.rows[0].id;
+    }
+
+    // Register for episode
+    const mappingQuery = `
+      INSERT INTO episode_registrations (student_id, episode_id)
+      VALUES ($1, $2)
+    `;
+    await pool.query(mappingQuery, [currentStudentId, episode_id]);
+
+    await pool.query('COMMIT');
+    res.status(201).json({ success: true, message: 'Registration successful' });
 
   } catch (error) {
-    console.error('Webhook error:', error);
+    await pool.query('ROLLBACK');
+    console.error('Registration error:', error);
+    if (error.code === '23505') { // Unique violation
+      return res.status(400).json({ success: false, error: 'You are already registered for this episode' });
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Admin: Get all episodes with registration counts (PROTECTED ROUTE)
+app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const query = `
+      SELECT e.*, COUNT(er.id) as registration_count
+      FROM episodes e
+      LEFT JOIN episode_registrations er ON e.id = er.episode_id
+      GROUP BY e.id
+      ORDER BY e.episode_number DESC
+    `;
+    const result = await pool.query(query);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Fetch dashboard error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Get episodes and registrations (PROTECTED ROUTE)
-app.get('/api/episodes', authenticateToken, async (req, res) => {
+// Admin: Get registrations for a specific episode (PROTECTED ROUTE)
+app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM registrations ORDER BY timestamp DESC');
-    
-    // Group by episode
-    const episodes = {};
-    result.rows.forEach(row => {
-      const ep = row.episode_number;
-      if (!episodes[ep]) {
-        episodes[ep] = [];
-      }
-      episodes[ep].push(row);
-    });
-
-    res.json({ success: true, data: episodes });
+    const query = `
+      SELECT s.*, er.registered_at
+      FROM students s
+      JOIN episode_registrations er ON s.id = er.student_id
+      WHERE er.episode_id = $1
+      ORDER BY er.registered_at DESC
+    `;
+    const result = await pool.query(query, [req.params.episode_id]);
+    res.json({ success: true, data: result.rows });
   } catch (error) {
-    console.error('Fetch error:', error);
+    console.error('Fetch registrations error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

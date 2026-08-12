@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RegistrationTable from './RegistrationTable';
-import { Calendar, Users, RefreshCw, ChevronDown, CheckCircle2, Trophy, LogOut } from 'lucide-react';
+import { Calendar, Users, RefreshCw, ChevronRight, CheckCircle2, Trophy, LogOut, ArrowLeft } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  // Calculate current week based on date (Starts July 17, 2026)
   const getCurrentWeek = () => {
     const startTime = new Date('2026-07-17T23:59:59Z');
     const now = new Date();
@@ -18,10 +17,12 @@ export default function Dashboard() {
 
   const currentWeek = getCurrentWeek();
 
-  const [activeEpisode, setActiveEpisode] = useState(currentWeek);
-  const [data, setData] = useState({});
+  const [activeEpisode, setActiveEpisode] = useState(null);
+  const [activeEpisodeId, setActiveEpisodeId] = useState(null);
+  const [data, setData] = useState([]); // List of episodes
+  const [registrations, setRegistrations] = useState([]); // Registrations for active episode
   const [loading, setLoading] = useState(true);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('summary'); // 'summary' or 'roster'
   const [profileOpen, setProfileOpen] = useState(false);
 
   // Change Password State
@@ -80,9 +81,7 @@ export default function Dashboard() {
     }
   };
 
-  // We are planning for 52 weeks
   const TOTAL_WEEKS = 52;
-  const allEpisodes = Array.from({ length: TOTAL_WEEKS }, (_, i) => i + 1);
 
   const fetchEpisodes = async () => {
     setLoading(true);
@@ -95,14 +94,13 @@ export default function Dashboard() {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/episodes`, {
+      const response = await fetch(`${API_URL}/api/admin/dashboard`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
       if (response.status === 401 || response.status === 403) {
-        // Token is invalid or expired
         localStorage.removeItem('adminToken');
         navigate('/login');
         return;
@@ -119,6 +117,34 @@ export default function Dashboard() {
     }
   };
 
+  const handleViewRoster = (episode) => {
+    setActiveEpisode(episode.episode_number);
+    setActiveEpisodeId(episode.id);
+    setViewMode('roster');
+    setLoading(true);
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const token = localStorage.getItem('adminToken');
+    fetchRegistrations(episode.id, token, API_URL);
+  };
+
+  const fetchRegistrations = async (episodeId, token, API_URL) => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/episodes/${episodeId}/registrations`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const result = await response.json();
+      if (result.success) {
+        setRegistrations(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch registrations:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchEpisodes();
   }, []);
@@ -128,10 +154,8 @@ export default function Dashboard() {
     navigate('/login');
   };
 
-  const currentData = data[activeEpisode] || [];
-  const totalRegistrations = Object.values(data).flat().length;
-  
-  // Progress based on current calendar week
+  const totalRegistrations = data.reduce((acc, ep) => acc + parseInt(ep.registration_count || 0, 10), 0);
+  const totalEpisodesCreated = data.length;
   const progressPercentage = (currentWeek / TOTAL_WEEKS) * 100;
 
   return (
@@ -141,7 +165,7 @@ export default function Dashboard() {
       <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 cursor-pointer" onClick={() => setViewMode('summary')}>
               <img src="/dos_logo.png" alt="DOS Logo" className="h-8 sm:h-10 w-auto object-contain drop-shadow-sm" />
               <h1 className="hidden sm:block text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-dos to-dos-dark whitespace-nowrap">
                 Open Source Friday
@@ -149,49 +173,6 @@ export default function Dashboard() {
             </div>
             
             <div className="flex items-center gap-4">
-              {/* Episode Dropdown Selector */}
-              <div className="relative">
-                <button 
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg transition-colors focus:ring-2 focus:ring-dos focus:outline-none"
-                >
-                  <Calendar className="h-4 w-4 text-slate-500" />
-                  Episode {activeEpisode}
-                  <ChevronDown className="h-4 w-4 text-slate-500 ml-1" />
-                </button>
-                
-                {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50">
-                    <div className="max-h-64 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200">
-                      {allEpisodes.map(ep => (
-                        <button
-                          key={ep}
-                          onClick={() => {
-                            setActiveEpisode(ep);
-                            setDropdownOpen(false);
-                          }}
-                          className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-between ${
-                            activeEpisode === ep 
-                              ? 'bg-dos-light/10 text-dos' 
-                              : 'text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            Week {ep} 
-                            {ep === currentWeek && <span className="text-[10px] uppercase bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-sm font-bold tracking-wider">Current</span>}
-                          </span>
-                          {data[ep] && data[ep].length > 0 && (
-                            <span className="bg-dos-light/20 text-dos py-0.5 px-2 rounded-full text-xs">
-                              {data[ep].length}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Profile Dropdown */}
               <div className="relative">
                 <button 
@@ -239,13 +220,21 @@ export default function Dashboard() {
             <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard Overview</h2>
             <p className="mt-1 text-slate-500 text-sm">Real-time metrics for your 52-week program.</p>
           </div>
-          <button
-            onClick={fetchEpisodes}
-            className="inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-dos hover:bg-dos-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95"
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh Data
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/admin/episodes/new')}
+              className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 shadow-sm text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95"
+            >
+              + Create Episode
+            </button>
+            <button
+              onClick={viewMode === 'summary' ? fetchEpisodes : () => fetchRegistrations(activeEpisodeId, localStorage.getItem('adminToken'), import.meta.env.VITE_API_URL || 'http://localhost:5000')}
+              className="inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-dos hover:bg-dos-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh Data
+            </button>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -287,36 +276,144 @@ export default function Dashboard() {
           <div className="bg-gradient-to-br from-dos to-dos-dark rounded-2xl shadow-md p-6 text-white flex flex-col justify-between relative overflow-hidden">
             <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl"></div>
             <div>
-              <p className="text-white/80 text-sm font-medium uppercase tracking-wider">Currently Viewing</p>
-              <h3 className="mt-2 text-3xl font-bold text-white">Episode {activeEpisode}</h3>
+              <p className="text-white/80 text-sm font-medium uppercase tracking-wider">Total Episodes Created</p>
+              <h3 className="mt-2 text-4xl font-extrabold text-white">{totalEpisodesCreated}</h3>
             </div>
             <p className="text-white mt-4 text-sm flex justify-between items-center bg-white/10 px-3 py-2 rounded-lg backdrop-blur-sm">
-              <span>Registrations</span>
-              <span className="font-bold text-lg">{currentData.length}</span>
+              <span>Goal</span>
+              <span className="font-bold text-lg">{TOTAL_WEEKS} Episodes</span>
             </p>
           </div>
         </div>
 
         {/* Data Table Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-slate-900">Episode {activeEpisode} Roster</h3>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-              {currentData.length} Participants
-            </span>
+        {viewMode === 'summary' ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-dos" />
+                All Events Summary
+              </h3>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-dos-light/20 text-dos">
+                {data.length} Events
+              </span>
+            </div>
+            
+            <div className="p-0 overflow-x-auto">
+              {loading ? (
+                <div className="flex flex-col justify-center items-center py-20 opacity-50">
+                  <RefreshCw className="h-10 w-10 text-dos animate-spin mb-4" />
+                  <p className="text-slate-500 font-medium">Loading events...</p>
+                </div>
+              ) : data.length === 0 ? (
+                <div className="flex flex-col justify-center items-center py-20 opacity-50">
+                  <p className="text-slate-500 font-medium">No episodes created yet.</p>
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Episode</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Title</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Presenter</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Registrations</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-200">
+                    {data.map((episode) => (
+                      <tr key={episode.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-sm font-bold bg-slate-100 text-slate-800">
+                            #{episode.episode_number}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-slate-900">{episode.title}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm font-medium text-slate-900">
+                              {episode.event_date ? new Date(episode.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                            </span>
+                          <div className="text-xs text-slate-500">
+                            {episode.event_time || 'N/A'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            {episode.presenter_photo_url && (
+                              <img className="h-8 w-8 rounded-full object-cover mr-3" src={episode.presenter_photo_url} alt="" />
+                            )}
+                            <div>
+                              <div className="text-sm font-medium text-slate-900">{episode.presenter_name}</div>
+                              <div className="text-xs text-slate-500">{episode.presenter_designation}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-bold bg-dos-light/20 text-dos">
+                            {episode.registration_count || 0}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end gap-3">
+                            <button
+                              onClick={() => navigate(`/admin/episodes/edit/${episode.id}`)}
+                              className="text-slate-500 hover:text-slate-700 font-medium inline-flex items-center gap-1 transition-colors bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleViewRoster(episode)}
+                              className="text-dos hover:text-dos-dark font-bold inline-flex items-center gap-1 transition-colors bg-dos-light/10 hover:bg-dos-light/20 px-3 py-1.5 rounded-lg"
+                            >
+                              View Roster
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
-          
-          <div className="p-0">
-            {loading ? (
-              <div className="flex flex-col justify-center items-center py-20 opacity-50">
-                <RefreshCw className="h-10 w-10 text-dos animate-spin mb-4" />
-                <p className="text-slate-500 font-medium">Loading data...</p>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setViewMode('summary')}
+                  className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
+                  title="Back to Events Summary"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <h3 className="text-lg font-bold text-slate-900">Episode {activeEpisode} Roster</h3>
               </div>
-            ) : (
-              <RegistrationTable data={currentData} />
-            )}
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                {registrations.length} Participants
+              </span>
+            </div>
+            
+            <div className="p-0">
+              {loading ? (
+                <div className="flex flex-col justify-center items-center py-20 opacity-50">
+                  <RefreshCw className="h-10 w-10 text-dos animate-spin mb-4" />
+                  <p className="text-slate-500 font-medium">Loading data...</p>
+                </div>
+              ) : registrations.length === 0 ? (
+                <div className="flex flex-col justify-center items-center py-20 opacity-50">
+                  <p className="text-slate-500 font-medium">No registrations for this episode yet.</p>
+                </div>
+              ) : (
+                <RegistrationTable data={registrations} />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Change Password Modal */}
