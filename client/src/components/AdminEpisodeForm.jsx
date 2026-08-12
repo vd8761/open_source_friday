@@ -31,6 +31,7 @@ const AdminEpisodeForm = () => {
     episode_number: '',
     title: '',
     description: '',
+    meta_description: '',
     presenter_name: '',
     presenter_designation: '',
     presenter_photo_url: '',
@@ -64,6 +65,7 @@ const AdminEpisodeForm = () => {
               episode_number: ep.episode_number,
               title: ep.title,
               description: ep.description,
+              meta_description: ep.meta_description || '',
               presenter_name: ep.presenter_name,
               presenter_designation: ep.presenter_designation,
               presenter_photo_url: ep.presenter_photo_url || '',
@@ -480,8 +482,20 @@ const AdminEpisodeForm = () => {
 
             {currentStep === 4 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Meta Description (Social Media Link Preview)</label>
+                  <p className="text-xs text-slate-500 mb-2">This short description appears when sharing the link on WhatsApp, LinkedIn, etc. Keep it around 160 characters.</p>
+                  <textarea
+                    name="meta_description"
+                    value={formData.meta_description}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos focus:border-dos transition-all outline-none resize-none"
+                    rows="2"
+                    placeholder="E.g., Join our Open Source Friday session on AI Leadership and discover how to advance your career..."
+                  ></textarea>
+                </div>
                 <div className="mb-4">
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Description</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Description (Full Content)</label>
                   <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-dos transition-all">
                     <ReactQuill 
                       theme="snow" 

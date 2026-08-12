@@ -47,18 +47,18 @@ export default async function handler(req, res) {
       
       // Strip HTML tags from description if they used the rich text editor
       const rawDescription = ep.description ? ep.description.replace(/<[^>]*>?/gm, '') : '';
-      const description = rawDescription.substring(0, 160) + (rawDescription.length > 160 ? '...' : '');
+      let description = ep.meta_description || rawDescription.substring(0, 160);
+      if (!ep.meta_description && rawDescription.length > 160) description += '...';
       
       // Set image URL to the new dynamic backend endpoint that serves the binary image
-      // WhatsApp and other social media scrapers do not support Base64 images in og:image
-      let imageUrl = 'https://osf.descienceosclub.com/dos_logo.png';
+      // Fallback to the wide logo to force large image preview on WhatsApp
+      let imageUrl = 'https://osf.descienceosclub.com/Open_Source_Fridays_logo.png';
       if (ep.cover_photo_url) {
         imageUrl = `${API_URL}/api/episodes/${ep.episode_number}/cover`;
       } else if (ep.presenter_photo_url) {
         // Fallback to presenter photo if they have one but no cover
-        // (Assuming presenter photo isn't Base64 either, or if it is we might need an endpoint for it too)
         imageUrl = ep.presenter_photo_url.startsWith('data:image') 
-          ? 'https://osf.descienceosclub.com/dos_logo.png' 
+          ? 'https://osf.descienceosclub.com/Open_Source_Fridays_logo.png' 
           : ep.presenter_photo_url;
       }
       
@@ -71,6 +71,13 @@ export default async function handler(req, res) {
       html = html.replace(/<meta property="og:description" content=".*?" \/>/g, `<meta property="og:description" content="${description}" />`);
       html = html.replace(/<meta property="og:image" content=".*?" \/>/g, `<meta property="og:image" content="${imageUrl}" />`);
       
+      // Insert twitter card tag if not present
+      if (!html.includes('<meta name="twitter:card"')) {
+        html = html.replace('</head>', `  <meta name="twitter:card" content="summary_large_image" />\n</head>`);
+      } else {
+        html = html.replace(/<meta name="twitter:card" content=".*?" \/>/g, `<meta name="twitter:card" content="summary_large_image" />`);
+      }
+
       html = html.replace(/<meta property="twitter:title" content=".*?" \/>/g, `<meta property="twitter:title" content="${title}" />`);
       html = html.replace(/<meta property="twitter:description" content=".*?" \/>/g, `<meta property="twitter:description" content="${description}" />`);
       html = html.replace(/<meta property="twitter:image" content=".*?" \/>/g, `<meta property="twitter:image" content="${imageUrl}" />`);

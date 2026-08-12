@@ -172,16 +172,16 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Admin: Create Episode (Protected)
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
   
   try {
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `;
-    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url];
     const result = await pool.query(query, values);
     res.status(201).json({ success: true, episode: result.rows[0] });
   } catch (error) {
@@ -192,17 +192,17 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode (Protected)
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
   const { id } = req.params;
   
   try {
     const query = `
       UPDATE episodes 
-      SET episode_number = $1, title = $2, description = $3, event_date = $4, event_time = $5, presenter_name = $6, presenter_designation = $7, presenter_photo_url = $8, cover_photo_url = $9, past_cover_photo_url = $10
-      WHERE id = $11
+      SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6, presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10, past_cover_photo_url = $11
+      WHERE id = $12
       RETURNING *
     `;
-    const values = [episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, id];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, id];
     const result = await pool.query(query, values);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Episode not found' });
