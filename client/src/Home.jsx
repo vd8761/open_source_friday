@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, ArrowRight, PlayCircle } from 'lucide-react';
+import { Calendar, Clock, User, ArrowRight, PlayCircle, Video, MapPin } from 'lucide-react';
 
 const Home = () => {
   const [episodes, setEpisodes] = useState([]);
@@ -64,22 +64,21 @@ const Home = () => {
         
         {/* Episode Badge */}
         <div className={`absolute top-4 left-4 z-20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold shadow-sm ${isCompleted ? 'bg-slate-800/90 text-white' : 'bg-white/90 text-dos'}`}>
-          {isCompleted ? `Completed - Episode ${episode.episode_number}` : `Episode ${episode.episode_number}`}
+          {isCompleted ? `Completed - EP ${episode.episode_number}` : `EP ${episode.episode_number}`}
         </div>
         
-        {/* Profile Photo Circular Badge */}
-        {episode.presenter_photo_url && (
-          <div className={`absolute -bottom-8 right-6 z-30 h-20 w-20 bg-white rounded-full p-1 shadow-md transform transition-transform duration-500 ${isCompleted ? '' : 'group-hover:scale-105'}`}>
-            <img 
-              src={episode.presenter_photo_url} 
-              alt={episode.presenter_name} 
-              className={`w-full h-full object-cover rounded-full ${isCompleted ? 'grayscale opacity-90' : ''}`}
-            />
-          </div>
-        )}
+        {/* Event Mode Badge */}
+        <div className={`absolute bottom-4 right-4 z-30 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-md flex items-center gap-1.5 ${isCompleted ? 'bg-slate-800/95 text-slate-300' : 'bg-white/95 text-slate-700'}`}>
+          {(!episode.event_mode || episode.event_mode === 'Online') ? (
+            <Video className={`w-3.5 h-3.5 ${isCompleted ? 'text-slate-400' : 'text-emerald-500'}`} />
+          ) : (
+            <MapPin className={`w-3.5 h-3.5 ${isCompleted ? 'text-slate-400' : 'text-amber-500'}`} />
+          )}
+          {(!episode.event_mode || episode.event_mode === 'Online') ? 'Online Event' : 'Offline Event'}
+        </div>
       </div>
 
-      <div className="p-6 pt-10 flex flex-col flex-1 relative z-20">
+      <div className="p-6 flex flex-col flex-1 relative z-20">
         <h4 className="text-xl font-bold text-slate-900 mb-1 line-clamp-2">{episode.title}</h4>
         <p className="text-slate-800 font-bold mb-1">{episode.presenter_name}</p>
         <p className="text-slate-500 text-sm mb-4 line-clamp-1">{episode.presenter_designation}</p>

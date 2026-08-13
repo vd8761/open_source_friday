@@ -28,8 +28,9 @@ async function initDB() {
       )
     `);
 
-    // Ensure the episodes table has the cover_photo_url column
+    // Ensure the episodes table has the cover_photo_url and event_mode columns
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS cover_photo_url TEXT`);
+    await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS event_mode VARCHAR(50) DEFAULT 'Online'`);
 
     // Check if any admin exists
     const result = await pool.query('SELECT COUNT(*) FROM admins');
@@ -172,16 +173,16 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Admin: Create Episode (Protected)
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode } = req.body;
   
   try {
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online'];
     const result = await pool.query(query, values);
     res.status(201).json({ success: true, episode: result.rows[0] });
   } catch (error) {
@@ -192,17 +193,17 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode (Protected)
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode } = req.body;
   const { id } = req.params;
   
   try {
     const query = `
       UPDATE episodes 
-      SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6, presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10, past_cover_photo_url = $11
-      WHERE id = $12
+      SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6, presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10, past_cover_photo_url = $11, event_mode = $12
+      WHERE id = $13 
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, id];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', id];
     const result = await pool.query(query, values);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Episode not found' });

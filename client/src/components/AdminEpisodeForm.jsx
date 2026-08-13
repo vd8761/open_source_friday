@@ -36,7 +36,8 @@ const AdminEpisodeForm = () => {
     presenter_designation: '',
     presenter_photo_url: '',
     cover_photo_url: '',
-    past_cover_photo_url: ''
+    past_cover_photo_url: '',
+    event_mode: 'Online'
   });
   const [eventDate, setEventDate] = useState(null);
   const [startTime, setStartTime] = useState(null);
@@ -70,7 +71,8 @@ const AdminEpisodeForm = () => {
               presenter_designation: ep.presenter_designation,
               presenter_photo_url: ep.presenter_photo_url || '',
               cover_photo_url: ep.cover_photo_url || '',
-              past_cover_photo_url: ep.past_cover_photo_url || ''
+              past_cover_photo_url: ep.past_cover_photo_url || '',
+              event_mode: ep.event_mode || 'Online'
             });
             if (ep.event_date) setEventDate(new Date(ep.event_date));
             if (ep.event_time) {
@@ -336,7 +338,7 @@ const AdminEpisodeForm = () => {
           <form onSubmit={(e) => { e.preventDefault(); if(currentStep === 4) handleSubmit(e); }} className="space-y-6">
             {currentStep === 1 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Episode Number</label>
                     <input type="number" name="episode_number" value={formData.episode_number} onChange={handleChange} required placeholder="e.g. 42"
@@ -348,6 +350,16 @@ const AdminEpisodeForm = () => {
                     <input type="text" name="title" value={formData.title} onChange={handleChange} required placeholder="e.g. Building a Scalable Backend"
                       className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 transition-all outline-none text-slate-700 ${errors.title ? 'border-rose-500 focus:ring-rose-200' : 'border-slate-200 focus:border-dos focus:ring-dos'}`} />
                     {errors.title && <p className="text-rose-500 text-xs mt-1.5 font-medium">{errors.title}</p>}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Event Mode</label>
+                    <select name="event_mode" value={formData.event_mode} onChange={handleChange}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:border-dos focus:ring-dos transition-all outline-none text-slate-700">
+                      <option value="Online">Online</option>
+                      <option value="Offline">Offline</option>
+                    </select>
                   </div>
                 </div>
               </div>
