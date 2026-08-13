@@ -265,7 +265,7 @@ const RegistrationForm = () => {
               )}
             </div>
             <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-dos shadow-sm">
-              Episode {episodeDetails.episode_number}
+              EP {episodeDetails.episode_number}
             </div>
           </div>
 
