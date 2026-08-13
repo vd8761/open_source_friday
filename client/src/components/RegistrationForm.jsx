@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, CheckCircle2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Calendar, Clock, User, CheckCircle2, ChevronRight, ArrowLeft, Video, MapPin, AlertCircle } from 'lucide-react';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import 'react-quill-new/dist/quill.snow.css';
 
 const RegistrationForm = () => {
@@ -30,6 +31,7 @@ const RegistrationForm = () => {
     excited_topic: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   useEffect(() => {
     if (!episodeNumber) {
@@ -176,9 +178,21 @@ const RegistrationForm = () => {
       }
     }
 
+    if (!executeRecaptcha) {
+      setRegisterError('Security check not ready. Please wait a moment.');
+      return;
+    }
+
     setIsSubmitting(true);
     setRegisterError('');
     try {
+      const recaptchaToken = await executeRecaptcha("register");
+      if (!recaptchaToken) {
+        setRegisterError('Security check failed. Please refresh and try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const res = await fetch(`${API_URL}/api/register`, {
         method: 'POST',
@@ -187,6 +201,7 @@ const RegistrationForm = () => {
           episode_id: episodeDetails.id,
           is_existing: studentFound,
           student_id: studentData.id,
+          recaptcha_token: recaptchaToken,
           ...studentData
         })
       });
@@ -267,25 +282,19 @@ const RegistrationForm = () => {
             <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-dos shadow-sm">
               EP {episodeDetails.episode_number}
             </div>
+            {/* Event Mode Badge */}
+            <div className={`absolute bottom-4 right-4 z-30 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-md flex items-center gap-1.5 ${!episodeDetails.is_active ? 'bg-slate-800/95 text-slate-300' : 'bg-white/95 text-slate-700'}`}>
+              {(!episodeDetails.event_mode || episodeDetails.event_mode === 'Online') ? (
+                <Video className={`w-3.5 h-3.5 ${!episodeDetails.is_active ? 'text-slate-400' : 'text-emerald-500'}`} />
+              ) : (
+                <MapPin className={`w-3.5 h-3.5 ${!episodeDetails.is_active ? 'text-slate-400' : 'text-amber-500'}`} />
+              )}
+              {(!episodeDetails.event_mode || episodeDetails.event_mode === 'Online') ? 'Online Event' : 'Offline Event'}
+            </div>
           </div>
 
           <div className="p-6 relative">
-            {/* Presenter Profile Badge */}
-            <div className="absolute -top-12 right-6 z-30 h-20 w-20 bg-white rounded-full p-1 shadow-lg">
-              {episodeDetails.presenter_photo_url ? (
-                <img
-                  src={episodeDetails.presenter_photo_url}
-                  alt={episodeDetails.presenter_name}
-                  className="w-full h-full object-cover rounded-full"
-                />
-              ) : (
-                <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center">
-                  <User className="h-8 w-8 text-slate-400" />
-                </div>
-              )}
-            </div>
-
-            <h2 className="text-2xl font-extrabold text-slate-900 mb-2 pr-20">{episodeDetails.title}</h2>
+            <h2 className="text-2xl font-extrabold text-slate-900 mb-2">{episodeDetails.title}</h2>
 
             <div className="mb-4">
               <p className="font-bold text-slate-800">{episodeDetails.presenter_name}</p>
@@ -363,7 +372,13 @@ const RegistrationForm = () => {
                 ) : (
                   <>
                     <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Welcome! Let's get started.</h3>
-                    <p className="text-slate-500 mb-8">Enter your email or WhatsApp number to begin registration.</p>
+                    <p className="text-slate-500 mb-6">Enter your email or WhatsApp number to begin registration.</p>
+                    {lookupError && (
+                      <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-100 flex items-center justify-center gap-2">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                        <span>{lookupError}</span>
+                      </div>
+                    )}
                 <form onSubmit={handleLookup} className="space-y-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">Email or WhatsApp Number</label>
@@ -384,11 +399,6 @@ const RegistrationForm = () => {
                     {isSubmitting ? 'Checking...' : 'Continue'}
                     {!isSubmitting && <ChevronRight className="ml-2 h-5 w-5" />}
                   </button>
-                  {lookupError && (
-                    <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-100 text-center">
-                      {lookupError}
-                    </div>
-                  )}
                 </form>
                 </>
                 )}
@@ -512,6 +522,7 @@ const RegistrationForm = () => {
                     <textarea name="excited_topic" value={studentData.excited_topic} onChange={handleFormChange} rows="2" placeholder="e.g. Artificial Intelligence, Web Development" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.excited_topic ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}></textarea>
                     {validationErrors.excited_topic && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.excited_topic}</p>}
                   </div>
+
 
                   <div className="pt-4 flex flex-col sm:flex-row gap-4">
                     <button

@@ -85,6 +85,27 @@ function getEpisodeNumber(timestampStr) {
   return Math.min(52, 1 + episodeOffset);
 }
 
+// Function to verify reCAPTCHA v3 token
+async function verifyRecaptchaToken(token) {
+  if (!token) return false;
+  try {
+    const formData = new URLSearchParams();
+    formData.append('secret', process.env.RECAPTCHA_SECRET_KEY);
+    formData.append('response', token);
+    
+    const result = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const outcome = await result.json();
+    return outcome.success && outcome.score >= 0.5; // Require a score of at least 0.5
+  } catch (err) {
+    console.error('reCAPTCHA verification error:', err);
+    return false;
+  }
+}
+
 // Admin Login Endpoint (Database verified)
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
@@ -312,10 +333,17 @@ app.post('/api/register', async (req, res) => {
     student_id,
     email, full_name, gender, college,
     degree, department, year_of_study, 
-    whatsapp_number, is_dos_club_member, excited_topic
+    whatsapp_number, is_dos_club_member, excited_topic,
+    recaptcha_token
   } = req.body;
 
   try {
+    // Verify reCAPTCHA Token
+    const isTokenValid = await verifyRecaptchaToken(recaptcha_token);
+    if (!isTokenValid) {
+      return res.status(400).json({ success: false, error: 'Security check failed. Please refresh and try again.' });
+    }
+
     // Check if episode is active
     const epCheck = await pool.query('SELECT is_active FROM episodes WHERE id = $1', [episode_id]);
     if (epCheck.rows.length === 0 || !epCheck.rows[0].is_active) {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import Home from './Home';
 import Dashboard from './Dashboard';
 import Login from './Login';
@@ -20,44 +21,46 @@ const ProtectedRoute = ({ children }) => {
 
 function App() {
   return (
-    <Router>
-      <PwaInstallPrompt />
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<Home />} />
-        <Route path="/register/:episode_number" element={<RegistrationForm />} />
-        <Route path="/login" element={<Login />} />
-        
-        {/* Admin Routes */}
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin/episodes/new" 
-          element={
-            <ProtectedRoute>
-              <AdminEpisodeForm />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin/episodes/edit/:id" 
-          element={
-            <ProtectedRoute>
-              <AdminEpisodeForm />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+    <GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}>
+      <Router>
+        <PwaInstallPrompt />
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<Home />} />
+          <Route path="/register/:episode_number" element={<RegistrationForm />} />
+          <Route path="/login" element={<Login />} />
+          
+          {/* Admin Routes */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/episodes/new" 
+            element={
+              <ProtectedRoute>
+                <AdminEpisodeForm />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/episodes/edit/:id" 
+            element={
+              <ProtectedRoute>
+                <AdminEpisodeForm />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Catch all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </GoogleReCaptchaProvider>
   );
 }
 

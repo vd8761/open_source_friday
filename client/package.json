@@ -17,6 +17,7 @@
     "react-datepicker": "^9.1.0",
     "react-dom": "^19.2.8",
     "react-easy-crop": "^6.2.3",
+    "react-google-recaptcha-v3": "^1.11.0",
     "react-quill-new": "^3.8.3",
     "react-router-dom": "^7.18.2"
   },
