@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, CheckCircle2, ChevronRight, ArrowLeft, Video, MapPin, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, User, CheckCircle2, ChevronRight, ArrowLeft, Video, MapPin, AlertCircle, Mail, Phone, Search } from 'lucide-react';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import 'react-quill-new/dist/quill.snow.css';
+import { countries } from '../utils/countries';
 
 const RegistrationForm = () => {
   const { episode_number: episodeParam } = useParams();
@@ -13,9 +14,23 @@ const RegistrationForm = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Steps: 1 = Lookup, 2 = Confirm/Form, 3 = Success
   const [step, setStep] = useState(1);
   const [identifier, setIdentifier] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
+  const [countrySearchQuery, setCountrySearchQuery] = useState('');
+  const [forcePhoneUI, setForcePhoneUI] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsCountryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [studentFound, setStudentFound] = useState(false);
   const [studentData, setStudentData] = useState({
@@ -33,13 +48,14 @@ const RegistrationForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { executeRecaptcha } = useGoogleReCaptcha();
 
-  // Returns true only if current time is > 1 hour before the episode event
+  // Returns true only if current time is < 1 hour before the episode event
   const isRegistrationOpen = (episode) => {
     if (!episode || !episode.is_active) return false;
     try {
-      const dateStr = episode.event_date; // e.g. "2026-08-15"
-      const timeStr = episode.event_time; // e.g. "06:00 PM" or "18:00"
-
+      const dateStr = String(episode.event_date).split('T')[0]; // Handle ISO strings
+      // If time is a range like "7:00 PM - 8:00 PM", take only the start time
+      const timeStr = String(episode.event_time).split('-')[0].trim(); 
+      
       // Parse time — support both 12h and 24h formats
       let hours = 0, minutes = 0;
       const time12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -126,6 +142,7 @@ const RegistrationForm = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           identifier,
+          countryCode,
           episode_id: episodeDetails?.id 
         })
       });
@@ -237,6 +254,7 @@ const RegistrationForm = () => {
           is_existing: studentFound,
           student_id: studentData.id,
           recaptcha_token: recaptchaToken,
+          country_code: countryCode,
           ...studentData
         })
       });
@@ -301,8 +319,8 @@ const RegistrationForm = () => {
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full flex flex-col lg:flex-row gap-8 items-start">
 
         {/* Left Column - Episode Details */}
-        <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden lg:sticky lg:top-24">
-          <div className="h-48 bg-gradient-to-br from-dos to-dos-dark relative overflow-hidden flex items-center justify-center">
+        <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border border-slate-200 lg:sticky lg:top-24">
+          <div className="h-48 bg-gradient-to-br from-dos to-dos-dark relative rounded-t-3xl overflow-hidden flex items-center justify-center">
             <div className="h-64 sm:h-80 relative overflow-hidden bg-slate-900">
               {(!episodeDetails.is_active && episodeDetails.past_cover_photo_url) || episodeDetails.cover_photo_url ? (
                 <img 
@@ -359,7 +377,7 @@ const RegistrationForm = () => {
 
         {/* Right Column - Form */}
         <div className="w-full lg:w-2/3">
-          <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 sm:p-10 relative overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 sm:p-10 relative">
             {/* Step Indicators */}
             {isRegistrationOpen(episodeDetails) && (
               <div className="flex items-center justify-between mb-10 relative z-10">
@@ -496,14 +514,122 @@ const RegistrationForm = () => {
                 <form onSubmit={handleLookup} className="space-y-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">Email or WhatsApp Number</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. john@example.com or 9876543210"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos focus:border-dos outline-none transition-all text-slate-900 font-medium"
-                      required
-                    />
+                    <div className="relative flex items-center">
+                      {(!forcePhoneUI && identifier.length === 0) ? null : (!forcePhoneUI && (identifier.includes('@') || /[a-zA-Z]/.test(identifier))) ? (
+                        <div className="absolute left-4 text-slate-400 animate-in fade-in zoom-in-95 duration-200">
+                          <Mail className="w-5 h-5" />
+                        </div>
+                      ) : (
+                        <div className="absolute left-2 flex items-center bg-white border border-slate-200 rounded-lg shadow-sm z-50 animate-in fade-in zoom-in-95 duration-200" ref={dropdownRef}>
+                          <div 
+                            className="flex items-center cursor-pointer py-1.5 pl-2 pr-1"
+                            onClick={() => {
+                              setIsCountryDropdownOpen(!isCountryDropdownOpen);
+                              setCountrySearchQuery('');
+                            }}
+                          >
+                            <img 
+                              src={`https://flagcdn.com/w20/${countries.find(c => c.dial === countryCode)?.code || 'in'}.png`} 
+                              alt="flag" 
+                              className="w-[18px] h-[13.5px] rounded-[2px] object-cover shadow-sm" 
+                            />
+                            <span className="ml-1.5 text-sm font-bold text-slate-700">{countryCode}</span>
+                            <div className="ml-1 text-slate-400">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                            </div>
+                          </div>
+                          
+                          {isCountryDropdownOpen && (
+                            <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50 animate-in slide-in-from-top-2 duration-200">
+                              <div className="p-2 border-b border-slate-100 bg-slate-50">
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                  <input 
+                                    type="text" 
+                                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-dos focus:border-dos"
+                                    placeholder="Search country..."
+                                    value={countrySearchQuery}
+                                    onChange={(e) => setCountrySearchQuery(e.target.value)}
+                                    autoFocus
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-60 overflow-y-auto overscroll-contain">
+                                {countries
+                                  .filter(c => c.name.toLowerCase().includes(countrySearchQuery.toLowerCase()) || c.dial.includes(countrySearchQuery))
+                                  .map((c, i) => (
+                                    <div 
+                                      key={`${c.code}-${i}`}
+                                      className="flex items-center px-3 py-2 cursor-pointer hover:bg-slate-50 transition-colors"
+                                      onClick={() => {
+                                        if (c.dial !== countryCode) {
+                                          setIdentifier('');
+                                          setForcePhoneUI(true);
+                                        }
+                                        setCountryCode(c.dial);
+                                        setIsCountryDropdownOpen(false);
+                                      }}
+                                    >
+                                      <img src={`https://flagcdn.com/w20/${c.code}.png`} alt={c.code} className="w-[18px] h-[13.5px] rounded-[2px] object-cover shadow-sm mr-3" />
+                                      <span className="text-sm font-medium text-slate-700 flex-1 truncate">{c.name}</span>
+                                      <span className="text-sm font-bold text-slate-500">{c.dial}</span>
+                                    </div>
+                                ))}
+                                {countries.filter(c => c.name.toLowerCase().includes(countrySearchQuery.toLowerCase()) || c.dial.includes(countrySearchQuery)).length === 0 && (
+                                  <div className="px-3 py-4 text-center text-sm text-slate-500">
+                                    No countries found
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {(() => {
+                        const isPhoneInput = forcePhoneUI || (identifier.length > 0 && !identifier.includes('@') && !/[a-zA-Z]/.test(identifier));
+                        const phoneMaxLen = { '+91': 10, '+1': 10, '+44': 10, '+61': 9, '+971': 9, '+94': 9, '+65': 8 }[countryCode] || 15;
+                        const maxLen = isPhoneInput ? phoneMaxLen : 255;
+                        
+                        return (
+                          <>
+                            <input
+                              type="text"
+                              placeholder="e.g. john@example.com or 9876543210"
+                              value={identifier}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val.length === 0) setForcePhoneUI(false);
+                                
+                                // Block letters if it's already considered a phone input, or just rely on maxLength
+                                if (val.length > 0 && !val.includes('@') && !/[a-zA-Z]/.test(val)) {
+                                  // Clean non-digits just in case, but allow raw type for simplicity
+                                  if (val.length <= phoneMaxLen) {
+                                    setIdentifier(val);
+                                  }
+                                } else {
+                                  setIdentifier(val);
+                                }
+                              }}
+                              maxLength={maxLen}
+                              className={`w-full py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos focus:border-dos outline-none transition-all text-slate-900 font-medium ${
+                                (!forcePhoneUI && identifier.length === 0) 
+                                  ? 'px-4' 
+                                  : isPhoneInput 
+                                    ? 'pl-[115px] pr-16' 
+                                    : 'pl-12 pr-4'
+                              }`}
+                              required
+                            />
+                            {isPhoneInput && (
+                              <div className="absolute right-4 text-xs font-bold text-slate-400 pointer-events-none">
+                                {identifier.length}/{phoneMaxLen}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <button
                     type="submit"

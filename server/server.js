@@ -318,11 +318,11 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 app.post('/api/students/lookup', async (req, res) => {
-  const { identifier, episode_id } = req.body;
+  const { identifier, countryCode, episode_id } = req.body;
   try {
     const result = await pool.query(
-      'SELECT id, full_name, email, whatsapp_number FROM students WHERE email = $1 OR whatsapp_number = $1',
-      [identifier]
+      'SELECT id, full_name, email, whatsapp_number, country_code FROM students WHERE email = $1 OR (whatsapp_number = $1 AND country_code = $2)',
+      [identifier, countryCode]
     );
     if (result.rows.length > 0) {
       const student = result.rows[0];
@@ -487,7 +487,7 @@ app.post('/api/register', async (req, res) => {
     episode_id, is_existing, student_id,
     email, full_name, gender, college,
     degree, department, year_of_study,
-    whatsapp_number, is_dos_club_member, excited_topic,
+    whatsapp_number, country_code, is_dos_club_member, excited_topic,
     recaptcha_token
   } = req.body;
 
@@ -507,16 +507,16 @@ app.post('/api/register', async (req, res) => {
     let currentStudentId = student_id;
 
     if (!is_existing) {
-      const existingCheck = await pool.query('SELECT id FROM students WHERE email = $1 OR whatsapp_number = $2', [email, whatsapp_number]);
+      const existingCheck = await pool.query('SELECT id FROM students WHERE email = $1 OR (whatsapp_number = $2 AND country_code = $3)', [email, whatsapp_number, country_code]);
       if (existingCheck.rows.length > 0) {
         currentStudentId = existingCheck.rows[0].id;
       } else {
         const studentQuery = `
-          INSERT INTO students (email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          INSERT INTO students (email, whatsapp_number, country_code, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           RETURNING id
         `;
-        const studentResult = await pool.query(studentQuery, [email, whatsapp_number, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic]);
+        const studentResult = await pool.query(studentQuery, [email, whatsapp_number, country_code, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic]);
         currentStudentId = studentResult.rows[0].id;
       }
     }

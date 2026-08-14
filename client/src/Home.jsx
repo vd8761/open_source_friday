@@ -41,7 +41,37 @@ const Home = () => {
     return epDate < today;
   });
 
-  const renderEpisodeCard = (episode, isCompleted) => (
+  const isRegistrationOpen = (episode) => {
+    if (!episode || !episode.is_active) return false;
+    try {
+      const dateStr = String(episode.event_date).split('T')[0];
+      const timeStr = String(episode.event_time).split('-')[0].trim();
+      let hours = 0, minutes = 0;
+      const time12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const time24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+      if (time12) {
+        hours = parseInt(time12[1], 10);
+        minutes = parseInt(time12[2], 10);
+        const period = time12[3].toUpperCase();
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+      } else if (time24) {
+        hours = parseInt(time24[1], 10);
+        minutes = parseInt(time24[2], 10);
+      } else return true;
+
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const eventDate = new Date(year, month - 1, day, hours, minutes, 0);
+      const cutoff = new Date(eventDate.getTime() - 60 * 60 * 1000);
+      return new Date() < cutoff;
+    } catch {
+      return true;
+    }
+  };
+
+  const renderEpisodeCard = (episode, isCompleted) => {
+    const registrationOpen = isRegistrationOpen(episode);
+    return (
     <div key={episode.id} className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col group relative ${isCompleted ? 'opacity-90 hover:opacity-100' : ''}`}>
       
       {/* Image Header */}
@@ -97,15 +127,22 @@ const Home = () => {
         <div className="mt-auto pt-4 border-t border-slate-100">
           <button
             onClick={() => navigate(`/register/episode-${episode.episode_number}`)}
-            className={`w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white focus:outline-none transition-all active:scale-95 ${isCompleted ? 'bg-slate-800 hover:bg-slate-900' : 'bg-dos hover:bg-dos-dark focus:ring-2 focus:ring-offset-2 focus:ring-dos'}`}
+            className={`w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white focus:outline-none transition-all active:scale-95 ${
+              isCompleted 
+                ? 'bg-slate-800 hover:bg-slate-900' 
+                : !registrationOpen 
+                  ? 'bg-amber-500 hover:bg-amber-600 focus:ring-2 focus:ring-offset-2 focus:ring-amber-500' 
+                  : 'bg-dos hover:bg-dos-dark focus:ring-2 focus:ring-offset-2 focus:ring-dos'
+            }`}
           >
-            {isCompleted ? 'View Episode Details' : 'Register Now'}
+            {isCompleted ? 'View Episode Details' : !registrationOpen ? 'Registration Closed' : 'Register Now'}
             {isCompleted ? <PlayCircle className="ml-2 h-4 w-4" /> : <ArrowRight className="ml-2 h-4 w-4" />}
           </button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col">
