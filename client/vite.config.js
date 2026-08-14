@@ -7,28 +7,38 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({ 
+    VitePWA({
+      // Use injectManifest so our custom sw.js handles push notifications
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      injectManifest: {
+        swDest: 'dist/sw.js',
+      },
+      includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Open Source Friday',
         short_name: 'OS Friday',
-        description: 'Dashboard for Open Source Friday registrations',
+        description: 'Discover and register for Open Source Friday sessions by Descience Open Source Club.',
         theme_color: '#07a97b',
+        background_color: '#f8fafc',
+        display: 'standalone',
+        start_url: '/',
         icons: [
           {
             src: '/favicon.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
           },
           {
             src: '/favicon.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
-      }
-    })
+            purpose: 'any maskable',
+          },
+        ],
+      },
+    }),
   ],
 })

@@ -33,6 +33,41 @@ const RegistrationForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { executeRecaptcha } = useGoogleReCaptcha();
 
+  // Returns true only if current time is > 1 hour before the episode event
+  const isRegistrationOpen = (episode) => {
+    if (!episode || !episode.is_active) return false;
+    try {
+      const dateStr = episode.event_date; // e.g. "2026-08-15"
+      const timeStr = episode.event_time; // e.g. "06:00 PM" or "18:00"
+
+      // Parse time — support both 12h and 24h formats
+      let hours = 0, minutes = 0;
+      const time12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const time24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+      if (time12) {
+        hours = parseInt(time12[1], 10);
+        minutes = parseInt(time12[2], 10);
+        const period = time12[3].toUpperCase();
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+      } else if (time24) {
+        hours = parseInt(time24[1], 10);
+        minutes = parseInt(time24[2], 10);
+      } else {
+        // Cannot parse time — leave open
+        return true;
+      }
+
+      // Build event datetime (treat date as local)
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const eventDate = new Date(year, month - 1, day, hours, minutes, 0);
+      const cutoff = new Date(eventDate.getTime() - 60 * 60 * 1000); // 1 hour before
+      return new Date() < cutoff;
+    } catch {
+      return true;
+    }
+  };
+
   useEffect(() => {
     if (!episodeNumber) {
       setError('No episode number provided.');
@@ -326,7 +361,7 @@ const RegistrationForm = () => {
         <div className="w-full lg:w-2/3">
           <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 sm:p-10 relative overflow-hidden">
             {/* Step Indicators */}
-            {episodeDetails.is_active && (
+            {isRegistrationOpen(episodeDetails) && (
               <div className="flex items-center justify-between mb-10 relative z-10">
                 {[1, 2, 3].map((s) => (
                   <div key={s} className="flex flex-col items-center flex-1">
@@ -348,26 +383,105 @@ const RegistrationForm = () => {
               </div>
             )}
 
-            {/* Step 1: Lookup or Inactive Message */}
+            {/* Step 1: Lookup or Closed Message */}
             {step === 1 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-500">
                 {!episodeDetails.is_active ? (
-                  <div className="text-center py-12">
+                  <div className="text-center py-10">
                     <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
                     </div>
                     <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-3">Episode Concluded</h3>
-                    <p className="text-slate-500 mb-8 max-w-md mx-auto">
+                    <p className="text-slate-500 mb-6 max-w-md mx-auto">
                       Registration is closed because this episode has already been completed. Thank you for your interest!
                     </p>
                     <button
                       onClick={() => navigate('/')}
-                      className="inline-flex items-center justify-center py-3 px-6 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
+                      className="inline-flex items-center justify-center py-3 px-6 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all mb-8"
                     >
                       Browse Upcoming Episodes
                     </button>
+
+                    {/* WhatsApp Channel CTA */}
+                    <div className="mt-2 rounded-2xl border border-[#25D366]/30 bg-[#f0fdf4] p-5 text-left flex items-start gap-4">
+                      <div className="flex-shrink-0 w-11 h-11 rounded-xl bg-[#25D366] flex items-center justify-center shadow-sm">
+                        <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.555 4.116 1.529 5.845L.057 23.571a.75.75 0 00.92.92l5.726-1.472A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.693 9.693 0 01-4.964-1.364l-.355-.212-3.698.95.968-3.598-.232-.371A9.693 9.693 0 012.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 mb-0.5">Have a query? Contact us on WhatsApp</p>
+                        <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                          Follow our WhatsApp channel to stay updated on upcoming episodes and get your questions answered.
+                        </p>
+                        <a
+                          href="https://whatsapp.com/channel/0029Vb6yhyh5Ui2YyHbIL117"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
+                        >
+                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.555 4.116 1.529 5.845L.057 23.571a.75.75 0 00.92.92l5.726-1.472A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.693 9.693 0 01-4.964-1.364l-.355-.212-3.698.95.968-3.598-.232-.371A9.693 9.693 0 012.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
+                          </svg>
+                          Follow our WhatsApp Channel
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : !isRegistrationOpen(episodeDetails) ? (
+                  <div className="text-center py-10">
+                    <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Clock className="h-10 w-10 text-amber-500" />
+                    </div>
+                    <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-3">Registration Closed</h3>
+                    <p className="text-slate-500 mb-2 max-w-md mx-auto">
+                      Registration closes <span className="font-semibold text-slate-700">1 hour before</span> the event starts.
+                    </p>
+                    <p className="text-slate-400 text-sm mb-6">
+                      This episode is scheduled for{' '}
+                      <span className="font-semibold text-slate-600">
+                        {new Date(episodeDetails.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        {' '}at {episodeDetails.event_time}
+                      </span>.
+                    </p>
+                    <button
+                      onClick={() => navigate('/')}
+                      className="inline-flex items-center justify-center py-3 px-6 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all mb-8"
+                    >
+                      Browse Upcoming Episodes
+                    </button>
+
+                    {/* WhatsApp Channel CTA */}
+                    <div className="mt-2 rounded-2xl border border-[#25D366]/30 bg-[#f0fdf4] p-5 text-left flex items-start gap-4">
+                      <div className="flex-shrink-0 w-11 h-11 rounded-xl bg-[#25D366] flex items-center justify-center shadow-sm">
+                        <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.555 4.116 1.529 5.845L.057 23.571a.75.75 0 00.92.92l5.726-1.472A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.693 9.693 0 01-4.964-1.364l-.355-.212-3.698.95.968-3.598-.232-.371A9.693 9.693 0 012.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 mb-0.5">Have a query? Contact us on WhatsApp</p>
+                        <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                          Follow our WhatsApp channel to stay updated on upcoming episodes and get your questions answered.
+                        </p>
+                        <a
+                          href="https://whatsapp.com/channel/0029Vb6yhyh5Ui2YyHbIL117"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
+                        >
+                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.555 4.116 1.529 5.845L.057 23.571a.75.75 0 00.92.92l5.726-1.472A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.693 9.693 0 01-4.964-1.364l-.355-.212-3.698.95.968-3.598-.232-.371A9.693 9.693 0 012.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
+                          </svg>
+                          Follow our WhatsApp Channel
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <>
