@@ -45,11 +45,27 @@ async function initDB() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    
+    // Ensure column exists for welcome tracking
+    await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS welcome_sent BOOLEAN DEFAULT FALSE`);
+
+    // Push notification history table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_notification_history (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        url TEXT,
+        type VARCHAR(50) NOT NULL,
+        sent_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
     // Ensure columns exist on episodes
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS cover_photo_url TEXT`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS event_mode VARCHAR(50) DEFAULT 'Online'`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_registration_open BOOLEAN DEFAULT TRUE`);
 
     // Seed initial admin
     const result = await pool.query('SELECT COUNT(*) FROM admins');
@@ -69,7 +85,7 @@ async function initDB() {
 initDB();
 
 // ─── Push Helper: send to all subscribers ────────────────────────────────────
-async function sendPushToAll(payload) {
+async function sendPushToAll(payload, type = 'Automated') {
   let rows = [];
   try {
     const result = await pool.query('SELECT * FROM push_subscriptions');
@@ -101,8 +117,22 @@ async function sendPushToAll(payload) {
 
   // Clean up dead subscriptions
   if (dead.length > 0) {
-    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1)', [dead]);
-    console.log(`[Push] Removed ${dead.length} expired subscription(s)`);
+    try {
+      await pool.query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1)', [dead]);
+      console.log(`[Push] Removed ${dead.length} expired subscription(s)`);
+    } catch (err) {
+      console.error('[Push] Failed to clean up dead subscriptions:', err);
+    }
+  }
+
+  // Record history
+  try {
+    await pool.query(
+      'INSERT INTO push_notification_history (title, body, url, type) VALUES ($1, $2, $3, $4)',
+      [payload.title, payload.body, payload.url || '/', type]
+    );
+  } catch (err) {
+    console.error('[Push] Failed to record notification history:', err);
   }
 }
 
@@ -243,12 +273,31 @@ app.post('/api/push/subscribe', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid subscription object' });
   }
   try {
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO push_subscriptions (endpoint, p256dh, auth)
        VALUES ($1, $2, $3)
-       ON CONFLICT (endpoint) DO UPDATE SET p256dh = $2, auth = $3`,
+       ON CONFLICT (endpoint) DO UPDATE SET p256dh = $2, auth = $3
+       RETURNING welcome_sent`,
       [endpoint, keys.p256dh, keys.auth]
     );
+    
+    if (result.rows[0] && !result.rows[0].welcome_sent) {
+      try {
+        const payload = {
+          title: 'Welcome to Open Source Friday! 🎉',
+          body: "This is a test notification. You've successfully subscribed to our updates! Stay tuned for upcoming open source activities. 🚀",
+          icon: '/favicon.png',
+          badge: '/favicon.png',
+          url: '/'
+        };
+        await webpush.sendNotification({ endpoint, keys }, JSON.stringify(payload));
+        
+        await pool.query('UPDATE push_subscriptions SET welcome_sent = TRUE WHERE endpoint = $1', [endpoint]);
+      } catch (err) {
+        console.error('[Push] Failed to send welcome notification:', err);
+      }
+    }
+    
     res.json({ success: true });
   } catch (err) {
     console.error('[Push] Subscribe DB error:', err);
@@ -350,15 +399,15 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Admin: Create Episode — sends "New Episode" push notification
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open } = req.body;
   try {
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online'];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true];
     const result = await pool.query(query, values);
     const episode = result.rows[0];
 
@@ -384,23 +433,43 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open } = req.body;
   const { id } = req.params;
   try {
     const query = `
       UPDATE episodes 
       SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6,
           presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10,
-          past_cover_photo_url = $11, event_mode = $12, reminder_sent = false
-      WHERE id = $13 
+          past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13, reminder_sent = false
+      WHERE id = $14 
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', id];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, id];
     const result = await pool.query(query, values);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Episode not found' });
     res.json({ success: true, episode: result.rows[0] });
   } catch (error) {
     console.error('Update episode error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Admin: Toggle Registration Status
+app.put('/api/episodes/:id/toggle-registration', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { is_registration_open } = req.body;
+  try {
+    const query = `
+      UPDATE episodes 
+      SET is_registration_open = $1 
+      WHERE id = $2 
+      RETURNING *
+    `;
+    const result = await pool.query(query, [is_registration_open, id]);
+    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Episode not found' });
+    res.json({ success: true, episode: result.rows[0] });
+  } catch (error) {
+    console.error('Toggle registration error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -424,7 +493,7 @@ app.get('/api/admin/episodes/:id', authenticateToken, async (req, res) => {
 app.get('/api/episodes', async (req, res) => {
   try {
     const query = `
-      SELECT id, episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, is_active
+      SELECT id, episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, is_active, is_registration_open
       FROM episodes 
       ORDER BY episode_number DESC
     `;
@@ -497,9 +566,12 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Security check failed. Please refresh and try again.' });
     }
 
-    const epCheck = await pool.query('SELECT is_active FROM episodes WHERE id = $1', [episode_id]);
+    const epCheck = await pool.query('SELECT is_active, is_registration_open FROM episodes WHERE id = $1', [episode_id]);
     if (epCheck.rows.length === 0 || !epCheck.rows[0].is_active) {
       return res.status(400).json({ success: false, error: 'Registration is closed for this episode.' });
+    }
+    if (epCheck.rows[0].is_registration_open === false) {
+      return res.status(400).json({ success: false, error: 'Registration is currently disabled for this episode.' });
     }
 
     await pool.query('BEGIN');
@@ -599,8 +671,13 @@ app.delete('/api/admin/episodes/:episode_id/registrations/:student_id', authenti
 // ─── Admin: Subscriber count (for dashboard insight) ─────────────────────────
 app.get('/api/admin/push/stats', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT COUNT(*) as total FROM push_subscriptions');
-    res.json({ success: true, total: parseInt(result.rows[0].total) });
+    const totalResult = await pool.query('SELECT COUNT(*) as total FROM push_subscriptions');
+    const welcomeResult = await pool.query('SELECT COUNT(*) as welcome_count FROM push_subscriptions WHERE welcome_sent = TRUE');
+    res.json({ 
+      success: true, 
+      total: parseInt(totalResult.rows[0].total),
+      welcomeSent: parseInt(welcomeResult.rows[0].welcome_count)
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
@@ -613,10 +690,20 @@ app.post('/api/admin/push/send', authenticateToken, async (req, res) => {
     return res.status(400).json({ success: false, error: 'title and body are required' });
   }
   try {
-    await sendPushToAll({ title, body, icon: '/favicon.png', badge: '/favicon.png', url: url || '/' });
+    await sendPushToAll({ title, body, icon: '/favicon.png', badge: '/favicon.png', url: url || '/' }, 'Manual');
     res.json({ success: true, message: 'Notification sent' });
   } catch (error) {
     console.error('Manual push error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ─── Admin: Get push notification history ─────────────────────────────────────
+app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM push_notification_history ORDER BY sent_at DESC');
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

@@ -48,18 +48,21 @@ const RegistrationForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { executeRecaptcha } = useGoogleReCaptcha();
 
-  // Returns true only if current time is < 1 hour before the episode event
-  const isRegistrationOpen = (episode) => {
-    if (!episode || !episode.is_active) return false;
+  // Returns true if the episode event has already completed based on its date and end time
+  const isEpisodeConcluded = (episode) => {
+    if (!episode) return false;
+    if (episode.is_active === false) return true; // Explicitly marked as concluded by admin
+    
     try {
-      const dateStr = String(episode.event_date).split('T')[0]; // Handle ISO strings
-      // If time is a range like "7:00 PM - 8:00 PM", take only the start time
-      const timeStr = String(episode.event_time).split('-')[0].trim(); 
+      const dateStr = String(episode.event_date).split('T')[0];
+      const timeStrList = String(episode.event_time).split('-');
+      // Use the end time if available, otherwise use start time
+      const timeStr = (timeStrList.length > 1 ? timeStrList[1] : timeStrList[0]).trim();
       
-      // Parse time — support both 12h and 24h formats
       let hours = 0, minutes = 0;
       const time12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
       const time24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+      
       if (time12) {
         hours = parseInt(time12[1], 10);
         minutes = parseInt(time12[2], 10);
@@ -70,18 +73,25 @@ const RegistrationForm = () => {
         hours = parseInt(time24[1], 10);
         minutes = parseInt(time24[2], 10);
       } else {
-        // Cannot parse time — leave open
-        return true;
+        // Fallback if time isn't parseable: check if it's the next day
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const eventDateEnd = new Date(year, month - 1, day, 23, 59, 59);
+        return new Date() > eventDateEnd;
       }
 
-      // Build event datetime (treat date as local)
       const [year, month, day] = dateStr.split('-').map(Number);
-      const eventDate = new Date(year, month - 1, day, hours, minutes, 0);
-      const cutoff = new Date(eventDate.getTime() - 60 * 60 * 1000); // 1 hour before
-      return new Date() < cutoff;
+      const eventDateEnd = new Date(year, month - 1, day, hours, minutes, 0);
+      return new Date() > eventDateEnd;
     } catch {
-      return true;
+      return false;
     }
+  };
+
+  // Returns true only if episode is active, registration is explicitly open, and event has not concluded
+  const isRegistrationOpen = (episode) => {
+    if (!episode) return false;
+    if (isEpisodeConcluded(episode)) return false;
+    return episode.is_registration_open !== false;
   };
 
   useEffect(() => {
@@ -322,11 +332,11 @@ const RegistrationForm = () => {
         <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border border-slate-200 lg:sticky lg:top-24">
           <div className="h-48 bg-gradient-to-br from-dos to-dos-dark relative rounded-t-3xl overflow-hidden flex items-center justify-center">
             <div className="h-64 sm:h-80 relative overflow-hidden bg-slate-900">
-              {(!episodeDetails.is_active && episodeDetails.past_cover_photo_url) || episodeDetails.cover_photo_url ? (
+              {(isEpisodeConcluded(episodeDetails) && episodeDetails.past_cover_photo_url) || episodeDetails.cover_photo_url ? (
                 <img 
-                  src={(!episodeDetails.is_active && episodeDetails.past_cover_photo_url) ? episodeDetails.past_cover_photo_url : episodeDetails.cover_photo_url} 
+                  src={(isEpisodeConcluded(episodeDetails) && episodeDetails.past_cover_photo_url) ? episodeDetails.past_cover_photo_url : episodeDetails.cover_photo_url} 
                   alt={episodeDetails.title} 
-                  className={`w-full h-full object-cover transition-all duration-700 ${!episodeDetails.is_active && !episodeDetails.past_cover_photo_url ? 'grayscale opacity-75 mix-blend-luminosity' : ''}`}
+                  className={`w-full h-full object-cover transition-all duration-700 ${isEpisodeConcluded(episodeDetails) && !episodeDetails.past_cover_photo_url ? 'grayscale opacity-75 mix-blend-luminosity' : ''}`}
                 />
               ) : (
                 <User className="h-20 w-20 text-white/50 z-20" />
@@ -336,11 +346,11 @@ const RegistrationForm = () => {
               EP {episodeDetails.episode_number}
             </div>
             {/* Event Mode Badge */}
-            <div className={`absolute bottom-4 right-4 z-30 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-md flex items-center gap-1.5 ${!episodeDetails.is_active ? 'bg-slate-800/95 text-slate-300' : 'bg-white/95 text-slate-700'}`}>
+            <div className={`absolute bottom-4 right-4 z-30 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-md flex items-center gap-1.5 ${isEpisodeConcluded(episodeDetails) ? 'bg-slate-800/95 text-slate-300' : 'bg-white/95 text-slate-700'}`}>
               {(!episodeDetails.event_mode || episodeDetails.event_mode === 'Online') ? (
-                <Video className={`w-3.5 h-3.5 ${!episodeDetails.is_active ? 'text-slate-400' : 'text-emerald-500'}`} />
+                <Video className={`w-3.5 h-3.5 ${isEpisodeConcluded(episodeDetails) ? 'text-slate-400' : 'text-emerald-500'}`} />
               ) : (
-                <MapPin className={`w-3.5 h-3.5 ${!episodeDetails.is_active ? 'text-slate-400' : 'text-amber-500'}`} />
+                <MapPin className={`w-3.5 h-3.5 ${isEpisodeConcluded(episodeDetails) ? 'text-slate-400' : 'text-amber-500'}`} />
               )}
               {(!episodeDetails.event_mode || episodeDetails.event_mode === 'Online') ? 'Online Event' : 'Offline Event'}
             </div>
@@ -404,7 +414,7 @@ const RegistrationForm = () => {
             {/* Step 1: Lookup or Closed Message */}
             {step === 1 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                {!episodeDetails.is_active ? (
+                {isEpisodeConcluded(episodeDetails) ? (
                   <div className="text-center py-10">
                     <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -457,7 +467,7 @@ const RegistrationForm = () => {
                     </div>
                     <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-3">Registration Closed</h3>
                     <p className="text-slate-500 mb-2 max-w-md mx-auto">
-                      Registration closes <span className="font-semibold text-slate-700">1 hour before</span> the event starts.
+                      Registration is currently <span className="font-semibold text-slate-700">disabled</span> for this event.
                     </p>
                     <p className="text-slate-400 text-sm mb-6">
                       This episode is scheduled for{' '}

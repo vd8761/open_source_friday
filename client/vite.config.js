@@ -16,6 +16,10 @@ export default defineConfig({
       injectManifest: {
         swDest: 'dist/sw.js',
       },
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
       includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Open Source Friday',

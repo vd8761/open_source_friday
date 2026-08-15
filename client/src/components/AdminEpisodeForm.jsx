@@ -37,7 +37,8 @@ const AdminEpisodeForm = () => {
     presenter_photo_url: '',
     cover_photo_url: '',
     past_cover_photo_url: '',
-    event_mode: 'Online'
+    event_mode: 'Online',
+    is_registration_open: true
   });
   const [eventDate, setEventDate] = useState(null);
   const [startTime, setStartTime] = useState(null);
@@ -72,7 +73,8 @@ const AdminEpisodeForm = () => {
               presenter_photo_url: ep.presenter_photo_url || '',
               cover_photo_url: ep.cover_photo_url || '',
               past_cover_photo_url: ep.past_cover_photo_url || '',
-              event_mode: ep.event_mode || 'Online'
+              event_mode: ep.event_mode || 'Online',
+              is_registration_open: ep.is_registration_open !== undefined ? ep.is_registration_open : true
             });
             if (ep.event_date) setEventDate(new Date(ep.event_date));
             if (ep.event_time) {
@@ -97,8 +99,8 @@ const AdminEpisodeForm = () => {
   const [isCropping, setIsCropping] = useState(false);
   const [croppingType, setCroppingType] = useState('none'); // 'profile' or 'cover'
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
   };
 

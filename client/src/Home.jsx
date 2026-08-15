@@ -26,29 +26,19 @@ const Home = () => {
     fetchEpisodes();
   }, []);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const upcomingEpisodes = episodes.filter(episode => {
-    const epDate = new Date(episode.event_date);
-    epDate.setHours(0, 0, 0, 0);
-    return epDate >= today;
-  });
-
-  const completedEpisodes = episodes.filter(episode => {
-    const epDate = new Date(episode.event_date);
-    epDate.setHours(0, 0, 0, 0);
-    return epDate < today;
-  });
-
-  const isRegistrationOpen = (episode) => {
-    if (!episode || !episode.is_active) return false;
+  const isEpisodeConcluded = (episode) => {
+    if (!episode) return false;
+    if (episode.is_active === false) return true;
+    
     try {
       const dateStr = String(episode.event_date).split('T')[0];
-      const timeStr = String(episode.event_time).split('-')[0].trim();
+      const timeStrList = String(episode.event_time).split('-');
+      const timeStr = (timeStrList.length > 1 ? timeStrList[1] : timeStrList[0]).trim();
+      
       let hours = 0, minutes = 0;
       const time12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
       const time24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+      
       if (time12) {
         hours = parseInt(time12[1], 10);
         minutes = parseInt(time12[2], 10);
@@ -58,15 +48,27 @@ const Home = () => {
       } else if (time24) {
         hours = parseInt(time24[1], 10);
         minutes = parseInt(time24[2], 10);
-      } else return true;
+      } else {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const eventDateEnd = new Date(year, month - 1, day, 23, 59, 59);
+        return new Date() > eventDateEnd;
+      }
 
       const [year, month, day] = dateStr.split('-').map(Number);
-      const eventDate = new Date(year, month - 1, day, hours, minutes, 0);
-      const cutoff = new Date(eventDate.getTime() - 60 * 60 * 1000);
-      return new Date() < cutoff;
+      const eventDateEnd = new Date(year, month - 1, day, hours, minutes, 0);
+      return new Date() > eventDateEnd;
     } catch {
-      return true;
+      return false;
     }
+  };
+
+  const upcomingEpisodes = episodes.filter(episode => !isEpisodeConcluded(episode));
+  const completedEpisodes = episodes.filter(episode => isEpisodeConcluded(episode));
+
+  const isRegistrationOpen = (episode) => {
+    if (!episode) return false;
+    if (isEpisodeConcluded(episode)) return false;
+    return episode.is_registration_open !== false;
   };
 
   const renderEpisodeCard = (episode, isCompleted) => {

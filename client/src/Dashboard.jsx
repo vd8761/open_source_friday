@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RegistrationTable from './RegistrationTable';
-import { Calendar, Users, RefreshCw, ChevronRight, CheckCircle2, Trophy, LogOut, ArrowLeft } from 'lucide-react';
+import { Calendar, Users, RefreshCw, ChevronRight, CheckCircle2, Trophy, LogOut, ArrowLeft, Bell, Send } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -22,8 +22,22 @@ export default function Dashboard() {
   const [data, setData] = useState([]); // List of episodes
   const [registrations, setRegistrations] = useState([]); // Registrations for active episode
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('summary'); // 'summary' or 'roster'
+  const [viewMode, setViewMode] = useState('summary'); // 'summary' or 'roster' or 'push'
+  const [pushHistory, setPushHistory] = useState([]);
+  const [pushStats, setPushStats] = useState({ total: 0, welcomeSent: 0 });
+  const [pushForm, setPushForm] = useState({ title: '', body: '', url: '' });
+  const [sendingPush, setSendingPush] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  
+  // Toast Notification State
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ visible: true, message, type });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, visible: false }));
+    }, 3000);
+  };
 
   // Change Password State
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
@@ -145,6 +159,56 @@ export default function Dashboard() {
     }
   };
 
+  const fetchPushData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('adminToken');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const [historyRes, statsRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/push/history`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/admin/push/stats`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+      const historyData = await historyRes.json();
+      const statsData = await statsRes.json();
+      if (historyData.success) setPushHistory(historyData.data);
+      if (statsData.success) setPushStats({ total: statsData.total, welcomeSent: statsData.welcomeSent });
+    } catch (error) {
+      console.error('Failed to fetch push data', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendPush = async (e) => {
+    e.preventDefault();
+    if (!pushForm.title || !pushForm.body) return;
+    setSendingPush(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_URL}/api/admin/push/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(pushForm)
+      });
+      const result = await response.json();
+      if (result.success) {
+        showToast('Push Notification Sent!', 'success');
+        setPushForm({ title: '', body: '', url: '' });
+        fetchPushData();
+      } else {
+        showToast(result.error || 'Failed to send notification', 'error');
+      }
+    } catch (error) {
+      showToast('Network error', 'error');
+    } finally {
+      setSendingPush(false);
+    }
+  };
+
   const handleDeleteRegistration = async (studentId) => {
     if (!window.confirm('Are you sure you want to delete this registration?')) {
       return;
@@ -162,14 +226,49 @@ export default function Dashboard() {
       
       const result = await response.json();
       if (result.success) {
-        // Remove from state
         setRegistrations(prev => prev.filter(r => r.id !== studentId));
+        showToast('Registration deleted successfully', 'success');
       } else {
-        alert(result.error || 'Failed to delete registration');
+        showToast(result.error || 'Failed to delete registration', 'error');
       }
     } catch (error) {
       console.error('Failed to delete registration:', error);
-      alert('An error occurred while deleting.');
+      showToast('An error occurred while deleting.', 'error');
+    }
+  };
+
+  const handleToggleRegistration = async (episodeId, currentStatus) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_URL}/api/episodes/${episodeId}/toggle-registration`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_registration_open: !currentStatus })
+      });
+      
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Server returned error status:', response.status, text);
+        showToast(`Server Error (${response.status}): The backend might need to be restarted.`, 'error');
+        return;
+      }
+      
+      const result = await response.json();
+      if (result.success) {
+        setData(prev => prev.map(ep => 
+          ep.id === episodeId ? { ...ep, is_registration_open: !currentStatus } : ep
+        ));
+        showToast(`Registration ${!currentStatus ? 'opened' : 'closed'} successfully`, 'success');
+      } else {
+        showToast(result.error || 'Failed to toggle registration status', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to toggle registration:', error);
+      showToast('An error occurred while updating status.', 'error');
     }
   };
 
@@ -224,8 +323,24 @@ export default function Dashboard() {
   const progressPercentage = (currentWeek / TOTAL_WEEKS) * 100;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans relative">
       
+      {/* Toast Notification */}
+      <div 
+        className={`fixed top-4 right-4 z-50 transition-all duration-300 transform ${toast.visible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'}`}
+      >
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border ${toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+          {toast.type === 'error' ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <CheckCircle2 className="h-5 w-5" />
+          )}
+          <span className="font-semibold text-sm">{toast.message}</span>
+        </div>
+      </div>
+
       {/* Top Navigation Bar */}
       <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -287,14 +402,21 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             <button
+              onClick={() => { setViewMode('push'); fetchPushData(); }}
+              className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 shadow-sm text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
+            >
+              <Bell className="mr-2 h-4 w-4 text-amber-500" />
+              Send Push Notification
+            </button>
+            <button
               onClick={() => navigate('/admin/episodes/new')}
-              className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 shadow-sm text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95"
+              className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 shadow-sm text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
             >
               + Create Episode
             </button>
             <button
               onClick={viewMode === 'summary' ? fetchEpisodes : () => fetchRegistrations(activeEpisodeId, localStorage.getItem('adminToken'), import.meta.env.VITE_API_URL || 'http://localhost:5000')}
-              className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-semibold rounded-xl text-white bg-dos hover:bg-dos-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95"
+              className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-semibold rounded-xl text-white bg-dos hover:bg-dos-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
             >
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh Data
@@ -352,7 +474,95 @@ export default function Dashboard() {
         </div>
 
         {/* Data Table Section */}
-        {viewMode === 'summary' ? (
+        {viewMode === 'push' ? (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-4">
+                <button onClick={() => setViewMode('summary')} className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600">
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-dos" />
+                  Push Notifications Management
+                </h3>
+                <div className="ml-auto flex gap-2">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700">
+                    {pushStats.total} Total Installs
+                  </span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
+                    {pushStats.welcomeSent} Welcome Messages Sent
+                  </span>
+                </div>
+              </div>
+              <div className="p-6">
+                <form onSubmit={handleSendPush} className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                  <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Send className="h-4 w-4 text-dos" />
+                    Send Custom Push Notification
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Title</label>
+                      <input type="text" required value={pushForm.title} onChange={e => setPushForm({...pushForm, title: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="Notification Title" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Target URL (Optional)</label>
+                      <input type="text" value={pushForm.url} onChange={e => setPushForm({...pushForm, url: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="e.g. / or https://example.com" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Message Body</label>
+                      <textarea required value={pushForm.body} onChange={e => setPushForm({...pushForm, body: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="Notification message body..." rows="2"></textarea>
+                    </div>
+                  </div>
+                  <button type="submit" disabled={sendingPush} className="inline-flex items-center justify-center px-6 py-2.5 bg-dos hover:bg-dos-dark text-white font-bold rounded-xl transition-all shadow-sm disabled:opacity-70">
+                    {sendingPush ? 'Sending...' : 'Send to All Subscribers'}
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-lg font-bold text-slate-900">Notification History</h3>
+              </div>
+              <div className="p-0 overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Type</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Title</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Body</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-200">
+                    {pushHistory.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                          {new Date(item.sent_at).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-bold rounded-md ${item.type === 'Manual' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                            {item.type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">
+                          {item.title}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600 max-w-md truncate" title={item.body}>
+                          {item.body}
+                        </td>
+                      </tr>
+                    ))}
+                    {pushHistory.length === 0 && (
+                      <tr><td colSpan="4" className="px-6 py-8 text-center text-slate-500 font-medium">No push notifications sent yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : viewMode === 'summary' ? (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
             <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -383,6 +593,7 @@ export default function Dashboard() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Presenter</th>
                       <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Registrations</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Registration Status</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
@@ -422,6 +633,23 @@ export default function Dashboard() {
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-bold bg-dos-light/20 text-dos">
                             {episode.registration_count || 0}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <label className="flex items-center justify-center space-x-2 cursor-pointer">
+                            <div className="relative">
+                              <input 
+                                type="checkbox" 
+                                checked={episode.is_registration_open !== false} 
+                                onChange={() => handleToggleRegistration(episode.id, episode.is_registration_open !== false)} 
+                                className="sr-only" 
+                              />
+                              <div className={`block w-10 h-6 rounded-full transition-colors ${episode.is_registration_open !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                              <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${episode.is_registration_open !== false ? 'transform translate-x-4' : ''}`}></div>
+                            </div>
+                            <span className={`text-xs font-bold ${episode.is_registration_open !== false ? 'text-emerald-600' : 'text-slate-500'}`}>
+                              {episode.is_registration_open !== false ? 'Open' : 'Closed'}
+                            </span>
+                          </label>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-3">

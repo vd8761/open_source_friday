@@ -7,6 +7,7 @@ import Login from './Login';
 import PwaInstallPrompt from './PwaInstallPrompt';
 import RegistrationForm from './components/RegistrationForm';
 import AdminEpisodeForm from './components/AdminEpisodeForm';
+import { subscribeToPush, getNotificationPermission } from './utils/pushNotifications';
 import './App.css';
 
 // A simple wrapper to protect routes
@@ -20,6 +21,14 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
+  React.useEffect(() => {
+    // If a user previously granted notification permissions but the service worker
+    // failed to register, this will automatically subscribe them properly on their next visit.
+    if (getNotificationPermission() === 'granted') {
+      subscribeToPush().catch(console.error);
+    }
+  }, []);
+
   return (
     <GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}>
       <Router>
