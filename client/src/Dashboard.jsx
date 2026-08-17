@@ -28,7 +28,7 @@ export default function Dashboard() {
   const [pushForm, setPushForm] = useState({ title: '', body: '', url: '' });
   const [sendingPush, setSendingPush] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  
+
   // Toast Notification State
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
@@ -100,7 +100,7 @@ export default function Dashboard() {
   const fetchEpisodes = async () => {
     setLoading(true);
     const token = localStorage.getItem('adminToken');
-    
+
     if (!token) {
       navigate('/login');
       return;
@@ -113,7 +113,7 @@ export default function Dashboard() {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.status === 401 || response.status === 403) {
         localStorage.removeItem('adminToken');
         navigate('/login');
@@ -223,7 +223,7 @@ export default function Dashboard() {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       const result = await response.json();
       if (result.success) {
         setRegistrations(prev => prev.filter(r => r.id !== studentId));
@@ -249,17 +249,17 @@ export default function Dashboard() {
         },
         body: JSON.stringify({ is_registration_open: !currentStatus })
       });
-      
+
       if (!response.ok) {
         const text = await response.text();
         console.error('Server returned error status:', response.status, text);
         showToast(`Server Error (${response.status}): The backend might need to be restarted.`, 'error');
         return;
       }
-      
+
       const result = await response.json();
       if (result.success) {
-        setData(prev => prev.map(ep => 
+        setData(prev => prev.map(ep =>
           ep.id === episodeId ? { ...ep, is_registration_open: !currentStatus } : ep
         ));
         showToast(`Registration ${!currentStatus ? 'opened' : 'closed'} successfully`, 'success');
@@ -274,11 +274,11 @@ export default function Dashboard() {
 
   const handleDownloadCSV = () => {
     if (registrations.length === 0) return;
-    
+
     const headers = ['Full Name', 'Email', 'WhatsApp', 'Gender', 'College', 'Degree', 'Department', 'Year of Study', 'DOS Member', 'Topic', 'Registered At'];
-    
+
     const csvRows = [headers.join(',')];
-    
+
     registrations.forEach(row => {
       const values = [
         `"${row.full_name || ''}"`,
@@ -295,11 +295,11 @@ export default function Dashboard() {
       ];
       csvRows.push(values.join(','));
     });
-    
+
     const csvData = csvRows.join('\n');
     const blob = new Blob([csvData], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.setAttribute('hidden', '');
     a.setAttribute('href', url);
@@ -324,9 +324,9 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans relative">
-      
+
       {/* Toast Notification */}
-      <div 
+      <div
         className={`fixed top-4 right-4 z-50 transition-all duration-300 transform ${toast.visible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'}`}
       >
         <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border ${toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
@@ -351,18 +351,18 @@ export default function Dashboard() {
                 Open Source Friday
               </h1>
             </div>
-            
+
             <div className="flex items-center gap-4">
               {/* Profile Dropdown */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setProfileOpen(!profileOpen)}
                   className="h-9 w-9 bg-dos-light/20 text-dos hover:bg-dos hover:text-white rounded-full flex items-center justify-center transition-all focus:ring-2 focus:ring-dos focus:outline-none font-bold text-sm shadow-sm"
                   title="Profile"
                 >
                   A
                 </button>
-                
+
                 {profileOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50">
                     <div className="p-2 flex flex-col gap-1">
@@ -393,7 +393,7 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
+
         {/* Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
           <div>
@@ -452,8 +452,8 @@ export default function Dashboard() {
             </div>
             {/* Progress Bar */}
             <div className="w-full bg-slate-100 rounded-full h-2.5">
-              <div 
-                className="bg-emerald-500 h-2.5 rounded-full transition-all duration-1000 ease-out" 
+              <div
+                className="bg-emerald-500 h-2.5 rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${Math.max(progressPercentage, 2)}%` }}
               ></div>
             </div>
@@ -503,15 +503,15 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Title</label>
-                      <input type="text" required value={pushForm.title} onChange={e => setPushForm({...pushForm, title: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="Notification Title" />
+                      <input type="text" required value={pushForm.title} onChange={e => setPushForm({ ...pushForm, title: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="Notification Title" />
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Target URL (Optional)</label>
-                      <input type="text" value={pushForm.url} onChange={e => setPushForm({...pushForm, url: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="e.g. / or https://example.com" />
+                      <input type="text" value={pushForm.url} onChange={e => setPushForm({ ...pushForm, url: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="e.g. / or https://example.com" />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-bold text-slate-700 mb-1">Message Body</label>
-                      <textarea required value={pushForm.body} onChange={e => setPushForm({...pushForm, body: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="Notification message body..." rows="2"></textarea>
+                      <textarea required value={pushForm.body} onChange={e => setPushForm({ ...pushForm, body: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:outline-none" placeholder="Notification message body..." rows="2"></textarea>
                     </div>
                   </div>
                   <button type="submit" disabled={sendingPush} className="inline-flex items-center justify-center px-6 py-2.5 bg-dos hover:bg-dos-dark text-white font-bold rounded-xl transition-all shadow-sm disabled:opacity-70">
@@ -573,7 +573,7 @@ export default function Dashboard() {
                 {data.length} Events
               </span>
             </div>
-            
+
             <div className="p-0 overflow-x-auto">
               {loading ? (
                 <div className="flex flex-col justify-center items-center py-20 opacity-50">
@@ -593,7 +593,7 @@ export default function Dashboard() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Presenter</th>
                       <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Registrations</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Registration Status</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
@@ -611,9 +611,9 @@ export default function Dashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-medium text-slate-900">
-                              {episode.event_date ? new Date(episode.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                            </span>
+                          <span className="text-sm font-medium text-slate-900">
+                            {episode.event_date ? new Date(episode.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                          </span>
                           <div className="text-xs text-slate-500">
                             {episode.event_time || 'N/A'}
                           </div>
@@ -637,11 +637,11 @@ export default function Dashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <label className="flex items-center justify-center space-x-2 cursor-pointer">
                             <div className="relative">
-                              <input 
-                                type="checkbox" 
-                                checked={episode.is_registration_open !== false} 
-                                onChange={() => handleToggleRegistration(episode.id, episode.is_registration_open !== false)} 
-                                className="sr-only" 
+                              <input
+                                type="checkbox"
+                                checked={episode.is_registration_open !== false}
+                                onChange={() => handleToggleRegistration(episode.id, episode.is_registration_open !== false)}
+                                className="sr-only"
                               />
                               <div className={`block w-10 h-6 rounded-full transition-colors ${episode.is_registration_open !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
                               <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${episode.is_registration_open !== false ? 'transform translate-x-4' : ''}`}></div>
@@ -701,7 +701,7 @@ export default function Dashboard() {
                 </span>
               </div>
             </div>
-            
+
             <div className="p-0">
               {loading ? (
                 <div className="flex flex-col justify-center items-center py-20 opacity-50">
@@ -713,9 +713,9 @@ export default function Dashboard() {
                   <p className="text-slate-500 font-medium">No registrations for this episode yet.</p>
                 </div>
               ) : (
-                <RegistrationTable 
-                  data={registrations} 
-                  onDeleteRegistration={handleDeleteRegistration} 
+                <RegistrationTable
+                  data={registrations}
+                  onDeleteRegistration={handleDeleteRegistration}
                 />
               )}
             </div>
@@ -729,14 +729,14 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="text-lg font-bold text-slate-900">Change Admin Password</h3>
-              <button 
+              <button
                 onClick={() => setChangePasswordModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 ✕
               </button>
             </div>
-            
+
             <form onSubmit={handleChangePassword} className="p-6 space-y-4">
               {passwordError && (
                 <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100">
@@ -760,7 +760,7 @@ export default function Dashboard() {
                   placeholder="Enter current password"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">New Password</label>
                 <input
