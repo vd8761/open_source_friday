@@ -45,7 +45,7 @@ async function initDB() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    
+
     // Ensure column exists for welcome tracking
     await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS welcome_sent BOOLEAN DEFAULT FALSE`);
 
@@ -280,7 +280,7 @@ app.post('/api/push/subscribe', async (req, res) => {
        RETURNING welcome_sent`,
       [endpoint, keys.p256dh, keys.auth]
     );
-    
+
     if (result.rows[0] && !result.rows[0].welcome_sent) {
       try {
         const payload = {
@@ -291,13 +291,13 @@ app.post('/api/push/subscribe', async (req, res) => {
           url: '/'
         };
         await webpush.sendNotification({ endpoint, keys }, JSON.stringify(payload));
-        
+
         await pool.query('UPDATE push_subscriptions SET welcome_sent = TRUE WHERE endpoint = $1', [endpoint]);
       } catch (err) {
         console.error('[Push] Failed to send welcome notification:', err);
       }
     }
-    
+
     res.json({ success: true });
   } catch (err) {
     console.error('[Push] Subscribe DB error:', err);
@@ -673,8 +673,8 @@ app.get('/api/admin/push/stats', authenticateToken, async (req, res) => {
   try {
     const totalResult = await pool.query('SELECT COUNT(*) as total FROM push_subscriptions');
     const welcomeResult = await pool.query('SELECT COUNT(*) as welcome_count FROM push_subscriptions WHERE welcome_sent = TRUE');
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       total: parseInt(totalResult.rows[0].total),
       welcomeSent: parseInt(welcomeResult.rows[0].welcome_count)
     });
