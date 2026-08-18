@@ -1,11 +1,23 @@
 const express = require('express');
 const { Pool } = require('pg');
+const path = require('path');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const webpush = require('web-push');
 const cron = require('node-cron');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.sender.net',
+  port: process.env.SMTP_PORT || 465,
+  secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 const app = express();
 app.use(cors());
@@ -566,7 +578,7 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Security check failed. Please refresh and try again.' });
     }
 
-    const epCheck = await pool.query('SELECT is_active, is_registration_open FROM episodes WHERE id = $1', [episode_id]);
+    const epCheck = await pool.query('SELECT * FROM episodes WHERE id = $1', [episode_id]);
     if (epCheck.rows.length === 0 || !epCheck.rows[0].is_active) {
       return res.status(400).json({ success: false, error: 'Registration is closed for this episode.' });
     }
@@ -604,6 +616,147 @@ app.post('/api/register', async (req, res) => {
 
     await pool.query('INSERT INTO episode_registrations (student_id, episode_id) VALUES ($1, $2)', [currentStudentId, episode_id]);
     await pool.query('COMMIT');
+
+    // Send confirmation email asynchronously
+    const episode = epCheck.rows[0];
+    const eventDateStr = new Date(episode.event_date).toLocaleDateString('en-IN', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    
+    const mailOptions = {
+      from: `"DOS Club Open Source Fridays" <${process.env.FROM_EMAIL || 'info@dosclub.com'}>`,
+      to: email,
+      subject: `Registration Confirmed: EP ${episode.episode_number} - ${episode.title}`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registration Confirmed</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; -webkit-font-smoothing: antialiased;">
+  <!-- Main Container -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f3f4f6; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <!-- Email Wrapper -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+          
+          <!-- Top Accent Line -->
+          <tr>
+            <td style="height: 6px; background-color: #07a97b; background-image: linear-gradient(to right, #07a97b, #20dbad);"></td>
+          </tr>
+
+          <!-- Header Logo -->
+          <tr>
+            <td align="center" style="padding: 35px 20px 25px; border-bottom: 1px solid #f1f5f9;">
+              <img src="https://osf.descienceosclub.com/dos_logo.png" alt="Open Source Friday" style="height: 50px; width: auto; display: block;" />
+            </td>
+          </tr>
+
+          <!-- Content Body -->
+          <tr>
+            <td style="padding: 40px 32px;">
+              <h1 style="margin: 0 0 20px 0; font-size: 24px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">
+                Registration Confirmed!
+              </h1>
+              
+              <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: #475569;">
+                Hi <strong style="color: #0f172a;">${full_name}</strong>,<br><br>
+                Thank you for reserving your spot for <strong style="color: #07a97b;">Episode ${episode.episode_number}: ${episode.title}</strong>. We're excited to have you join us for this upcoming session.
+              </p>
+
+              <!-- Event Details Card -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 30px;">
+                <tr>
+                  <td style="padding: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 13px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">
+                      Event Details
+                    </h3>
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="100" style="padding: 8px 0; font-size: 15px; color: #64748b;">Date</td>
+                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #1e293b;">${eventDateStr}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; font-size: 15px; color: #64748b;">Time</td>
+                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #1e293b;">${episode.event_time}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; font-size: 15px; color: #64748b;">Speaker</td>
+                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #1e293b;">${episode.presenter_name}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; font-size: 15px; color: #64748b;">Mode</td>
+                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #07a97b;">${episode.event_mode}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0 0 32px 0; font-size: 16px; line-height: 1.6; color: #475569;">
+                Please mark your calendar. If this is an online event, you'll receive the meeting link shortly before the session begins.
+              </p>
+
+              <!-- Call to Action -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <a href="https://osf.descienceosclub.com/" target="_blank" style="display: inline-block; padding: 14px 28px; background-color: #07a97b; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 6px; text-align: center;">
+                      Visit Platform
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #475569;">
+                Descience Open Source Club
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #94a3b8; line-height: 1.5;">
+                You received this email because you registered for an Open Source Friday event.<br>
+                <a href="https://osf.descienceosclub.com/" style="color: #07a97b; text-decoration: none;">osf.descienceosclub.com</a>
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+      `,
+      text: `Registration Successful!
+Hi ${full_name},
+You have successfully registered for Episode ${episode.episode_number}: ${episode.title}.
+
+Event Details:
+Date: ${eventDateStr}
+Time: ${episode.event_time}
+Presenter: ${episode.presenter_name}
+Mode: ${episode.event_mode}
+
+We look forward to seeing you there!
+Best regards,
+Open Source Friday Team`,
+      replyTo: process.env.ADMIN_EMAIL || 'info@dosclub.com'
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error('Error sending confirmation email:', error);
+      } else {
+        console.log('Confirmation email sent:', info.messageId);
+      }
+    });
 
     res.status(201).json({ success: true, message: 'Registration successful' });
   } catch (error) {
