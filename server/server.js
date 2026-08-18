@@ -493,7 +493,7 @@ app.get('/api/admin/episodes/:id', authenticateToken, async (req, res) => {
 app.get('/api/episodes', async (req, res) => {
   try {
     const query = `
-      SELECT id, episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, is_active, is_registration_open
+      SELECT id, episode_number, title, description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_active, is_registration_open
       FROM episodes 
       ORDER BY episode_number DESC
     `;
