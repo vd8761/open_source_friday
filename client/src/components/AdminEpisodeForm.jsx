@@ -208,7 +208,7 @@ const AdminEpisodeForm = () => {
         body: JSON.stringify({
           ...formData,
           episode_number: parseInt(formData.episode_number, 10),
-          event_date: eventDate.toISOString(),
+          event_date: format(eventDate, 'yyyy-MM-dd'),
           event_time: formattedTime
         })
       });

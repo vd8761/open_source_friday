@@ -24,8 +24,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body,
-    icon,
-    badge,
+    icon: new URL(icon, self.location.origin).href,
+    badge: new URL(badge, self.location.origin).href,
     data: { url },
     tag: tag || 'osf-notification',
     vibrate: [200, 100, 200],
