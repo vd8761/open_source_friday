@@ -280,7 +280,7 @@ app.get('/api/push/vapid-public-key', (req, res) => {
 
 // Save a push subscription
 app.post('/api/push/subscribe', async (req, res) => {
-  const { endpoint, keys } = req.body;
+  const { endpoint, keys, isExplicitInteraction } = req.body;
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
     return res.status(400).json({ success: false, error: 'Invalid subscription object' });
   }
@@ -293,11 +293,11 @@ app.post('/api/push/subscribe', async (req, res) => {
       [endpoint, keys.p256dh, keys.auth]
     );
 
-    if (result.rows[0] && !result.rows[0].welcome_sent) {
+    if (isExplicitInteraction && result.rows[0] && !result.rows[0].welcome_sent) {
       try {
         const payload = {
           title: 'Welcome to Open Source Friday! 🎉',
-          body: "This is a test notification. You've successfully subscribed to our updates! Stay tuned for upcoming open source activities. 🚀",
+          body: "You've successfully subscribed to our updates! We'll notify you when new open source activities and episodes go live. Stay tuned! 🚀",
           icon: '/favicon.png',
           badge: '/favicon.png',
           url: '/'

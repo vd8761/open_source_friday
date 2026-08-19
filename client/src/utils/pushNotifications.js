@@ -14,7 +14,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
  * Sends the subscription to the server for storage.
  * Returns: 'granted' | 'denied' | 'unsupported' | 'error'
  */
-export async function subscribeToPush() {
+export async function subscribeToPush(isExplicitInteraction = false) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     return 'unsupported';
   }
@@ -34,10 +34,15 @@ export async function subscribeToPush() {
       });
     }
 
+    const subJson = subscription.toJSON();
     await fetch(`${API_URL}/api/push/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscription),
+      body: JSON.stringify({
+        endpoint: subJson.endpoint,
+        keys: subJson.keys,
+        isExplicitInteraction
+      }),
     });
 
     return 'granted';

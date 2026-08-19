@@ -50,7 +50,7 @@ const PwaInstallPrompt = () => {
 
   const handleEnableNotifications = async () => {
     setShowNotifPrompt(false);
-    await subscribeToPush();
+    await subscribeToPush(true);
   };
 
   // ─── Install Prompt ──────────────────────────────────────────────────────────
