@@ -747,7 +747,12 @@ Mode: ${episode.event_mode}
 We look forward to seeing you there!
 Best regards,
 Open Source Friday Team`,
-      replyTo: process.env.ADMIN_EMAIL || 'info@dosclub.com'
+      replyTo: process.env.REPLY_TO_EMAIL || 'info@descienceosclub.com',
+      headers: {
+        'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || 'info@descienceosclub.com'}?subject=unsubscribe>`,
+        'Precedence': 'Bulk',
+        'X-Entity-Ref-ID': Date.now().toString()
+      }
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
