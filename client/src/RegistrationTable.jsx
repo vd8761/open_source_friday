@@ -90,7 +90,7 @@ export default function RegistrationTable({ data, onDeleteRegistration }) {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-slate-700 flex items-center gap-1.5">
                       <Phone className="h-4 w-4 text-slate-400" />
-                      {row.whatsapp_number}
+                      {row.country_code ? `${row.country_code} ` : ''}{row.whatsapp_number}
                     </div>
                     <div className="text-xs text-slate-500 mt-1 uppercase tracking-wide">
                       {row.gender}
