@@ -74,14 +74,20 @@ const RegistrationForm = () => {
         minutes = parseInt(time24[2], 10);
       } else {
         // Fallback if time isn't parseable: check if it's the next day
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const eventDateEnd = new Date(year, month - 1, day, 23, 59, 59);
+        const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+        const year = istDateObj.getFullYear();
+        const month = istDateObj.getMonth();
+        const day = istDateObj.getDate();
+        const eventDateEnd = new Date(year, month, day, 23, 59, 59);
         const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
         return nowIST > eventDateEnd;
       }
 
-      const [year, month, day] = dateStr.split('-').map(Number);
-      const eventDateEnd = new Date(year, month - 1, day, hours, minutes, 0);
+      const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+      const year = istDateObj.getFullYear();
+      const month = istDateObj.getMonth();
+      const day = istDateObj.getDate();
+      const eventDateEnd = new Date(year, month, day, hours, minutes, 0);
       const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
       return nowIST > eventDateEnd;
     } catch {
@@ -114,8 +120,11 @@ const RegistrationForm = () => {
         minutes = parseInt(time24[2], 10);
       }
       
-      const [year, month, day] = dateStr.split('-').map(Number);
-      const eventDateStart = new Date(year, month - 1, day, hours, minutes, 0);
+      const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+      const year = istDateObj.getFullYear();
+      const month = istDateObj.getMonth();
+      const day = istDateObj.getDate();
+      const eventDateStart = new Date(year, month, day, hours, minutes, 0);
       
       // Close registration 1 hour before start
       const registrationCloseTime = new Date(eventDateStart.getTime() - 60 * 60 * 1000);
