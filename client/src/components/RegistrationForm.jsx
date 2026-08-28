@@ -76,12 +76,14 @@ const RegistrationForm = () => {
         // Fallback if time isn't parseable: check if it's the next day
         const [year, month, day] = dateStr.split('-').map(Number);
         const eventDateEnd = new Date(year, month - 1, day, 23, 59, 59);
-        return new Date() > eventDateEnd;
+        const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+        return nowIST > eventDateEnd;
       }
 
       const [year, month, day] = dateStr.split('-').map(Number);
       const eventDateEnd = new Date(year, month - 1, day, hours, minutes, 0);
-      return new Date() > eventDateEnd;
+      const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+      return nowIST > eventDateEnd;
     } catch {
       return false;
     }
@@ -91,6 +93,41 @@ const RegistrationForm = () => {
   const isRegistrationOpen = (episode) => {
     if (!episode) return false;
     if (isEpisodeConcluded(episode)) return false;
+    
+    try {
+      const dateStr = String(episode.event_date).split('T')[0];
+      const timeStrList = String(episode.event_time).split('-');
+      const startTimeStr = timeStrList[0].trim();
+      
+      let hours = 0, minutes = 0;
+      const time12 = startTimeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const time24 = startTimeStr.match(/^(\d{1,2}):(\d{2})$/);
+      
+      if (time12) {
+        hours = parseInt(time12[1], 10);
+        minutes = parseInt(time12[2], 10);
+        const period = time12[3].toUpperCase();
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+      } else if (time24) {
+        hours = parseInt(time24[1], 10);
+        minutes = parseInt(time24[2], 10);
+      }
+      
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const eventDateStart = new Date(year, month - 1, day, hours, minutes, 0);
+      
+      // Close registration 1 hour before start
+      const registrationCloseTime = new Date(eventDateStart.getTime() - 60 * 60 * 1000);
+      const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+      
+      if (nowIST > registrationCloseTime) {
+        return false;
+      }
+    } catch (e) {
+      // ignore
+    }
+
     return episode.is_registration_open !== false;
   };
 
