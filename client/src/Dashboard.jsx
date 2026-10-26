@@ -422,6 +422,8 @@ export default function Dashboard() {
               <Bell className="mr-2 h-4 w-4 text-amber-500" />
               Send Push Notification
             </button>
+            <button onClick={() => navigate('/admin/invitations')}
+              className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50">Email Invitations</button>
             <button
               onClick={() => navigate('/admin/episodes/new')}
               className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 shadow-sm text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
@@ -674,6 +676,7 @@ export default function Dashboard() {
                             >
                               Edit
                             </button>
+                            <button onClick={() => navigate(`/admin/episodes/${episode.id}/attendance`)} className="text-dos font-semibold text-sm">Attendance</button>
                             <button
                               onClick={() => handleViewRoster(episode)}
                               className="text-dos hover:text-dos-dark font-bold inline-flex items-center gap-1 transition-colors bg-dos-light/10 hover:bg-dos-light/20 px-3 py-1.5 rounded-lg"
@@ -704,6 +707,7 @@ export default function Dashboard() {
                 <h3 className="text-lg font-bold text-slate-900">Episode {activeEpisode} Roster</h3>
               </div>
               <div className="flex items-center gap-3">
+                <button onClick={() => navigate(`/admin/episodes/${activeEpisodeId}/attendance`)} className="text-dos font-semibold text-sm">Attendance</button>
                 <button
                   onClick={handleDownloadCSV}
                   disabled={registrations.length === 0}

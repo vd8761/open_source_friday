@@ -1,0 +1,105 @@
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const { createSenderClient } = require("../sender");
+const env = {
+  SENDER_API_TOKEN: "private-key",
+  SENDER_FROM_EMAIL: "from@example.com",
+  SENDER_FROM_NAME: "OSF",
+  SENDER_POSTAL_ADDRESS: "Address",
+  PUBLIC_APP_URL: "https://osf.example.com",
+};
+function setup(responses, override = env) {
+  const calls = [];
+  return {
+    calls,
+    client: createSenderClient({
+      env: override,
+      fetchImpl: async (url, init) => {
+        calls.push({ url, ...init });
+        assert.ok(responses.length);
+        const response = responses.shift();
+        if (response instanceof Error) throw response;
+        return {
+          ok: response.status < 400,
+          status: response.status,
+          headers: { get: () => response.retryAfter || null },
+          json: async () => response.body,
+        };
+      },
+    }),
+  };
+}
+test("Sender API keeps secrets server-side, disables automation and uses marketing campaign audiences", async () => {
+  const { client, calls } = setup([
+    { status: 200, body: { data: { id: "g1" } } },
+    { status: 200, body: {} },
+    { status: 200, body: { data: { id: "c1" } } },
+    { status: 200, body: { success: true } },
+  ]);
+  const group = await client.createGroup("Test");
+  await client.addToGroup(group, ["one@example.com"]);
+  const id = await client.createCampaign(
+    "Title",
+    "Subject",
+    "<p>Body</p>",
+    group,
+  );
+  await client.send(id);
+  assert.equal(calls[0].headers.Authorization, "Bearer private-key");
+  assert.deepEqual(JSON.parse(calls[1].body), {
+    subscribers: ["one@example.com"],
+    trigger_automation: false,
+  });
+  const body = JSON.parse(calls[2].body);
+  assert.deepEqual(body.groups, ["g1"]);
+  assert.equal(body.auto_followup_active, false);
+  assert.equal(body.reply_to, "from@example.com");
+  assert.equal(calls[3].url, "https://api.sender.net/v2/campaigns/c1/send");
+});
+test("Sender errors hide response details, preserve throttling, and never retry sends automatically", async () => {
+  const { client, calls } = setup([
+    {
+      status: 429,
+      retryAfter: "600",
+      body: { message: "private-key and email" },
+    },
+  ]);
+  await assert.rejects(
+    client.send("c1"),
+    (err) =>
+      err.status === 429 &&
+      err.retryAfterSeconds === 600 &&
+      !err.message.includes("private-key"),
+  );
+  assert.equal(calls.length, 1);
+  const network = setup([new Error("private-key")]);
+  await assert.rejects(network.client.send("c1"), /outcome is unknown/);
+  assert.equal(network.calls.length, 1);
+});
+test("Sender report pagination accepts documented object/array data and never follows provider-supplied URLs", async () => {
+  const { client, calls } = setup([
+    {
+      status: 200,
+      body: {
+        data: [{ email: "one@example.com" }],
+        links: { next: "https://malicious.example/steal" },
+      },
+    },
+    {
+      status: 200,
+      body: { data: { email: "two@example.com" }, links: { next: null } },
+    },
+  ]);
+  assert.equal((await client.report("c1", "opens")).length, 2);
+  assert.ok(
+    calls.every((c) =>
+      c.url.startsWith("https://api.sender.net/v2/campaigns/c1/opens?"),
+    ),
+  );
+  assert.ok(calls[1].url.includes("page=2"));
+});
+test("unconfigured Sender cannot make network requests", async () => {
+  const { client, calls } = setup([], {});
+  await assert.rejects(client.createGroup("Test"), /Configure Sender/);
+  assert.equal(calls.length, 0);
+});

@@ -1,0 +1,447 @@
+const express = require("express");
+const { episodeEnd } = require("./episode-time");
+const { InputError, csvExport } = require("./outreach-csv");
+const { SenderError } = require("./sender");
+const { ZoomError } = require("./zoom");
+const {
+  previewImport,
+  createInviteCampaign,
+  syncInviteReports,
+  reconcileBatch,
+  importDeliveryReport,
+} = require("./invite-service");
+const {
+  attendanceCsv,
+  saveAttendance,
+  attendanceReport,
+  syncEpisodeAttendance,
+} = require("./attendance");
+const uuid = (value) =>
+  typeof value === "string" &&
+  /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(value);
+const numberId = (value) =>
+  /^\d+$/.test(String(value)) &&
+  Number(value) > 0 &&
+  Number(value) <= 2147483647;
+function createOutreachRouter({
+  pool,
+  sender,
+  zoom,
+  authenticateToken,
+  env = process.env,
+}) {
+  const router = express.Router();
+  router.use(authenticateToken);
+  const admin = (req) => req.user.id;
+  const route =
+    (handler, transaction = false) =>
+    async (req, res) => {
+      const db = await pool.connect();
+      try {
+        if (transaction) await db.query("BEGIN");
+        const result = await handler(req, db);
+        if (transaction) await db.query("COMMIT");
+        if (result?.csv !== undefined) {
+          res.type("text/csv").attachment(result.filename).send(result.csv);
+          return;
+        }
+        res.json({ success: true, ...result });
+      } catch (error) {
+        if (transaction) await db.query("ROLLBACK");
+        const safe =
+          error instanceof InputError ||
+          error instanceof SenderError ||
+          error instanceof ZoomError;
+        res.status(safe ? error.status : 500).json({
+          success: false,
+          error: safe
+            ? error.message
+            : "Unable to complete this operation. No uncertain email send will be retried automatically.",
+        });
+      } finally {
+        db.release();
+      }
+    };
+  router.param("campaignId", (req, res, next, value) =>
+    uuid(value)
+      ? next()
+      : res.status(400).json({ success: false, error: "Invalid campaign ID." }),
+  );
+  router.param("episodeId", (req, res, next, value) =>
+    numberId(value)
+      ? next()
+      : res.status(400).json({ success: false, error: "Invalid episode ID." }),
+  );
+  const campaign = async (db, id) => {
+    const result = (
+      await db.query("SELECT * FROM invite_campaigns WHERE id=$1", [id])
+    ).rows[0];
+    if (!result) throw new InputError("Campaign not found.", 404);
+    return result;
+  };
+  const episode = async (db, id) => {
+    const result = (await db.query("SELECT * FROM episodes WHERE id=$1", [id]))
+      .rows[0];
+    if (!result) throw new InputError("Episode not found.", 404);
+    return result;
+  };
+  router.get(
+    "/outreach/config",
+    route(async () => ({
+      sender: sender.identity(),
+      zoom_configured: zoom.configured(),
+      attendance_threshold_minutes: 30,
+      delivery_tracking:
+        "Provider delivery events are not assumed. Import a Sender delivery report for explicit delivery confirmation.",
+    })),
+  );
+  router.post(
+    "/outreach/preview",
+    route(async (req, db) => {
+      if (!numberId(req.body.episode_id))
+        throw new InputError("Choose an episode.");
+      const result = await previewImport(
+        db,
+        req.body.episode_id,
+        req.body.csv,
+        req.body.filters,
+      );
+      return {
+        total: result.total,
+        eligible: result.contacts.length,
+        duplicates: result.duplicates,
+        filtered: result.filtered,
+        rejected: result.rejected,
+        excluded: result.excluded,
+        preview: result.contacts.slice(0, 100),
+      };
+    }),
+  );
+  router.post(
+    "/outreach/campaigns",
+    route(async (req, db) => {
+      if (!numberId(req.body.episode_id))
+        throw new InputError("Choose an episode.");
+      return createInviteCampaign(db, req.body, admin(req), env);
+    }, true),
+  );
+  router.get(
+    "/outreach/campaigns",
+    route(async (req, db) => ({
+      data: (
+        await db.query(`SELECT c.*,e.episode_number,
+    (SELECT COUNT(*)::integer FROM invite_recipients r WHERE r.campaign_id=c.id) AS recipients,
+    (SELECT COUNT(*)::integer FROM invite_recipients r WHERE r.campaign_id=c.id AND r.sent_at IS NOT NULL) AS sent,
+    (SELECT COUNT(*)::integer FROM invite_recipients r WHERE r.campaign_id=c.id AND r.opened_at IS NOT NULL) AS opened,
+    (SELECT COUNT(*)::integer FROM invite_recipients r WHERE r.campaign_id=c.id AND r.delivered_at IS NOT NULL) AS delivered
+    FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id ORDER BY c.created_at DESC LIMIT 100`)
+      ).rows,
+    })),
+  );
+  async function campaignRecipients(db, id) {
+    return (
+      await db.query(
+        `SELECT r.*,EXISTS(SELECT 1 FROM episode_registrations er JOIN students s ON s.id=er.student_id
+      JOIN invite_campaigns c ON c.episode_id=er.episode_id WHERE c.id=r.campaign_id AND LOWER(TRIM(s.email))=r.email) AS registered
+      FROM invite_recipients r WHERE r.campaign_id=$1 ORDER BY r.id`,
+        [id],
+      )
+    ).rows;
+  }
+  router.get(
+    "/outreach/campaigns/:campaignId",
+    route(async (req, db) => ({
+      campaign: await campaign(db, req.params.campaignId),
+      data: await campaignRecipients(db, req.params.campaignId),
+      batches: (
+        await db.query(
+          "SELECT * FROM invite_batches WHERE campaign_id=$1 ORDER BY created_at",
+          [req.params.campaignId],
+        )
+      ).rows,
+    })),
+  );
+  router.get(
+    "/outreach/campaigns/:campaignId/export",
+    route(async (req, db) => ({
+      csv: csvExport(
+        await campaignRecipients(db, req.params.campaignId),
+        [
+          ["email", "Email"],
+          ["full_name", "Full Name"],
+          ["college", "College"],
+          ["department", "Department"],
+          ["year", "Year"],
+          ["send_status", "Queue Status"],
+          ["skip_reason", "Skip Reason"],
+          ["sent_at", "Sent At"],
+          ["delivered_at", "Delivered At"],
+          ["delivery_source", "Delivery Evidence"],
+          ["opened_at", "Open Detected At"],
+          ["clicked_at", "Click Detected At"],
+          ["hard_bounced_at", "Hard Bounced At"],
+          ["soft_bounced_at", "Soft Bounced At"],
+          ["unsubscribed_at", "Unsubscribed At"],
+          ["complained_at", "Complaint At"],
+          ["registered", "Registered"],
+        ].map(([key, label]) => ({ key, label })),
+      ),
+      filename: `invitation_${req.params.campaignId}.csv`,
+    })),
+  );
+  router.post(
+    "/outreach/campaigns/:campaignId/start",
+    route(async (req, db) => {
+      const c = await campaign(db, req.params.campaignId);
+      if (!sender.configured())
+        throw new InputError(
+          "Configure Sender and the public application URL on the backend before starting.",
+          503,
+        );
+      if (!["draft", "paused"].includes(c.status))
+        throw new InputError("Only draft or paused campaigns can be started.");
+      const e = await episode(db, c.episode_id);
+      if (episodeEnd(e) && episodeEnd(e) < Date.now())
+        throw new InputError(
+          "This episode has ended. Choose an upcoming episode.",
+        );
+      if (!e.is_active || e.is_registration_open === false)
+        throw new InputError("Episode registration must be open.");
+      const blocked = await db.query(
+        "SELECT id FROM invite_batches WHERE campaign_id=$1 AND status IN ('sending','review')",
+        [c.id],
+      );
+      if (blocked.rows.length)
+        throw new InputError(
+          "Reconcile the uncertain batch with Sender before resuming.",
+          409,
+        );
+      // Preserve any rate-limit cooldown recorded by the worker.
+      await db.query(
+        "UPDATE invite_campaigns SET status='running',last_error=NULL WHERE id=$1",
+        [c.id],
+      );
+      return {
+        message:
+          "Campaign started. The background worker will send the next batch when due.",
+      };
+    }, true),
+  );
+  router.post(
+    "/outreach/campaigns/:campaignId/pause",
+    route(async (req, db) => {
+      await campaign(db, req.params.campaignId);
+      await db.query(
+        "UPDATE invite_campaigns SET status='paused' WHERE id=$1 AND status<>'completed'",
+        [req.params.campaignId],
+      );
+      return {
+        message:
+          "Campaign paused. A batch already submitted to Sender cannot be recalled here.",
+      };
+    }),
+  );
+  router.post(
+    "/outreach/campaigns/:campaignId/sync",
+    route(async (req, db) => {
+      await campaign(db, req.params.campaignId);
+      await syncInviteReports(db, sender, req.params.campaignId);
+      return {
+        message:
+          "Sender reports synchronized. Sent emails without delivery evidence remain unconfirmed.",
+      };
+    }),
+  );
+  router.post(
+    "/outreach/campaigns/:campaignId/reconcile/:batchId",
+    route(async (req, db) => {
+      if (!uuid(req.params.batchId)) throw new InputError("Invalid batch ID.");
+      await db.query("SELECT pg_advisory_xact_lock(7410626)");
+      const batch = (
+        await db.query(
+          "SELECT id FROM invite_batches WHERE id=$1 AND campaign_id=$2 AND status IN ('sending','review')",
+          [req.params.batchId, req.params.campaignId],
+        )
+      ).rows[0];
+      if (!batch)
+        throw new InputError(
+          "No uncertain batch was found for this campaign.",
+          404,
+        );
+      const result = await reconcileBatch(db, sender, batch.id);
+      return {
+        message:
+          result === "unsent"
+            ? "Sender confirmed the draft was not sent. Resume to rebuild and submit this batch."
+            : "Sender confirmed this batch was submitted. Resume the campaign to continue.",
+      };
+    }, true),
+  );
+  router.post(
+    "/outreach/campaigns/:campaignId/delivery-import",
+    route(async (req, db) => {
+      await campaign(db, req.params.campaignId);
+      return {
+        updated: await importDeliveryReport(
+          db,
+          req.params.campaignId,
+          req.body.csv,
+          admin(req),
+        ),
+        message: "Delivery evidence imported from the supplied report.",
+      };
+    }, true),
+  );
+  router.get(
+    "/episodes/:episodeId/attendance",
+    route(async (req, db) => {
+      await episode(db, req.params.episodeId);
+      return attendanceReport(db, req.params.episodeId);
+    }),
+  );
+  router.post(
+    "/episodes/:episodeId/attendance/sync",
+    route(async (req, db) => {
+      const e = await episode(db, req.params.episodeId);
+      if (!e.zoom_meeting_id)
+        throw new InputError("Link a Zoom meeting to this episode first.");
+      await syncEpisodeAttendance(db, zoom, e, {
+        meetingUuid: req.body.meeting_uuid,
+        threshold: req.body.threshold_minutes,
+        adminId: admin(req),
+      });
+      return {
+        message: "Zoom attendance synchronized.",
+        ...(await attendanceReport(db, e.id)),
+      };
+    }, true),
+  );
+  router.post(
+    "/episodes/:episodeId/attendance/import",
+    route(async (req, db) => {
+      await episode(db, req.params.episodeId);
+      await saveAttendance(db, {
+        episodeId: req.params.episodeId,
+        meetingUuid: req.body.meeting_uuid,
+        participants: attendanceCsv(req.body.csv),
+        threshold: req.body.threshold_minutes ?? 30,
+        source: "zoom_csv",
+        adminId: admin(req),
+        complete: req.body.report_complete === true,
+      });
+      return {
+        message: "Attendance CSV imported.",
+        ...(await attendanceReport(db, req.params.episodeId)),
+      };
+    }, true),
+  );
+  router.post(
+    "/episodes/:episodeId/attendance/match",
+    route(async (req, db) => {
+      await db.query("SELECT id FROM episodes WHERE id=$1 FOR UPDATE", [
+        req.params.episodeId,
+      ]);
+      if (
+        !numberId(req.body.registration_id) ||
+        !/^[a-f\d]{64}$/.test(req.body.participant_id || "")
+      )
+        throw new InputError("Choose a participant and registration.");
+      const registration = (
+        await db.query(
+          "SELECT id FROM episode_registrations WHERE episode_id=$1 AND id=$2",
+          [req.params.episodeId, req.body.registration_id],
+        )
+      ).rows[0];
+      if (!registration)
+        throw new InputError("Registration not found in this episode.", 404);
+      const result = await db.query(
+        "UPDATE attendance_participants SET registration_id=$3,match_method='manual' WHERE episode_id=$1 AND id=$2 RETURNING id",
+        [req.params.episodeId, req.body.participant_id, registration.id],
+      );
+      if (!result.rows.length)
+        throw new InputError("Participant not found.", 404);
+      await db.query(
+        "INSERT INTO attendance_audit(episode_id,registration_id,action,detail,admin_id) VALUES($1,$2,$3,$4,$5)",
+        [
+          req.params.episodeId,
+          registration.id,
+          "manual_match",
+          req.body.participant_id,
+          admin(req),
+        ],
+      );
+      return { message: "Participant matched to the selected registration." };
+    }, true),
+  );
+  router.post(
+    "/episodes/:episodeId/attendance/override",
+    route(async (req, db) => {
+      await db.query("SELECT id FROM episodes WHERE id=$1 FOR UPDATE", [
+        req.params.episodeId,
+      ]);
+      const { registration_id, status } = req.body;
+      const note = String(req.body.note || "").trim();
+      if (
+        !numberId(registration_id) ||
+        !["present", "absent", "partial", "clear"].includes(status) ||
+        note.length < 3 ||
+        note.length > 1000
+      )
+        throw new InputError(
+          "Choose a valid registration, status, and a reason (3–1000 characters).",
+        );
+      if (
+        !(
+          await db.query(
+            "SELECT id FROM episode_registrations WHERE episode_id=$1 AND id=$2",
+            [req.params.episodeId, registration_id],
+          )
+        ).rows.length
+      )
+        throw new InputError("Registration not found.", 404);
+      if (status === "clear")
+        await db.query(
+          "DELETE FROM attendance_overrides WHERE registration_id=$1",
+          [registration_id],
+        );
+      else
+        await db.query(
+          `INSERT INTO attendance_overrides(registration_id,status,note,updated_by) VALUES($1,$2,$3,$4)
+      ON CONFLICT(registration_id) DO UPDATE SET status=$2,note=$3,updated_by=$4,updated_at=NOW()`,
+          [registration_id, status, note, admin(req)],
+        );
+      await db.query(
+        "INSERT INTO attendance_audit(episode_id,registration_id,action,detail,admin_id) VALUES($1,$2,$3,$4,$5)",
+        [
+          req.params.episodeId,
+          registration_id,
+          "override",
+          `${status}: ${note}`,
+          admin(req),
+        ],
+      );
+      return { message: "Attendance correction saved with an audit entry." };
+    }, true),
+  );
+  router.get(
+    "/episodes/:episodeId/attendance/export",
+    route(async (req, db) => ({
+      csv: csvExport(
+        (await attendanceReport(db, req.params.episodeId)).data,
+        [
+          ["full_name", "Full Name"],
+          ["email", "Email"],
+          ["joined", "Joined"],
+          ["status", "Attendance"],
+          ["minutes", "Minutes"],
+          ["sessions", "Sessions"],
+          ["duration_estimated", "Duration Estimated"],
+          ["override_note", "Correction Reason"],
+        ].map(([key, label]) => ({ key, label })),
+      ),
+      filename: `episode_${req.params.episodeId}_attendance.csv`,
+    })),
+  );
+  return router;
+}
+module.exports = { createOutreachRouter };
