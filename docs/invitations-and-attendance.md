@@ -1,0 +1,116 @@
+# Bulk invitations and Zoom attendance
+
+## Workflow
+
+CSV audience → Sender registration invitation → application registration → Zoom enrollment and Zoom confirmation → attendance sync.
+
+CSV imports create invitation contacts only. They do not create students, episode registrations or Zoom registrants. The existing registration flow continues to use Zoom for its only confirmation email. Bulk invitations are separate, admin-started Sender marketing campaigns with unsubscribe links. No application SMTP sender is used.
+
+## Dependencies and activation
+
+1. An existing Sender account with marketing campaign API access and enough subscriber/send allowance. Its public free plan advertises 2,500 subscribers and 15,000 emails/month; confirm the actual account allowance before sending. Account webhooks are not required by this implementation.
+2. A Sender API access token with subscriber, group, campaign and campaign-report access. Create it in Sender Settings → API access tokens. Add it to Render; never paste it into chat or a VITE variable.
+3. Verify `descienceosclub.com` in Sender, including its SPF, DKIM and DMARC configuration. Confirm `info@descienceosclub.com` is an authorized sending address. Supply the real organization mailing address for the footer.
+4. Configure these variables on the **Render backend**:
+
+   ```dotenv
+   PUBLIC_APP_URL=https://osf.descienceosclub.com
+   SENDER_API_TOKEN=<secret token entered directly in Render>
+   SENDER_FROM_EMAIL=info@descienceosclub.com
+   SENDER_FROM_NAME=Descience Open Source Club
+   SENDER_POSTAL_ADDRESS=<real organization mailing address>
+   ```
+
+5. Keep the existing `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET`. On the Zoom Server-to-Server OAuth app, add these reporting scopes and reactivate/reauthorize if Zoom requests it:
+   - `report:read:meeting:admin` — validates the meeting instance and date.
+   - `report:read:list_meeting_participants:admin` — retrieves participant attendance.
+   The host needs an eligible paid Zoom account with a licensed Meetings user and report access. The plan on Render does not determine Zoom reporting availability.
+6. Keep Vercel's `VITE_API_URL` pointed at the backend. No Sender secret belongs on Vercel's frontend.
+7. Backend Node.js >=20 and PostgreSQL are already required. Run `npm ci --omit=dev` in `server/`. New runtime package: `csv-parse`; `@electric-sql/pglite` is a development-only PostgreSQL test runtime. Existing server dependencies received compatible security patches.
+8. Run the backend continuously so its minute/15-minute workers can run. Paid Render's existing web service is sufficient at this scale; no additional queue service is required. PostgreSQL advisory locks coordinate multiple instances.
+
+Deploy the backend first and the frontend second from `qa-zoom-integration`. Startup adds tables and indexes without replacing registrations. All campaigns start as drafts and require an authenticated admin to click Start. Restarting a server cannot start a draft. Do not run a production bulk campaign until the single-recipient test is verified.
+
+## Admin workflow
+
+Dashboard → **Email Invitations**:
+
+1. Choose an upcoming active episode with registration open. Campaigns for ended episodes cannot start or continue.
+2. Upload CSV (up to 5 MB / 10,000 rows), or paste CSV. Required `Email`; optional `Full Name`, `College`, `Department`, `Year of Study`, `Status`.
+3. Optionally filter college, department or year. Preview shows valid count, duplicates, exclusions and up to 100 eligible contacts.
+4. Enter subject/message and batch settings. Default: 50 contacts every 15 minutes. This controls pacing, not inbox placement. Existing Sender subscriber suppression is checked again while processing each batch. This check can further reduce the preview count.
+5. Confirm the contacts opted in to episode invitations; save a draft. Review the draft and use **Start sending** separately. For testing, use a CSV containing a single opted-in address you control that is not already registered for the selected episode.
+6. Pause/resume as needed. A batch already submitted to Sender cannot be recalled by this tool. Sender dispatch of that batch is asynchronous; the interval controls submissions.
+7. Use **Sync Sender reports** or allow the 15-minute worker to update recent campaigns. Export the recipient report as CSV.
+
+The worker excludes current episode registrations, known suppressions, and contacts already invited in another campaign for the same episode. Reusing a CSV does not reactivate Sender subscribers. New contact/group membership creation disables automatic Sender workflow triggering. Subject/message are escaped and rendered as text with an application registration button, postal address and Sender unsubscribe link.
+
+### Uncertain sends
+
+Before the send API request, the batch records `sending` durably. A timeout, error or crash leaves it paused or requiring review, never automatically resubmitted. Use **Check send outcome in Sender**:
+
+- If Sender confirms SENT/SENDING, the batch is reconciled without resending.
+- If Sender explicitly confirms an unsent DRAFT without a sent timestamp, it can be rebuilt and submitted after Resume.
+- Unknown/scheduled/other outcomes stay blocked for review.
+
+Pausing or restarting cannot bypass a rate-limit cooldown. Sender groups/drafts created for interrupted preparations are retained in Sender; unused drafts are never sent by this tool.
+
+## Delivery and open evidence
+
+Campaign API reports synchronize sent, open, click, hard/soft bounce, unsubscribe and complaint events. Hard bounces, unsubscribes and complaints also enter the application's suppression list. Events are idempotent, and reports paginate without following arbitrary provider URLs.
+
+**A sent event does not prove delivery.** The documented marketing API does not establish a recipient delivery endpoint. This tool therefore displays **Not reported** instead of inferring delivery from sent/open events. Real-time per-recipient delivery tracking remains dependent on a verified delivery-event/report capability in the actual Sender account. If the account supplies a delivery export, use **Import explicit delivery evidence** with this campaign's report:
+
+```csv
+Email,Status,Timestamp
+student@example.com,delivered,2026-10-26T13:30:00Z
+```
+
+The import only updates recipients already submitted in that campaign. It records admin, time and source (`admin_imported_sender_report`); the UI labels this evidence as imported. It does not claim to authenticate a manually uploaded file as a signed provider event. Invalid imports roll back completely.
+
+Delivered means accepted by the recipient's mail server, not confirmed inbox placement. Open detection is approximate because images can be blocked or preloaded. Clicks can include security scanners. Registration is measured from the application's confirmed registration, independently of email opens. Sender tracking applies only to Sender invitations, not Zoom's confirmation emails.
+
+## Attendance
+
+Dashboard → episode **Attendance** (also accessible from the roster):
+
+- Default minimum for Present is **30 minutes**, as agreed. It is editable per report import/sync.
+- Present: at least 30 minutes. Partial: joined but less than the threshold. Absent: no matched session in a complete report. Not synced: no evidence from a complete report yet.
+- Join/leave intervals are merged across reconnects and simultaneous devices before totaling time. Duration-only rows are labeled estimated because overlap cannot be established.
+- Matching uses the saved Zoom registrant ID first, then an unambiguous normalized email. A supplied unknown registrant ID is not overridden by email. Names alone are never matched.
+- Review unidentified participants and match them to the correct registration. Host/guest participants may legitimately remain unmatched. An absent record can require review if an unidentified participant might be that student.
+- Manual Present/Partial/Absent corrections require a reason. Corrections are audited, can be cleared, and survive later syncs.
+- Syncs replace a snapshot idempotently and preserve manually matched identical participant rows. A different meeting UUID cannot silently replace an episode's session.
+
+### Automatic sync
+
+Every 15 minutes, the backend checks episodes in the past seven days with a Zoom meeting and a parseable start–end time. It first requests attendance at least 30 minutes after the configured end, and retries delayed/failed reports with backoff. A successful complete report is not automatically overwritten later; use manual Sync for a refresh. It validates the report's meeting ID and IST date against the episode, and stores the actual session UUID. Empty/all-zero reports do not mark students absent. The page shows the last automatic failure and next retry time.
+
+Attendance reporting scopes are additional to enrollment scopes. The API method is `GET /report/meetings/{meetingUUID}/participants?include_fields=registrant_id`, with report detail validation and pagination. Use the correct meeting UUID when a meeting ID has been reused. Zoom may omit identifying information for guests, so unmatched review is necessary. A forwarded personal join link is not identity verification.
+
+### CSV fallback
+
+Export participant data from Zoom's Meeting and webinar history report. Import columns:
+
+```csv
+User Email,Name,Duration (Minutes),Registrant ID
+student@example.com,Example Student,40,known-registrant-id
+```
+
+`Duration Seconds` is also supported. Optional `Join Time`/`Leave Time` must be ISO values with explicit timezone; convert local display timestamps or omit those columns and use durations. Supply the session UUID/reference. Use the actual Zoom UUID if a later API sync is intended. Only check **complete report** after confirming the file represents the entire session. Otherwise absent is not inferred. Export attendance and review the audit history in the tool.
+
+## Verification and operational limits
+
+Automated tests use an isolated in-process PostgreSQL database and fake provider responses, with no real emails or Zoom registrations. They cover CSV validation, 600+ audience processing, consent and authentication, cross-campaign duplicates, opt-outs, paced batches, uncertain send recovery, report synchronization, delivery-import rollback, meeting UUIDs, attendance duration/matching, corrections and background sync.
+
+Before the first bulk run, test a single real Sender invitation and a short Zoom session with two participants (host + test attendee). Confirm sender authentication, application registration, native Zoom confirmation, and report matching. Configure attendance minimum for a test as needed, then restore 30 minutes. Live account validation remains required; API payloads/permissions and actual delivery behavior cannot be established from local tests alone.
+
+References:
+- [Sender API](https://api.sender.net/)
+- [Sender campaign creation](https://api.sender.net/campaigns/create-campaign/)
+- [Sender subscriber status](https://api.sender.net/subscribers/get-one/)
+- [Sender sent campaign emails](https://api.sender.net/statistics/sents/)
+- [Sender domain requirements](https://www.sender.net/help/transactional-emails/sender-identity-and-domain-requirements/)
+- [Sender pricing](https://www.sender.net/pricing/)
+- [Zoom reporting requirements](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0073594)
+- [Zoom reporting scopes](https://developers.zoom.us/docs/integrations/oauth-scopes-granular/)

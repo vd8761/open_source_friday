@@ -85,6 +85,29 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
         throw new ZoomError('Enable Zoom confirmation emails for registrants under the meeting’s Email Settings before linking it.', 400);
       }
     },
+    async attendance(id, instanceUuid) {
+      const reference = instanceUuid || meetingId(id);
+      const encoded = encodeURIComponent(reference);
+      const pathId = reference.startsWith('/') || reference.includes('//') ? encodeURIComponent(encoded) : encoded;
+      const detail = await request(`/report/meetings/${pathId}`);
+      if (String(detail.id) !== String(id) || !detail.uuid) throw new ZoomError('Zoom report does not match the linked meeting.', 400);
+      const participants = [];
+      let nextPage = '';
+      const seen = new Set();
+      do {
+        const query = new URLSearchParams({ page_size: '300', include_fields: 'registrant_id' });
+        if (nextPage) query.set('next_page_token',nextPage);
+        const report = await request(`/report/meetings/${pathId}/participants?${query}`);
+        if (!Array.isArray(report.participants)) throw new ZoomError('Zoom attendance report is not ready. Retry later.');
+        participants.push(...report.participants);
+        nextPage = report.next_page_token || '';
+        if (nextPage && seen.has(nextPage)) throw new ZoomError('Zoom returned a repeated attendance page token. Retry later.');
+        seen.add(nextPage);
+        if (seen.size > 100) throw new ZoomError('Zoom attendance report exceeded the page limit.');
+      } while (nextPage);
+      if (!participants.length || participants.every(p => !Number(p.duration))) throw new ZoomError('Zoom attendance is still processing or empty. Retry later; absence has not been recorded.', 202);
+      return { meetingUuid: detail.uuid, startTime: detail.start_time, participants };
+    },
     async addRegistrant(id, student) {
       if (!student.email || !student.full_name?.trim()) throw new ZoomError('Student name and email are required for Zoom registration.', 400);
       // Reconcile with Zoom before writing, including after a timeout or a process crash.

@@ -119,3 +119,19 @@ test('OAuth throttling also respects the cooldown', async () => {
   const { zoom } = setup([reply({}, 429, { 'retry-after': '180' })]);
   await assert.rejects(zoom.validateMeeting('12345678901'), error => error.status === 429 && error.retryAfterSeconds === 180);
 });
+
+test('attendance uses the meeting instance, requests registrant IDs and reads every page', async () => {
+  const { zoom, calls } = setup([token(),reply({id:12345678901,uuid:'/instance//',start_time:'2026-10-26T13:30:00Z'}),
+    reply({participants:[{registrant_id:'r1',duration:1200}],next_page_token:'next'}),reply({participants:[{registrant_id:'r2',duration:1800}]})]);
+  const result=await zoom.attendance('12345678901','/instance//');
+  assert.equal(result.participants.length,2);
+  assert.ok(calls[1].url.includes('%252Finstance%252F%252F'));
+  assert.ok(calls[2].url.includes('include_fields=registrant_id'));
+  assert.ok(calls[3].url.includes('next_page_token=next'));
+});
+test('attendance rejects mismatched meetings and reports still processing', async () => {
+  let client=setup([token(),reply({id:12345678902,uuid:'wrong'})]);
+  await assert.rejects(client.zoom.attendance('12345678901'),/does not match/);
+  client=setup([token(),reply({id:12345678901,uuid:'instance'}),reply({participants:[{duration:0}]})]);
+  await assert.rejects(client.zoom.attendance('12345678901'),error=>error.status===202&&/processing/.test(error.message));
+});

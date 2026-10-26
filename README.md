@@ -82,3 +82,9 @@ Tests use mocked PostgreSQL and Zoom services. They exercise HTTP registration/a
 - `GET /api/admin/episodes/:id/zoom-registrations` exposes job diagnostics without personal join links.
 
 Private join links remain in the database for reconciliation. They are not returned by the public student lookup or admin roster. Restrict database access appropriately.
+
+### Email invitations and attendance
+
+Admins can use **Dashboard → Email Invitations** to preview a CSV audience and start paced Sender campaigns. Each episode also has an **Attendance** screen for Zoom report synchronization, participant CSV import, review and audited corrections. The default attendance minimum is 30 minutes. CSV contacts still have to register in the application before Zoom enrollment.
+
+See [setup, dependencies and reporting limitations](docs/invitations-and-attendance.md) before activation. Campaigns start as drafts; configuring credentials alone does not send invitations.

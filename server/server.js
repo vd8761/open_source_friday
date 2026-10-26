@@ -9,6 +9,12 @@ const cron = require('node-cron');
 require('dotenv').config();
 const { createZoomClient, meetingId, ZoomError } = require('./zoom');
 const { enqueueZoomRegistrations, processZoomJobs } = require('./zoom-jobs');
+const { createSenderClient } = require('./sender');
+const { initOutreachDB } = require('./outreach-schema');
+const { processInviteBatch } = require('./invite-service');
+const { createOutreachRouter } = require('./outreach-routes');
+const { syncRecentInviteReports, syncRecentAttendance } = require('./outreach-workers');
+const sender = createSenderClient();
 const zoom = createZoomClient();
 const app = express();
 app.use(cors());
@@ -90,6 +96,8 @@ async function initDB() {
     // Prior SMTP failures must not hide a successful Zoom registration. Do not resend anything.
     await pool.query(`UPDATE zoom_registration_jobs SET invitation_status = 'zoom_managed', last_error = NULL
       WHERE status = 'registered' AND invitation_status <> 'zoom_managed'`);
+
+    await initOutreachDB(pool);
 
     // Seed initial admin
     const result = await pool.query('SELECT COUNT(*) FROM admins');
@@ -839,10 +847,25 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
   }
 });
 
+app.use('/api/admin', createOutreachRouter({ pool, sender, zoom, authenticateToken }));
+let inviteWorkerRunning = false;
+async function runInviteWorker() {
+  if (inviteWorkerRunning) return;
+  inviteWorkerRunning = true;
+  try { await processInviteBatch(pool,sender); }
+  catch { console.error('[Invitations] Worker failed; campaigns retain their saved state.'); }
+  finally { inviteWorkerRunning = false; }
+}
 const PORT = process.env.PORT || 5000;
 if (require.main === module) initDB().then(() => {
   cron.schedule('* * * * *', sendEpisodeReminders);
   cron.schedule('* * * * *', runZoomWorker);
+  cron.schedule('* * * * *', runInviteWorker);
+  void runInviteWorker();
+  cron.schedule('*/15 * * * *', () => {
+    void syncRecentInviteReports(pool,sender).catch(() => console.error('[Invitations] Report sync will retry.'));
+    void syncRecentAttendance(pool,zoom).catch(() => console.error('[Attendance] Sync will retry.'));
+  });
   void runZoomWorker();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

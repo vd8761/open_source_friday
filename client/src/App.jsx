@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import Home from './Home';
 import Dashboard from './Dashboard';
+import OutreachTool from './components/OutreachTool';
+import AttendanceTool from './components/AttendanceTool';
 import Login from './Login';
 import PwaInstallPrompt from './PwaInstallPrompt';
 import RegistrationForm from './components/RegistrationForm';
@@ -40,6 +42,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           {/* Admin Routes */}
+          <Route path="/admin/invitations" element={<ProtectedRoute><OutreachTool /></ProtectedRoute>} />
+          <Route path="/admin/episodes/:id/attendance" element={<ProtectedRoute><AttendanceTool /></ProtectedRoute>} />
           <Route 
             path="/dashboard" 
             element={
