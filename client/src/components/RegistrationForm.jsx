@@ -856,7 +856,7 @@ const RegistrationForm = () => {
                 </div>
                 <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-4">Registration Successful!</h3>
                 <p className="text-slate-600 text-lg mb-8 max-w-sm mx-auto">
-                  Thank you for registering for Episode {episodeDetails.episode_number}. {zoomPending ? 'Your Zoom registration is being processed. We will email your Zoom invitation separately.' : 'We look forward to seeing you there!'}
+                  Thank you for registering for Episode {episodeDetails.episode_number}. {zoomPending ? 'Your Zoom registration is being processed. Zoom will email your personal meeting link once confirmed.' : 'We look forward to seeing you there!'}
                 </p>
                 <button
                   onClick={() => navigate('/')}

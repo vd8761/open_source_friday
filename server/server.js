@@ -6,27 +6,10 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const webpush = require('web-push');
 const cron = require('node-cron');
-const nodemailer = require('nodemailer');
 require('dotenv').config();
 const { createZoomClient, meetingId, ZoomError } = require('./zoom');
 const { enqueueZoomRegistrations, processZoomJobs } = require('./zoom-jobs');
 const zoom = createZoomClient();
-const { sendZoomInvitation } = require('./zoom-invitation');
-const deliverZoomInvitation = (job, link) => sendZoomInvitation(transporter, job, link);
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.sender.net',
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 30000,
-  port: process.env.SMTP_PORT || 465,
-  secure: Number(process.env.SMTP_PORT || 465) === 465, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -101,7 +84,12 @@ async function initDB() {
     await pool.query(`ALTER TABLE zoom_registration_jobs
       ADD COLUMN IF NOT EXISTS invitation_status TEXT NOT NULL DEFAULT 'pending',
       ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS invitation_message_id TEXT`);
+      ADD COLUMN IF NOT EXISTS invitation_message_id TEXT,
+      ADD COLUMN IF NOT EXISTS zoom_registered_at TIMESTAMPTZ`);
+
+    // Prior SMTP failures must not hide a successful Zoom registration. Do not resend anything.
+    await pool.query(`UPDATE zoom_registration_jobs SET invitation_status = 'zoom_managed', last_error = NULL
+      WHERE status = 'registered' AND invitation_status <> 'zoom_managed'`);
 
     // Seed initial admin
     const result = await pool.query('SELECT COUNT(*) FROM admins');
@@ -123,7 +111,7 @@ let zoomWorkerRunning = false;
 async function runZoomWorker() {
   if (zoomWorkerRunning) return;
   zoomWorkerRunning = true;
-  try { await processZoomJobs(pool, zoom, 10, deliverZoomInvitation); }
+  try { await processZoomJobs(pool, zoom, 10); }
   catch { console.error('[Zoom] Worker failed; will retry next minute.'); }
   finally { zoomWorkerRunning = false; }
 }
@@ -704,153 +692,8 @@ app.post('/api/register', async (req, res) => {
     await enqueueZoomRegistrations(db, episode_id);
     await db.query('COMMIT');
     committed = true;
-    // The registration is now confirmed; invitations are sent from the committed outbox.
-
-    // Attempt the confirmation email before triggering the invitation worker.
+    // Zoom enrollment starts only after the application registration has committed.
     const episode = epCheck.rows[0];
-    const eventDateStr = new Date(episode.event_date).toLocaleDateString('en-IN', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
-    
-    const mailOptions = {
-      from: `"DOS Club Open Source Fridays" <${process.env.FROM_EMAIL || 'info@dosclub.com'}>`,
-      to: savedStudent.rows[0].email,
-      subject: `Registration Confirmed: EP ${episode.episode_number} - ${episode.title}`,
-      html: `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Registration Confirmed</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; -webkit-font-smoothing: antialiased;">
-  <!-- Main Container -->
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f3f4f6; padding: 40px 20px;">
-    <tr>
-      <td align="center">
-        <!-- Email Wrapper -->
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-          
-          <!-- Top Accent Line -->
-          <tr>
-            <td style="height: 6px; background-color: #07a97b; background-image: linear-gradient(to right, #07a97b, #20dbad);"></td>
-          </tr>
-
-          <!-- Header Logo -->
-          <tr>
-            <td align="center" style="padding: 35px 20px 25px; border-bottom: 1px solid #f1f5f9;">
-              <img src="https://osf.descienceosclub.com/dos_logo.png" alt="Open Source Friday" style="height: 50px; width: auto; display: block;" />
-            </td>
-          </tr>
-
-          <!-- Content Body -->
-          <tr>
-            <td style="padding: 40px 32px;">
-              <h1 style="margin: 0 0 20px 0; font-size: 24px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">
-                Registration Confirmed!
-              </h1>
-              
-              <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: #475569;">
-                Hi <strong style="color: #0f172a;">${savedStudent.rows[0].full_name}</strong>,<br><br>
-                Thank you for reserving your spot for <strong style="color: #07a97b;">Episode ${episode.episode_number}: ${episode.title}</strong>. We're excited to have you join us for this upcoming session.
-              </p>
-
-              <!-- Event Details Card -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 30px;">
-                <tr>
-                  <td style="padding: 24px;">
-                    <h3 style="margin: 0 0 16px 0; font-size: 13px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">
-                      Event Details
-                    </h3>
-                    
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td width="100" style="padding: 8px 0; font-size: 15px; color: #64748b;">Date</td>
-                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #1e293b;">${eventDateStr}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 8px 0; font-size: 15px; color: #64748b;">Time</td>
-                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #1e293b;">${episode.event_time}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 8px 0; font-size: 15px; color: #64748b;">Speaker</td>
-                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #1e293b;">${episode.presenter_name}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 8px 0; font-size: 15px; color: #64748b;">Mode</td>
-                        <td style="padding: 8px 0; font-size: 15px; font-weight: 600; color: #07a97b;">${episode.event_mode}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin: 0 0 32px 0; font-size: 16px; line-height: 1.6; color: #475569;">
-                ${episode.zoom_meeting_id ? 'Your Zoom registration is being processed. We will email your Zoom invitation separately.' : 'Please mark your calendar. For online events, the organizers will share joining details before the session.'}
-              </p>
-
-              <!-- Call to Action -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center">
-                    <a href="https://osf.descienceosclub.com/" target="_blank" style="display: inline-block; padding: 14px 28px; background-color: #07a97b; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 6px; text-align: center;">
-                      Visit Platform
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #475569;">
-                Descience Open Source Club
-              </p>
-              <p style="margin: 0; font-size: 13px; color: #94a3b8; line-height: 1.5;">
-                You received this email because you registered for an Open Source Friday event.<br>
-                <a href="https://osf.descienceosclub.com/" style="color: #07a97b; text-decoration: none;">osf.descienceosclub.com</a>
-              </p>
-            </td>
-          </tr>
-          
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-      `,
-      text: `Registration Successful!
-Hi ${savedStudent.rows[0].full_name},
-You have successfully registered for Episode ${episode.episode_number}: ${episode.title}.
-
-Event Details:
-Date: ${eventDateStr}
-Time: ${episode.event_time}
-Presenter: ${episode.presenter_name}
-Mode: ${episode.event_mode}
-${episode.zoom_meeting_id ? 'We will email your Zoom invitation separately.' : ''}
-
-We look forward to seeing you there!
-Best regards,
-Open Source Friday Team`,
-      replyTo: process.env.REPLY_TO_EMAIL || 'info@descienceosclub.com',
-      headers: {
-        'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || 'info@descienceosclub.com'}?subject=unsubscribe>`,
-        'Precedence': 'Bulk',
-        'X-Entity-Ref-ID': Date.now().toString()
-      }
-    };
-
-    try {
-      await transporter.sendMail(mailOptions);
-    } catch (error) {
-      console.error('Error sending registration confirmation email:', error.message);
-    }
-
     void runZoomWorker();
     res.status(201).json({ success: true, message: 'Registration successful', zoom_status: episode.zoom_meeting_id ? 'pending' : 'not_required' });
   } catch (error) {
@@ -889,8 +732,10 @@ app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, asyn
     const query = `
       SELECT s.*, er.registered_at, er.id AS registration_id,
         e.zoom_meeting_id IS NOT NULL AND e.event_mode = 'Online' AS zoom_enabled,
-        COALESCE(j.invitation_status, 'not_sent') AS invitation_status,
-        j.invitation_sent_at, j.invitation_message_id, j.last_error AS invitation_error
+        CASE WHEN j.status = 'registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status, 'not_sent') END AS invitation_status,
+        COALESCE(j.status, 'not_registered') AS zoom_registration_status,
+        j.meeting_id AS zoom_meeting_id, j.zoom_registered_at,
+        CASE WHEN j.status = 'registered' THEN NULL ELSE j.last_error END AS invitation_error
       FROM students s
       JOIN episode_registrations er ON s.id = er.student_id
       JOIN episodes e ON e.id = er.episode_id
@@ -906,7 +751,7 @@ app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, asyn
   }
 });
 
-// Only registered students can receive an invitation. Admins can send or resend at any time.
+// Only confirmed application registrations can be enrolled. Email resend is managed in Zoom.
 app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitation', authenticateToken, async (req, res) => {
   if (!zoom.configured()) return res.status(503).json({ success: false, error: 'Zoom credentials are not configured on the server.' });
   const db = await pool.connect();
@@ -923,7 +768,7 @@ app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitat
     }
     registrationId = rows[0].id;
     await enqueueZoomRegistrations(db, req.params.episode_id);
-    await db.query(`UPDATE zoom_registration_jobs SET invitation_status = 'pending',
+    await db.query(`UPDATE zoom_registration_jobs SET invitation_status = CASE WHEN status = 'registered' THEN 'zoom_managed' ELSE 'pending' END,
       next_attempt_at = NOW(), last_error = NULL WHERE registration_id = $1`, [registrationId]);
     await db.query('COMMIT');
   } catch {
@@ -931,12 +776,12 @@ app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitat
     return res.status(500).json({ success: false, error: 'Unable to queue Zoom invitation' });
   } finally { db.release(); }
   try {
-    await processZoomJobs(pool, zoom, 1, deliverZoomInvitation, registrationId);
-    const { rows } = await pool.query('SELECT invitation_status, last_error FROM zoom_registration_jobs WHERE registration_id = $1', [registrationId]);
-    const sent = rows[0]?.invitation_status === 'sent';
-    res.status(sent ? 200 : 202).json({ success: true, invitation_status: rows[0]?.invitation_status || 'pending',
-      message: sent ? 'Zoom invitation accepted by email service.' : (rows[0]?.last_error || 'Invitation queued. Refresh to check its status.') });
-  } catch { res.status(202).json({ success: true, invitation_status: 'pending', message: 'Invitation queued; delivery will be retried.' }); }
+    await processZoomJobs(pool, zoom, 1, registrationId);
+    const { rows } = await pool.query("SELECT status, meeting_id, CASE WHEN status = 'registered' THEN 'zoom_managed' ELSE invitation_status END AS invitation_status, last_error FROM zoom_registration_jobs WHERE registration_id = $1", [registrationId]);
+    const enrolled = rows[0]?.status === 'registered';
+    res.status(enrolled ? 200 : 202).json({ success: true, invitation_status: enrolled ? 'zoom_managed' : (rows[0]?.invitation_status || 'pending'),
+      message: enrolled ? 'Registered with Zoom. Zoom handles the confirmation email. To resend, open the meeting in Zoom.' : (rows[0]?.last_error || 'Zoom registration queued. Refresh to check its status.') });
+  } catch { res.status(202).json({ success: true, invitation_status: 'pending', message: 'Zoom registration queued; enrollment will be retried.' }); }
 });
 
 app.delete('/api/admin/episodes/:episode_id/registrations/:student_id', authenticateToken, async (req, res) => {
@@ -1004,4 +849,4 @@ if (require.main === module) initDB().then(() => {
   });
 }).catch(async () => { await pool.end(); process.exitCode = 1; });
 
-module.exports = { app, sendEpisodeReminders };
+module.exports = { app, sendEpisodeReminders, initDB };

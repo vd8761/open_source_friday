@@ -123,17 +123,21 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                   </td>
 
                   <td className="px-6 py-4 text-sm min-w-[220px]">
-                    <div className={row.invitation_status === 'sent' ? 'font-bold text-emerald-700' : row.invitation_status === 'failed' ? 'font-bold text-rose-700' : 'font-bold text-slate-600'}>
-                      {!row.zoom_enabled ? 'Zoom not configured' : ({ sent: 'Invitation sent', pending: 'Invitation pending', failed: 'Invitation failed', not_sent: 'Invitation not sent' }[row.invitation_status] || 'Invitation not sent')}
+                    <div className={row.invitation_status === 'zoom_managed' ? 'font-bold text-emerald-700' : row.invitation_status === 'failed' ? 'font-bold text-rose-700' : 'font-bold text-slate-600'}>
+                      {!row.zoom_enabled ? 'Zoom not configured' : ({ zoom_managed: 'Registered with Zoom', pending: 'Zoom registration pending', failed: 'Zoom registration failed', not_sent: 'Not registered with Zoom' }[row.invitation_status] || 'Not registered with Zoom')}
                     </div>
-                    {row.invitation_sent_at && <div className="text-xs text-slate-500 mt-1">Last sent: {new Date(row.invitation_sent_at).toLocaleString()}</div>}
-                    {row.invitation_status === 'sent' && <div className="text-xs text-slate-500 mt-1">Accepted by email service; inbox delivery unverified.</div>}
+                    {row.zoom_registered_at && <div className="text-xs text-slate-500 mt-1">Registered: {new Date(row.zoom_registered_at).toLocaleString()}</div>}
+                    {row.invitation_status === 'zoom_managed' && <div className="text-xs text-slate-500 mt-1">Zoom sends the confirmation email. Inbox delivery is not tracked here.</div>}
                     {row.invitation_error && <div className="text-xs text-rose-600 mt-1 max-w-xs">{row.invitation_error}</div>}
-                    {onSendZoomInvitation && <button type="button" disabled={!row.zoom_enabled || sendingStudentId !== null}
+                    {row.invitation_status === 'zoom_managed' && /^\d{9,11}$/.test(row.zoom_meeting_id || '') ? (
+                      <a href={`https://zoom.us/meeting/${row.zoom_meeting_id}#registration`} target="_blank" rel="noopener noreferrer"
+                        className="mt-2 inline-block px-3 py-1.5 rounded-lg bg-dos text-white font-bold text-xs">Resend in Zoom</a>
+                    ) : onSendZoomInvitation && <button type="button" disabled={!row.zoom_enabled || sendingStudentId !== null}
                       onClick={() => sendInvitation(row.id)}
                       className="mt-2 px-3 py-1.5 rounded-lg bg-dos text-white font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-                      {sendingStudentId === row.id ? 'Sending…' : row.invitation_sent_at ? 'Resend invitation' : 'Send invitation'}
+                      {sendingStudentId === row.id ? 'Registering…' : 'Register with Zoom'}
                     </button>}
+
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <button
