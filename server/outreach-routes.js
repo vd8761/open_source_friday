@@ -216,6 +216,22 @@ function createOutreachRouter({
           "Reconcile the uncertain batch with Sender before resuming.",
           409,
         );
+      const submitted = (
+        await db.query(
+          "SELECT COUNT(*)::integer AS count FROM invite_batches WHERE campaign_id=$1 AND status='submitted' AND provider_campaign_id IS NOT NULL",
+          [c.id],
+        )
+      ).rows[0].count;
+      if (c.pause_after_first_batch && !c.pilot_reviewed_at && submitted > 0) {
+        if (req.body?.reviewed_first_batch !== true)
+          throw new InputError(
+            "Confirm you reviewed the first batch inbox placement and Sender reports before resuming.",
+          );
+        await db.query(
+          "UPDATE invite_campaigns SET pilot_reviewed_at=NOW() WHERE id=$1",
+          [c.id],
+        );
+      }
       // Preserve any rate-limit cooldown recorded by the worker.
       await db.query(
         "UPDATE invite_campaigns SET status='running',last_error=NULL WHERE id=$1",

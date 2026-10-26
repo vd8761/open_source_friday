@@ -25,7 +25,12 @@ async function syncRecentInviteReports(pool, sender) {
       }
     }
   } finally {
-    if (locked) await db.query("SELECT pg_advisory_unlock(7410627)");
+    try {
+      if (locked) await db.query("SELECT pg_advisory_unlock(7410627)");
+    } catch (error) {
+      db.release(error);
+      throw error;
+    }
     db.release();
   }
 }
@@ -84,7 +89,12 @@ async function syncRecentAttendance(pool, zoom, now = Date.now()) {
       }
     }
   } finally {
-    if (locked) await db.query("SELECT pg_advisory_unlock(7410628)");
+    try {
+      if (locked) await db.query("SELECT pg_advisory_unlock(7410628)");
+    } catch (error) {
+      db.release(error);
+      throw error;
+    }
     db.release();
   }
 }

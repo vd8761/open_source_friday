@@ -38,9 +38,9 @@ Dashboard → **Email Invitations**:
 1. Choose an upcoming active episode with registration open. Campaigns for ended episodes cannot start or continue.
 2. Upload CSV (up to 5 MB / 10,000 rows), or paste CSV. Required `Email`; optional `Full Name`, `College`, `Department`, `Year of Study`, `Status`.
 3. Optionally filter college, department or year. Preview shows valid count, duplicates, exclusions and up to 100 eligible contacts.
-4. Enter subject/message and batch settings. Default: 50 contacts every 15 minutes. This controls pacing, not inbox placement. Existing Sender subscriber suppression is checked again while processing each batch. This check can further reduce the preview count.
+4. Enter subject/message and batch settings. Default: 50 contacts every 15 minutes, with a pause after the first non-empty batch for delivery review. This controls pacing, not inbox placement. Existing Sender subscriber suppression is checked again while processing each batch. This check can further reduce the preview count.
 5. Confirm the contacts opted in to episode invitations; save a draft. Review the draft and use **Start sending** separately. For testing, use a CSV containing a single opted-in address you control that is not already registered for the selected episode.
-6. Pause/resume as needed. A batch already submitted to Sender cannot be recalled by this tool. Sender dispatch of that batch is asynchronous; the interval controls submissions.
+6. First-batch review is enabled by default. If recipients remain, sending pauses after the first batch. Inspect recipient inbox placement and Sender reports, then explicitly confirm review before Resume. Campaigns that fit in one batch complete immediately. You may disable first-batch review when preparing an established, tested campaign. Pause/resume as needed. A batch already submitted to Sender cannot be recalled by this tool. Sender dispatch of that batch is asynchronous; the interval controls submissions.
 7. Use **Sync Sender reports** or allow the 15-minute worker to update recent campaigns. Export the recipient report as CSV.
 
 The worker excludes current episode registrations, known suppressions, and contacts already invited in another campaign for the same episode. Reusing a CSV does not reactivate Sender subscribers. New contact/group membership creation disables automatic Sender workflow triggering. Subject/message are escaped and rendered as text with an application registration button, postal address and Sender unsubscribe link.
@@ -54,6 +54,12 @@ Before the send API request, the batch records `sending` durably. A timeout, err
 - Unknown/scheduled/other outcomes stay blocked for review.
 
 Pausing or restarting cannot bypass a rate-limit cooldown. Sender groups/drafts created for interrupted preparations are retained in Sender; unused drafts are never sent by this tool.
+
+## Sending-quality protections
+
+Before later batches, the worker refreshes Sender reports. It pauses on a reported complaint, on a hard-bounce rate of at least 0.5% after 20 submitted recipients, or on a combined hard/soft bounce rate of at least 2% after 20 submitted recipients. These are application guardrails, not guarantees or provider acceptance thresholds. Missing/unavailable reports pause subsequent sending. Reports can be delayed and do not report every recipient spam-folder placement.
+
+CSV opt-outs take precedence over active duplicate rows, regardless of row order, and are retained in the application's suppression list when a draft is created. Invitations include a clear organization identity, opt-in explanation, help-by-reply guidance, mailing address and unsubscribe link. Sender remains responsible for generating compliant email headers; verify those in a real application campaign test.
 
 ## Delivery and open evidence
 
@@ -114,3 +120,19 @@ References:
 - [Sender pricing](https://www.sender.net/pricing/)
 - [Zoom reporting requirements](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0073594)
 - [Zoom reporting scopes](https://developers.zoom.us/docs/integrations/oauth-scopes-granular/)
+
+## Morning production test and readiness
+
+Code is prepared for a controlled production test. A full 600+ recipient rollout remains pending live verification of the application integration and inbox placement.
+
+1. Deploy the latest branch to Render, then Vercel. Confirm Email Invitations and Attendance appear in the dashboard. Adding variables does not start draft campaigns.
+2. Set the five Sender/public-URL variables above, including `SENDER_FROM_EMAIL=info@descienceosclub.com`. Keep secrets on Render.
+3. Create an upcoming silent test episode. Import only a few opted-in test addresses you control; use one recipient per batch and keep first-batch review enabled. Existing registrations are excluded, so use an episode these recipients have not registered for.
+4. Save the draft, review it and Start. Verify the first application-generated message's From address, registration URL, working unsubscribe URL, and list-unsubscribe headers. Confirm SPF/DKIM/DMARC in the received original message. Do not interpret a sent/open event as proof of inbox placement.
+5. Check actual placement in the test mailboxes. Only confirm first-batch review and Resume when the results are acceptable. If mail is placed in Spam, investigate sender/content/engagement reputation with Sender support before expanding the audience. Authentication alone does not guarantee inbox placement.
+6. Complete application registration, confirm the native Zoom email, and run a small Zoom meeting (host plus test attendee). After reports are available, verify matching and duration in Attendance. The agreed production default is 30 minutes.
+7. Increase sending gradually to recently engaged, opted-in contacts. Keep pause/review available. Avoid switching domains/IPs to evade filtering; address the underlying deliverability issue.
+
+The direct Sender test on 26 October 2026 reached `descienceosclub@gmail.com` at 11:36 PM IST but was placed in Spam. SPF, DKIM and DMARC passed. That test confirms receipt only; it does not establish reliable inbox placement or validate the application API worker. No further live email was sent while adding these protections.
+
+Deliverability references: [Sender guidance](https://www.sender.net/help/deliverability-compliance/email-deliverability-best-practices/), [Sender delivery metrics](https://www.sender.net/help/deliverability-compliance/how-email-deliverability-works/), [Gmail sender guidelines](https://support.google.com/mail/answer/81126).

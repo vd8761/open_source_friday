@@ -60,6 +60,28 @@ function contactImport(csv, filters = {}) {
     throw new InputError(
       "CSV needs an Email column. Optional: Full Name, College, Department, Year of Study.",
     );
+  if (
+    !filters ||
+    typeof filters !== "object" ||
+    Array.isArray(filters) ||
+    Object.values(filters).some(
+      (value) => typeof value !== "string" || value.length > 255,
+    )
+  )
+    throw new InputError(
+      "Audience filters must be text values up to 255 characters.",
+    );
+  // An opt-out wins across all rows, regardless of which duplicate comes first.
+  const suppressed = new Set(
+    rows
+      .filter((row) =>
+        /unsubscribed|bounced|complaint|suppressed|inactive/i.test(
+          `${row.status || ""} ${row.subscription_status || ""}`,
+        ),
+      )
+      .map((row) => normalizeEmail(row.email || row.email_address))
+      .filter(validEmail),
+  );
   const contacts = [],
     rejected = [],
     seen = new Set();
@@ -96,17 +118,20 @@ function contactImport(csv, filters = {}) {
       continue;
     }
     // A prior opt-out in an exported list must not become permission on re-import.
-    if (
-      /unsubscribed|bounced|complaint|suppressed|inactive/i.test(
-        row.status || row.subscription_status || "",
-      )
-    ) {
+    if (suppressed.has(email)) {
       rejected.push({ row: index + 2, reason: "Suppressed in CSV" });
       continue;
     }
     contacts.push(contact);
   }
-  return { contacts, total: rows.length, duplicates, filtered, rejected };
+  return {
+    contacts,
+    total: rows.length,
+    duplicates,
+    filtered,
+    rejected,
+    suppressed_emails: [...suppressed],
+  };
 }
 function csvExport(rows, columns) {
   const cell = (value) =>
