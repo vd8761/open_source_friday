@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createZoomClient, meetingId } = require('../zoom');
 const env = { ZOOM_ACCOUNT_ID: 'account', ZOOM_CLIENT_ID: 'client', ZOOM_CLIENT_SECRET: 'secret' };
-const reply = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+const reply = (body, status = 200, headers = {}) => ({ headers: { get: key => headers[key] ?? null }, ok: status >= 200 && status < 300, status, json: async () => body });
 function setup(responses, options = {}) {
   const calls = [];
   const zoom = createZoomClient({ env, ...options, fetchImpl: async (url, init) => {
@@ -92,4 +92,30 @@ test('linked meetings must enable Zoom-managed confirmation emails', async () =>
     const { zoom } = setup([token(), reply({ ...validMeeting, settings })]);
     await assert.rejects(zoom.validateMeeting('12345678901'), /Enable Zoom confirmation emails/);
   }
+});
+
+test('rate limits respect Retry-After seconds and dates without exposing provider data', async () => {
+  const now = Date.parse('2026-10-26T10:00:00Z');
+  for (const [header, expected] of [['120', 120], ['Mon, 26 Oct 2026 10:05:00 GMT', 300], ['2026-10-26T10:05:00Z', 300], ['invalid', 60], [null, 60]]) {
+    const { zoom } = setup([token(), reply({ code: 429, message: 'private@example.com' }, 429, { 'retry-after': header })], { now: () => now });
+    await assert.rejects(zoom.validateMeeting('12345678901'), error => {
+      assert.equal(error.status, 429);
+      assert.equal(error.retryAfterSeconds, expected);
+      assert.ok(!error.message.includes('private@example.com'));
+      return true;
+    });
+  }
+});
+test('daily registration limits without a reset header wait a full day', async () => {
+  const { zoom } = setup([token(), reply({ registrants: [] }), reply({ code: 429, message: 'You have exceeded the daily rate limit of (3) for private@example.com' }, 429)]);
+  await assert.rejects(zoom.addRegistrant('12345678901', { email: 'test@example.com', full_name: 'Test' }), error => {
+    assert.equal(error.retryAfterSeconds, 86400);
+    assert.match(error.message, /daily registration limit/);
+    assert.ok(!error.message.includes('private@example.com'));
+    return true;
+  });
+});
+test('OAuth throttling also respects the cooldown', async () => {
+  const { zoom } = setup([reply({}, 429, { 'retry-after': '180' })]);
+  await assert.rejects(zoom.validateMeeting('12345678901'), error => error.status === 429 && error.retryAfterSeconds === 180);
 });

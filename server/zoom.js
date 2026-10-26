@@ -2,6 +2,22 @@
 class ZoomError extends Error {
   constructor(message, status = 502) { super(message); this.status = status; }
 }
+function rateLimitError(response, data, timestamp) {
+  if (response.status !== 429) return null;
+  const daily = /daily|24.hour/i.test(String(data?.message));
+  const header = response.headers?.get('retry-after');
+  const seconds = header && /^\d+(?:\.\d+)?$/.test(header.trim())
+    ? Number(header) : (Date.parse(header) - timestamp) / 1000;
+  // A daily registrant limit has no useful short retry. If Zoom omits its reset,
+  // wait a full day rather than repeatedly consuming requests during the limit.
+  const fallback = daily ? 86400 : 60;
+  const delay = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : fallback;
+  const error = new ZoomError(daily
+    ? 'Zoom’s daily registration limit was reached. Registration remains saved; enrollment will retry after the cooldown. Avoid deleting and registering again.'
+    : 'Zoom is temporarily rate-limiting requests. Registration remains saved; enrollment will retry after the cooldown.', 429);
+  error.retryAfterSeconds = Math.max(60, delay);
+  return error;
+}
 function meetingId(value) {
   if (value == null || value === '') return null;
   if (typeof value !== 'string' || !/^\d{9,11}$/.test(value.trim())) {
@@ -25,7 +41,9 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
           body: new URLSearchParams({ grant_type: 'account_credentials', account_id: env.ZOOM_ACCOUNT_ID }),
           signal: AbortSignal.timeout(15000),
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
+        const limited = rateLimitError(response, data, now());
+        if (limited) throw limited;
         if (!response.ok || !data.access_token) throw new ZoomError('Zoom authentication failed. Check the server credentials and app activation.', 503);
         token = data.access_token;
         expiresAt = now() + Math.max(0, Number(data.expires_in || 3600) - 60) * 1000;
@@ -43,7 +61,9 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
       token = undefined;
       return request(path, options, false);
     }
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
+    const limited = rateLimitError(response, data, now());
+    if (limited) throw limited;
     // Do not persist or log Zoom response bodies, which can contain personal data.
     if (!response.ok) {
       // Surface only recognized, non-sensitive guidance; never expose arbitrary provider messages.

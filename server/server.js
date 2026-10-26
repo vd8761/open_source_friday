@@ -734,7 +734,7 @@ app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, asyn
         e.zoom_meeting_id IS NOT NULL AND e.event_mode = 'Online' AS zoom_enabled,
         CASE WHEN j.status = 'registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status, 'not_sent') END AS invitation_status,
         COALESCE(j.status, 'not_registered') AS zoom_registration_status,
-        j.meeting_id AS zoom_meeting_id, j.zoom_registered_at,
+        j.meeting_id AS zoom_meeting_id, j.zoom_registered_at, j.next_attempt_at AS zoom_next_attempt_at,
         CASE WHEN j.status = 'registered' THEN NULL ELSE j.last_error END AS invitation_error
       FROM students s
       JOIN episode_registrations er ON s.id = er.student_id
@@ -769,7 +769,8 @@ app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitat
     registrationId = rows[0].id;
     await enqueueZoomRegistrations(db, req.params.episode_id);
     await db.query(`UPDATE zoom_registration_jobs SET invitation_status = CASE WHEN status = 'registered' THEN 'zoom_managed' ELSE 'pending' END,
-      next_attempt_at = NOW(), last_error = NULL WHERE registration_id = $1`, [registrationId]);
+      next_attempt_at = NOW(), last_error = NULL WHERE registration_id = $1
+      AND (invitation_status <> 'rate_limited' OR next_attempt_at <= NOW())`, [registrationId]);
     await db.query('COMMIT');
   } catch {
     await db.query('ROLLBACK');
@@ -777,9 +778,9 @@ app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitat
   } finally { db.release(); }
   try {
     await processZoomJobs(pool, zoom, 1, registrationId);
-    const { rows } = await pool.query("SELECT status, meeting_id, CASE WHEN status = 'registered' THEN 'zoom_managed' ELSE invitation_status END AS invitation_status, last_error FROM zoom_registration_jobs WHERE registration_id = $1", [registrationId]);
+    const { rows } = await pool.query("SELECT status, meeting_id, CASE WHEN status = 'registered' THEN 'zoom_managed' ELSE invitation_status END AS invitation_status, last_error, next_attempt_at FROM zoom_registration_jobs WHERE registration_id = $1", [registrationId]);
     const enrolled = rows[0]?.status === 'registered';
-    res.status(enrolled ? 200 : 202).json({ success: true, invitation_status: enrolled ? 'zoom_managed' : (rows[0]?.invitation_status || 'pending'),
+    res.status(enrolled ? 200 : 202).json({ success: true, next_attempt_at: rows[0]?.next_attempt_at, invitation_status: enrolled ? 'zoom_managed' : (rows[0]?.invitation_status || 'pending'),
       message: enrolled ? 'Registered with Zoom. Zoom handles the confirmation email. To resend, open the meeting in Zoom.' : (rows[0]?.last_error || 'Zoom registration queued. Refresh to check its status.') });
   } catch { res.status(202).json({ success: true, invitation_status: 'pending', message: 'Zoom registration queued; enrollment will be retried.' }); }
 });
