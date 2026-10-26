@@ -28,18 +28,20 @@ async function processZoomJobs(pool, zoom, limit = 10, registrationId = null) {
       const job = rows[0];
       let result;
       let failure;
+      let rateLimit;
       try { result = await zoom.addRegistrant(job.meeting_id, job); }
       catch (error) {
+        if (error instanceof ZoomError && error.status === 429) rateLimit = error;
         failure = error instanceof ZoomError
           ? `Zoom registration failed. ${error.message}`
           : 'Zoom registration failed. Check Zoom credentials, meeting settings and API availability.';
       }
       if (failure) {
-        const delaySeconds = Math.min(3600, 60 * 2 ** Math.min(job.attempts, 6));
+        const delaySeconds = rateLimit?.retryAfterSeconds || Math.min(3600, 60 * 2 ** Math.min(job.attempts, 6));
         await db.query(`UPDATE zoom_registration_jobs SET attempts = attempts + 1,
-          invitation_status = 'failed', last_error = $2,
+          invitation_status = $4, last_error = $2,
           next_attempt_at = NOW() + $3 * INTERVAL '1 second' WHERE registration_id = $1`,
-          [job.registration_id, failure, delaySeconds]);
+          [job.registration_id, failure, delaySeconds, rateLimit ? 'rate_limited' : 'failed']);
         console.error('[Zoom] Registration pending; retry scheduled:', job.registration_id, failure);
       } else {
         await db.query(`UPDATE zoom_registration_jobs SET status = 'registered', registrant_id = $2,
@@ -48,6 +50,8 @@ async function processZoomJobs(pool, zoom, limit = 10, registrationId = null) {
           [job.registration_id, result.registrantId, result.joinUrl]);
       }
       await db.query('COMMIT');
+      // Stop this batch when Zoom asks us to wait.
+      if (rateLimit) return;
     } catch (error) {
       await db.query('ROLLBACK');
       throw error;

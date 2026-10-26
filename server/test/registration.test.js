@@ -33,7 +33,7 @@ const db = {
   async query(sql, values) {
     queries.push({ sql, values });
     if (!sql.includes('INSERT') && sql.includes('SELECT er.id, e.zoom_meeting_id')) return { rows: registered ? [{ id: 42, zoom_meeting_id: '12345678901', event_mode: 'Online' }] : [] };
-    if (sql.includes('SELECT j.*')) return { rows: zoomJobStatus === 'registered' ? [] : [{ registration_id: 42, email: 'stored@example.com', full_name: 'Stored Student', meeting_id: '12345678901', status: 'pending', attempts: 0 }] };
+    if (sql.includes('SELECT j.*')) return { rows: zoomJobStatus === 'registered' || invitationStatus === 'rate_limited' ? [] : [{ registration_id: 42, email: 'stored@example.com', full_name: 'Stored Student', meeting_id: '12345678901', status: 'pending', attempts: 0 }] };
     if (sql.includes("SET status = 'registered'")) { zoomJobStatus = 'registered'; invitationStatus = 'zoom_managed'; }
     if (sql.includes("invitation_status = 'sent'")) invitationStatus = 'sent';
     if (sql.includes("invitation_status = 'pending'")) invitationStatus = 'pending';
@@ -243,4 +243,18 @@ test('startup clears legacy SMTP failures for successful Zoom registrations with
   assert.equal(invitationStatus, 'zoom_managed');
   assert.equal(zoomRequests.length, 0);
   assert.ok(queries.some(q => q.sql.includes("WHERE status = 'registered' AND invitation_status <> 'zoom_managed'")));
+});
+
+test('manual enrollment preserves an active Zoom cooldown', async () => {
+  zoomConfigured = true; zoomJobStatus = 'pending'; invitationStatus = 'rate_limited';
+  zoomRequests.length = 0; queries.length = 0;
+  try {
+    const response = await nativeFetch(`${base}/api/admin/episodes/1/registrations/7/zoom-invitation`, { method: 'POST', headers: adminHeaders() });
+    assert.equal(response.status, 202);
+    assert.equal((await response.json()).invitation_status, 'rate_limited');
+    assert.equal(zoomRequests.length, 0);
+    const update = queries.find(q => q.sql.includes('next_attempt_at = NOW(), last_error = NULL'));
+    assert.match(update.sql, /invitation_status <> 'rate_limited' OR next_attempt_at <= NOW\(\)/);
+    assert.ok(queries.find(q => q.sql.includes('SELECT j.*')).sql.includes('j.next_attempt_at <= NOW()'));
+  } finally { zoomConfigured = false; zoomJobStatus = 'registered'; invitationStatus = 'zoom_managed'; }
 });

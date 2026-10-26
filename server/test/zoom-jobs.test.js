@@ -66,3 +66,17 @@ test('outbox preserves safe Zoom guidance and hides arbitrary exception messages
     if (error instanceof ZoomError) assert.match(retry.values[1], /requires Last Name/);
   }
 });
+
+test('rate limits persist the provider cooldown and stop the batch', async () => {
+  const { ZoomError } = require('../zoom');
+  const error = new ZoomError('Zoom is rate-limiting requests.', 429);
+  error.retryAfterSeconds = 86400;
+  const { pool, calls } = database(job);
+  let requests = 0;
+  await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { requests++; throw error; } });
+  assert.equal(requests, 1);
+  const update = calls.find(c => c.sql.includes('last_error = $2'));
+  assert.equal(update.values[2], 86400);
+  assert.equal(update.values[3], 'rate_limited');
+  assert.deepEqual(calls.slice(-2).map(c => c.sql), ['COMMIT', 'RELEASE']);
+});
