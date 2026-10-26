@@ -67,3 +67,20 @@ test('concurrent requests share one token exchange', async () => {
   await Promise.all([zoom.validateMeeting('12345678901'), zoom.validateMeeting('12345678901')]);
   assert.equal(calls.filter(c => c.url.includes('/oauth/token')).length, 1);
 });
+
+test('single-word names omit empty Last Name without inventing one', async () => {
+  const { zoom, calls } = setup([token(), reply({ registrants: [] }), reply({ registrant_id: 'r1', join_url: 'https://zoom.us/personal' })]);
+  await zoom.addRegistrant('12345678901', { email: 'test@example.com', full_name: 'Mohan' });
+  const body = JSON.parse(calls.at(-1).body);
+  assert.equal(body.first_name, 'Mohan');
+  assert.equal(Object.hasOwn(body, 'last_name'), false);
+});
+test('required Last Name error gives actionable guidance without echoing provider data', async () => {
+  const { zoom } = setup([token(), reply({ registrants: [] }), reply({ code: 300, message: 'The parameter is required: last_name. private@example.com' }, 400)]);
+  await assert.rejects(zoom.addRegistrant('12345678901', { email: 'test@example.com', full_name: 'Mohan' }), error => {
+    assert.match(error.message, /requires Last Name/);
+    assert.match(error.message, /Registration > Questions/);
+    assert.ok(!error.message.includes('private@example.com'));
+    return true;
+  });
+});

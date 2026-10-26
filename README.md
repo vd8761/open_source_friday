@@ -36,7 +36,7 @@ Credentials and OAuth tokens remain server-side. Do not add them to `VITE_` vari
 
 ## Admin setup and operation
 
-1. In Zoom, schedule a non-recurring meeting with a licensed host, registration required and automatic approval. Match its schedule to the application episode. Only name/email registration questions should be required; extra required Zoom questions are not mapped by this integration.
+1. In Zoom, schedule a non-recurring meeting with a licensed host, registration required and automatic approval. Match its schedule to the application episode. First Name and Email are supported. For students with a single-word name, make Last Name optional in Zoom → Registration → Edit → Questions, or collect the student’s real surname. The integration does not invent surnames. Extra required Zoom questions are not mapped by this integration.
 2. In **Create/Edit Episode → schedule step**, enter the 9–11 digit **Zoom Meeting ID** without spaces or a URL. Save. The server validates the Zoom meeting before accepting the association. Leave blank for events without Zoom.
 3. Linking a meeting to an episode with existing registered students queues those students too. A meeting cannot be replaced/removed once students have registered to avoid invitations pointing to different meetings. Use a new episode for a different meeting.
 4. In the episode roster, review **Zoom Invitation**. Click **Send invitation** or **Resend invitation** after a student reports a missing email. Fix credentials, SMTP or meeting settings if status reports a failure, then retry. Invitations always use the student's saved email, not an arbitrary recipient supplied to the send endpoint.

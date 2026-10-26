@@ -1,3 +1,5 @@
+const { ZoomError } = require('./zoom');
+
 // A durable outbox: committed application registrations survive Zoom/email outages.
 async function enqueueZoomRegistrations(db, episodeId) {
   await db.query(`INSERT INTO zoom_registration_jobs (registration_id, meeting_id)
@@ -30,7 +32,11 @@ async function processZoomJobs(pool, zoom, limit = 10, sendInvitation, registrat
       let failure;
       if (!result) {
         try { result = await zoom.addRegistrant(job.meeting_id, job); }
-        catch { failure = 'Zoom registration failed. Check Zoom credentials, meeting settings and API availability.'; }
+        catch (error) {
+          failure = error instanceof ZoomError
+            ? `Zoom registration failed. ${error.message}`
+            : 'Zoom registration failed. Check Zoom credentials, meeting settings and API availability.';
+        }
         if (result) {
           await db.query(`UPDATE zoom_registration_jobs SET status = 'registered', registrant_id = $2,
             join_url = $3 WHERE registration_id = $1`, [job.registration_id, result.registrantId, result.joinUrl]);

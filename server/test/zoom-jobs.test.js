@@ -57,3 +57,15 @@ test('admin resend reuses the personal link and records sent status only after e
   assert.ok(calls.some(c => c.sql.includes("invitation_status = 'sent'") && c.values[1] === 'email-123'));
   assert.deepEqual(calls.find(c => c.sql.includes('SELECT j.*')).values, [42]);
 });
+
+test('outbox preserves recognized Zoom guidance and does not leak unknown exception messages', async () => {
+  const { ZoomError } = require('../zoom');
+  for (const error of [new ZoomError('Zoom requires Last Name for this meeting.', 400), new Error('secret-provider-token')]) {
+    const { pool, calls } = database(job);
+    await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { throw error; } }, 1, async () => assert.fail('Must not email after registration failure'));
+    const retry = calls.find(call => call.sql.includes('last_error = $2'));
+    assert.ok(retry);
+    assert.ok(!retry.values[1].includes('secret-provider-token'));
+    if (error instanceof ZoomError) assert.match(retry.values[1], /requires Last Name/);
+  }
+});

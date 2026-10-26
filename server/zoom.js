@@ -45,7 +45,13 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
     }
     const data = await response.json();
     // Do not persist or log Zoom response bodies, which can contain personal data.
-    if (!response.ok) throw new ZoomError(`Zoom request failed (HTTP ${response.status}, code ${Number(data.code) || 'unknown'}).`, 502);
+    if (!response.ok) {
+      // Surface only recognized, non-sensitive guidance; never expose arbitrary provider messages.
+      if (Number(data.code) === 300 && /last_name/i.test(String(data.message)) && /required/i.test(String(data.message))) {
+        throw new ZoomError('Zoom requires Last Name for this meeting. Provide the student’s real surname, or make Last Name optional under Zoom Registration > Questions.', 400);
+      }
+      throw new ZoomError(`Zoom request failed (HTTP ${response.status}, code ${Number(data.code) || 'unknown'}).`, 502);
+    }
     return data;
   }
   return {
@@ -73,8 +79,11 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
         nextPage = page.next_page_token || '';
       } while (nextPage);
       const [first_name, ...last] = student.full_name.trim().split(/\s+/);
+      const registrant = { email: student.email.trim(), first_name, auto_approve: true };
+      // Preserve single-word names without fabricating a surname or sending an empty field.
+      if (last.length) registrant.last_name = last.join(' ');
       const data = await request(`/meetings/${meetingId(id)}/registrants`, {
-        method: 'POST', body: JSON.stringify({ email: student.email.trim(), first_name, last_name: last.join(' '), auto_approve: true }),
+        method: 'POST', body: JSON.stringify(registrant),
       });
       if (!data.registrant_id || !data.join_url) throw new ZoomError('Zoom did not return an approved registration. Check the meeting settings.');
       return { registrantId: data.registrant_id, joinUrl: data.join_url };
