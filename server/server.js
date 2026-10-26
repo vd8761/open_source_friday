@@ -8,11 +8,19 @@ const webpush = require('web-push');
 const cron = require('node-cron');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+const { createZoomClient, meetingId, ZoomError } = require('./zoom');
+const { enqueueZoomRegistrations, processZoomJobs } = require('./zoom-jobs');
+const zoom = createZoomClient();
+const { sendZoomInvitation } = require('./zoom-invitation');
+const deliverZoomInvitation = (job, link) => sendZoomInvitation(transporter, job, link);
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.sender.net',
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 30000,
   port: process.env.SMTP_PORT || 465,
-  secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
+  secure: Number(process.env.SMTP_PORT || 465) === 465, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -79,6 +87,21 @@ async function initDB() {
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_registration_open BOOLEAN DEFAULT TRUE`);
 
+    await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS zoom_meeting_id VARCHAR(11)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS zoom_registration_jobs (
+      registration_id INTEGER PRIMARY KEY REFERENCES episode_registrations(id) ON DELETE CASCADE,
+      meeting_id VARCHAR(11) NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'registered')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      registrant_id TEXT, join_url TEXT, last_error TEXT
+    )`);
+
+    await pool.query(`ALTER TABLE zoom_registration_jobs
+      ADD COLUMN IF NOT EXISTS invitation_status TEXT NOT NULL DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS invitation_message_id TEXT`);
+
     // Seed initial admin
     const result = await pool.query('SELECT COUNT(*) FROM admins');
     if (parseInt(result.rows[0].count) === 0) {
@@ -92,9 +115,18 @@ async function initDB() {
     }
   } catch (err) {
     console.error('Database initialization error:', err);
+    throw err;
   }
 }
-initDB();
+let zoomWorkerRunning = false;
+async function runZoomWorker() {
+  if (zoomWorkerRunning) return;
+  zoomWorkerRunning = true;
+  try { await processZoomJobs(pool, zoom, 10, deliverZoomInvitation); }
+  catch { console.error('[Zoom] Worker failed; will retry next minute.'); }
+  finally { zoomWorkerRunning = false; }
+}
+
 
 // ─── Push Helper: send to all subscribers ────────────────────────────────────
 async function sendPushToAll(payload, type = 'Automated') {
@@ -175,7 +207,7 @@ function parseEventDateTime(eventDate, eventTime) {
 }
 
 // ─── Cron: runs every minute — checks 30-min reminders + starting-now alerts ──
-cron.schedule('* * * * *', async () => {
+async function sendEpisodeReminders() {
   try {
     const result = await pool.query(
       `SELECT * FROM episodes WHERE is_active = true`
@@ -225,7 +257,7 @@ cron.schedule('* * * * *', async () => {
   } catch (err) {
     console.error('[Cron] Reminder job error:', err);
   }
-});
+}
 
 
 // ─── JWT Middleware ───────────────────────────────────────────────────────────
@@ -411,15 +443,18 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Admin: Create Episode — sends "New Episode" push notification
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id } = req.body;
   try {
+    const zoomId = meetingId(zoom_meeting_id);
+    if (zoomId && event_mode === 'Offline') throw new ZoomError('Zoom meetings can only be linked to online episodes.', 400);
+    if (zoomId) await zoom.validateMeeting(zoomId);
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, zoomId];
     const result = await pool.query(query, values);
     const episode = result.rows[0];
 
@@ -438,6 +473,7 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
     res.status(201).json({ success: true, episode });
   } catch (error) {
+    if (error instanceof ZoomError) return res.status(error.status).json({ success: false, error: error.message });
     console.error('Create episode error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
@@ -445,25 +481,42 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id } = req.body;
   const { id } = req.params;
+  const db = await pool.connect();
   try {
+    await db.query('BEGIN');
+    const existing = await db.query('SELECT * FROM episodes WHERE id = $1 FOR UPDATE', [id]);
+    if (!existing.rows.length) { await db.query('ROLLBACK'); return res.status(404).json({ success: false, error: 'Episode not found' }); }
+    const old = existing.rows[0];
+    const zoomId = zoom_meeting_id === undefined ? old.zoom_meeting_id : meetingId(zoom_meeting_id);
+    if (zoomId && event_mode === 'Offline') throw new ZoomError('Remove the Zoom meeting before changing to offline.', 400);
+    if (old.zoom_meeting_id && (zoomId !== old.zoom_meeting_id || event_mode === 'Offline')) {
+      const registrations = await db.query('SELECT id FROM episode_registrations WHERE episode_id = $1 LIMIT 1', [id]);
+      if (registrations.rows.length) throw new ZoomError('A Zoom meeting cannot be changed or removed after students register. Create a new episode for a different meeting.', 409);
+    }
+    if (zoomId && zoomId !== old.zoom_meeting_id) await zoom.validateMeeting(zoomId);
     const query = `
       UPDATE episodes 
       SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6,
           presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10,
-          past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13, reminder_sent = false
+          past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13, reminder_sent = false, zoom_meeting_id = $15
       WHERE id = $14 
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, id];
-    const result = await pool.query(query, values);
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, id, zoomId];
+    const result = await db.query(query, values);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Episode not found' });
+    await enqueueZoomRegistrations(db, id);
+    await db.query('COMMIT');
+    void runZoomWorker();
     res.json({ success: true, episode: result.rows[0] });
   } catch (error) {
+    await db.query('ROLLBACK');
+    if (error instanceof ZoomError) return res.status(error.status).json({ success: false, error: error.message });
     console.error('Update episode error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
-  }
+  } finally { db.release(); }
 });
 
 // Admin: Toggle Registration Status
@@ -499,6 +552,18 @@ app.get('/api/admin/episodes/:id', authenticateToken, async (req, res) => {
     console.error('Fetch episode error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
+});
+
+// Admin: inspect pending/failed Zoom registrations without exposing personal join links.
+app.get('/api/admin/episodes/:id/zoom-registrations', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT j.registration_id, s.full_name, s.email,
+      j.meeting_id, j.status, j.attempts, j.next_attempt_at, j.last_error
+      FROM zoom_registration_jobs j JOIN episode_registrations er ON er.id = j.registration_id
+      JOIN students s ON s.id = er.student_id WHERE er.episode_id = $1
+      ORDER BY j.registration_id`, [req.params.id]);
+    res.json({ success: true, data: result.rows });
+  } catch { res.status(500).json({ success: false, error: 'Unable to fetch Zoom registration status' }); }
 });
 
 // Public: Get all episodes
@@ -572,26 +637,30 @@ app.post('/api/register', async (req, res) => {
     recaptcha_token
   } = req.body;
 
+  let db;
+  let committed = false;
   try {
     const isTokenValid = await verifyRecaptchaToken(recaptcha_token);
     if (!isTokenValid) {
       return res.status(400).json({ success: false, error: 'Security check failed. Please refresh and try again.' });
     }
 
-    const epCheck = await pool.query('SELECT * FROM episodes WHERE id = $1', [episode_id]);
+    db = await pool.connect();
+    await db.query('BEGIN');
+    const epCheck = await db.query('SELECT * FROM episodes WHERE id = $1 FOR UPDATE', [episode_id]);
     if (epCheck.rows.length === 0 || !epCheck.rows[0].is_active) {
+      await db.query('ROLLBACK');
       return res.status(400).json({ success: false, error: 'Registration is closed for this episode.' });
     }
     if (epCheck.rows[0].is_registration_open === false) {
+      await db.query('ROLLBACK');
       return res.status(400).json({ success: false, error: 'Registration is currently disabled for this episode.' });
     }
-
-    await pool.query('BEGIN');
 
     let currentStudentId = student_id;
 
     if (!is_existing) {
-      const existingCheck = await pool.query('SELECT id FROM students WHERE email = $1 OR (whatsapp_number = $2 AND country_code = $3)', [email, whatsapp_number, country_code]);
+      const existingCheck = await db.query('SELECT id FROM students WHERE email = $1 OR (whatsapp_number = $2 AND country_code = $3)', [email, whatsapp_number, country_code]);
       if (existingCheck.rows.length > 0) {
         currentStudentId = existingCheck.rows[0].id;
       } else {
@@ -600,24 +669,29 @@ app.post('/api/register', async (req, res) => {
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           RETURNING id
         `;
-        const studentResult = await pool.query(studentQuery, [email, whatsapp_number, country_code, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic]);
+        const studentResult = await db.query(studentQuery, [email, whatsapp_number, country_code, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic]);
         currentStudentId = studentResult.rows[0].id;
       }
     }
 
-    const duplicateCheck = await pool.query(
+    const duplicateCheck = await db.query(
       'SELECT id FROM episode_registrations WHERE student_id = $1 AND episode_id = $2',
       [currentStudentId, episode_id]
     );
     if (duplicateCheck.rows.length > 0) {
-      await pool.query('ROLLBACK');
+      await db.query('ROLLBACK');
       return res.status(400).json({ success: false, error: 'You are already registered for this episode.' });
     }
 
-    await pool.query('INSERT INTO episode_registrations (student_id, episode_id) VALUES ($1, $2)', [currentStudentId, episode_id]);
-    await pool.query('COMMIT');
+    await db.query('INSERT INTO episode_registrations (student_id, episode_id) VALUES ($1, $2)', [currentStudentId, episode_id]);
+    const savedStudent = await db.query('SELECT email, full_name FROM students WHERE id = $1', [currentStudentId]);
+    if (!savedStudent.rows.length) throw new Error('Student not found');
+    await enqueueZoomRegistrations(db, episode_id);
+    await db.query('COMMIT');
+    committed = true;
+    // The registration is now confirmed; invitations are sent from the committed outbox.
 
-    // Send confirmation email asynchronously
+    // Attempt the confirmation email before triggering the invitation worker.
     const episode = epCheck.rows[0];
     const eventDateStr = new Date(episode.event_date).toLocaleDateString('en-IN', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -625,7 +699,7 @@ app.post('/api/register', async (req, res) => {
     
     const mailOptions = {
       from: `"DOS Club Open Source Fridays" <${process.env.FROM_EMAIL || 'info@dosclub.com'}>`,
-      to: email,
+      to: savedStudent.rows[0].email,
       subject: `Registration Confirmed: EP ${episode.episode_number} - ${episode.title}`,
       html: `
 <!DOCTYPE html>
@@ -663,7 +737,7 @@ app.post('/api/register', async (req, res) => {
               </h1>
               
               <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: #475569;">
-                Hi <strong style="color: #0f172a;">${full_name}</strong>,<br><br>
+                Hi <strong style="color: #0f172a;">${savedStudent.rows[0].full_name}</strong>,<br><br>
                 Thank you for reserving your spot for <strong style="color: #07a97b;">Episode ${episode.episode_number}: ${episode.title}</strong>. We're excited to have you join us for this upcoming session.
               </p>
 
@@ -698,7 +772,7 @@ app.post('/api/register', async (req, res) => {
               </table>
 
               <p style="margin: 0 0 32px 0; font-size: 16px; line-height: 1.6; color: #475569;">
-                Please mark your calendar. If this is an online event, you'll receive the meeting link shortly before the session begins.
+                ${episode.zoom_meeting_id ? 'Your Zoom registration is being processed. We will email your Zoom invitation separately.' : 'Please mark your calendar. For online events, the organizers will share joining details before the session.'}
               </p>
 
               <!-- Call to Action -->
@@ -735,7 +809,7 @@ app.post('/api/register', async (req, res) => {
 </html>
       `,
       text: `Registration Successful!
-Hi ${full_name},
+Hi ${savedStudent.rows[0].full_name},
 You have successfully registered for Episode ${episode.episode_number}: ${episode.title}.
 
 Event Details:
@@ -743,6 +817,7 @@ Date: ${eventDateStr}
 Time: ${episode.event_time}
 Presenter: ${episode.presenter_name}
 Mode: ${episode.event_mode}
+${episode.zoom_meeting_id ? 'We will email your Zoom invitation separately.' : ''}
 
 We look forward to seeing you there!
 Best regards,
@@ -755,23 +830,22 @@ Open Source Friday Team`,
       }
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Error sending confirmation email:', error);
-      } else {
-        console.log('Confirmation email sent:', info.messageId);
-      }
-    });
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('Error sending registration confirmation email:', error.message);
+    }
 
-    res.status(201).json({ success: true, message: 'Registration successful' });
+    void runZoomWorker();
+    res.status(201).json({ success: true, message: 'Registration successful', zoom_status: episode.zoom_meeting_id ? 'pending' : 'not_required' });
   } catch (error) {
-    await pool.query('ROLLBACK');
+    if (db && !committed) await db.query('ROLLBACK');
     console.error('Registration error:', error);
     if (error.code === '23505') {
       return res.status(400).json({ success: false, error: 'You are already registered for this episode' });
     }
     res.status(500).json({ success: false, error: 'Internal server error' });
-  }
+  } finally { if (db) db.release(); }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -798,9 +872,14 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
 app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, async (req, res) => {
   try {
     const query = `
-      SELECT s.*, er.registered_at
+      SELECT s.*, er.registered_at, er.id AS registration_id,
+        e.zoom_meeting_id IS NOT NULL AND e.event_mode = 'Online' AS zoom_enabled,
+        COALESCE(j.invitation_status, 'not_sent') AS invitation_status,
+        j.invitation_sent_at, j.invitation_message_id, j.last_error AS invitation_error
       FROM students s
       JOIN episode_registrations er ON s.id = er.student_id
+      JOIN episodes e ON e.id = er.episode_id
+      LEFT JOIN zoom_registration_jobs j ON j.registration_id = er.id
       WHERE er.episode_id = $1
       ORDER BY er.registered_at DESC
     `;
@@ -810,6 +889,39 @@ app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, asyn
     console.error('Fetch registrations error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Only registered students can receive an invitation. Admins can send or resend at any time.
+app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitation', authenticateToken, async (req, res) => {
+  if (!zoom.configured()) return res.status(503).json({ success: false, error: 'Zoom credentials are not configured on the server.' });
+  const db = await pool.connect();
+  let registrationId;
+  try {
+    await db.query('BEGIN');
+    const { rows } = await db.query(`SELECT er.id, e.zoom_meeting_id, e.event_mode
+      FROM episode_registrations er JOIN episodes e ON e.id = er.episode_id
+      WHERE er.episode_id = $1 AND er.student_id = $2 FOR UPDATE OF er`,
+      [req.params.episode_id, req.params.student_id]);
+    if (!rows.length) { await db.query('ROLLBACK'); return res.status(404).json({ success: false, error: 'Student must register for this episode before receiving an invitation.' }); }
+    if (!rows[0].zoom_meeting_id || rows[0].event_mode !== 'Online') {
+      await db.query('ROLLBACK'); return res.status(400).json({ success: false, error: 'Link a Zoom meeting to this online episode first.' });
+    }
+    registrationId = rows[0].id;
+    await enqueueZoomRegistrations(db, req.params.episode_id);
+    await db.query(`UPDATE zoom_registration_jobs SET invitation_status = 'pending',
+      next_attempt_at = NOW(), last_error = NULL WHERE registration_id = $1`, [registrationId]);
+    await db.query('COMMIT');
+  } catch {
+    await db.query('ROLLBACK');
+    return res.status(500).json({ success: false, error: 'Unable to queue Zoom invitation' });
+  } finally { db.release(); }
+  try {
+    await processZoomJobs(pool, zoom, 1, deliverZoomInvitation, registrationId);
+    const { rows } = await pool.query('SELECT invitation_status, last_error FROM zoom_registration_jobs WHERE registration_id = $1', [registrationId]);
+    const sent = rows[0]?.invitation_status === 'sent';
+    res.status(sent ? 200 : 202).json({ success: true, invitation_status: rows[0]?.invitation_status || 'pending',
+      message: sent ? 'Zoom invitation accepted by email service.' : (rows[0]?.last_error || 'Invitation queued. Refresh to check its status.') });
+  } catch { res.status(202).json({ success: true, invitation_status: 'pending', message: 'Invitation queued; delivery will be retried.' }); }
 });
 
 app.delete('/api/admin/episodes/:episode_id/registrations/:student_id', authenticateToken, async (req, res) => {
@@ -867,7 +979,14 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`[Push] VAPID configured for ${process.env.VAPID_EMAIL}`);
-});
+if (require.main === module) initDB().then(() => {
+  cron.schedule('* * * * *', sendEpisodeReminders);
+  cron.schedule('* * * * *', runZoomWorker);
+  void runZoomWorker();
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`[Push] VAPID configured for ${process.env.VAPID_EMAIL}`);
+  });
+}).catch(async () => { await pool.end(); process.exitCode = 1; });
+
+module.exports = { app };

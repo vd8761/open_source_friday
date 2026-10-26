@@ -38,6 +38,7 @@ const AdminEpisodeForm = () => {
     cover_photo_url: '',
     past_cover_photo_url: '',
     event_mode: 'Online',
+    zoom_meeting_id: '',
     is_registration_open: true
   });
   const [eventDate, setEventDate] = useState(null);
@@ -74,6 +75,7 @@ const AdminEpisodeForm = () => {
               cover_photo_url: ep.cover_photo_url || '',
               past_cover_photo_url: ep.past_cover_photo_url || '',
               event_mode: ep.event_mode || 'Online',
+              zoom_meeting_id: ep.zoom_meeting_id || '',
               is_registration_open: ep.is_registration_open !== undefined ? ep.is_registration_open : true
             });
             if (ep.event_date) setEventDate(new Date(ep.event_date));
@@ -369,6 +371,15 @@ const AdminEpisodeForm = () => {
 
             {currentStep === 2 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                {formData.event_mode === 'Online' && (
+                  <div className="mb-6">
+                    <label htmlFor="zoom-meeting-id" className="block text-sm font-bold text-slate-700 mb-1">Zoom Meeting ID (optional)</label>
+                    <input id="zoom-meeting-id" name="zoom_meeting_id" type="text" inputMode="numeric" maxLength={11}
+                      value={formData.zoom_meeting_id} onChange={handleChange} placeholder="e.g. 12345678901"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos outline-none" />
+                    <p className="text-xs text-slate-500 mt-2">Use a scheduled Zoom meeting with registration, and automatic approval enabled. Students will be added automatically and receive a separate invitation email from this application. Leave blank for events without Zoom.</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Event Date</label>

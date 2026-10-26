@@ -1,0 +1,139 @@
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const Module = require('node:module');
+const originalLoad = Module._load;
+const queries = [];
+const emails = [];
+let duplicate = false;
+let zoomConfigured = false;
+let registered = true;
+let invitationStatus = 'pending';
+process.env.JWT_SECRET = 'test-only-secret';
+let closed = false;
+let queueFailure = false;
+let firstTimeStudent = false;
+let releases = 0;
+const db = {
+  async query(sql, values) {
+    queries.push({ sql, values });
+    if (!sql.includes('INSERT') && sql.includes('SELECT er.id, e.zoom_meeting_id')) return { rows: registered ? [{ id: 42, zoom_meeting_id: '12345678901', event_mode: 'Online' }] : [] };
+    if (sql.includes('SELECT j.*')) return { rows: [{ registration_id: 42, email: 'stored@example.com', full_name: 'Stored Student', meeting_id: '12345678901', status: 'registered', registrant_id: 'r1', join_url: 'https://zoom.us/private', attempts: 0 }] };
+    if (sql.includes("invitation_status = 'sent'")) invitationStatus = 'sent';
+    if (sql.includes("invitation_status = 'pending'")) invitationStatus = 'pending';
+    if (sql.includes('SELECT * FROM episodes')) return { rows: [{ id: 1, is_active: !closed, is_registration_open: true, zoom_meeting_id: '12345678901', event_mode: 'Online', event_date: '2026-12-01', episode_number: 5 }] };
+    if (sql.includes('SELECT id FROM episode_registrations')) return { rows: duplicate ? [{ id: 10 }] : [] };
+    if (sql.includes('SELECT id FROM students')) return { rows: firstTimeStudent ? [] : [{ id: 7 }] };
+    if (sql.includes('INSERT INTO students')) return { rows: [{ id: 7 }] };
+    if (sql.includes('SELECT email, full_name FROM students')) return { rows: [{ email: 'stored@example.com', full_name: 'Stored Student' }] };
+    if (queueFailure && sql.includes('INSERT INTO zoom_registration_jobs')) throw new Error('outbox unavailable');
+    return { rows: [] };
+  },
+  release() { releases++; },
+};
+Module._load = function(name, ...args) {
+  if (name === './zoom') return { ...originalLoad.call(this, name, ...args), createZoomClient: () => ({ configured: () => zoomConfigured }) };
+  if (name === 'pg') return { Pool: class { connect() { return Promise.resolve(db); } query(sql) { if (sql.includes('SELECT invitation_status')) return Promise.resolve({ rows: [{ invitation_status: invitationStatus }] }); throw new Error('Registration must use a checked out client'); } } };
+  if (name === 'node-cron') return { schedule() {} };
+  if (name === 'web-push') return { setVapidDetails() {} };
+  if (name === 'nodemailer') return { createTransport: () => ({ sendMail: async (mail) => { emails.push(mail); return { accepted: [mail.to], messageId: 'test-email' }; } }) };
+  return originalLoad.call(this, name, ...args);
+};
+const { app } = require('../server');
+Module._load = originalLoad;
+let server;
+let base;
+const nativeFetch = global.fetch;
+before(async () => {
+  global.fetch = async (url, options) => url === 'https://www.google.com/recaptcha/api/siteverify'
+    ? { json: async () => ({ success: options.body.get('response') === 'valid', score: 0.9 }) }
+    : nativeFetch(url, options);
+  server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  base = `http://127.0.0.1:${server.address().port}`;
+});
+after(async () => { global.fetch = nativeFetch; await new Promise(resolve => server.close(resolve)); });
+async function register(overrides = {}) {
+  queries.length = 0; emails.length = 0; releases = 0;
+  return nativeFetch(`${base}/api/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ episode_id: 1, is_existing: true, student_id: 7, email: 'untrusted@example.com', full_name: 'Untrusted', recaptcha_token: 'valid', ...overrides }) });
+}
+test('existing student registration commits outbox with registration and emails saved identity', async () => {
+  const response = await register();
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).zoom_status, 'pending');
+  const sql = queries.map(q => q.sql);
+  assert.ok(sql[0] === 'BEGIN');
+  assert.ok(sql[1].includes('FOR UPDATE'));
+  assert.ok(sql.findIndex(q => q.includes('INSERT INTO zoom_registration_jobs')) < sql.indexOf('COMMIT'));
+  assert.equal(emails[0].to, 'stored@example.com');
+  assert.ok(emails[0].text.includes('Stored Student'));
+  assert.equal(releases, 1);
+});
+test('new student lookup uses stored identity and enters the same outbox', async () => {
+  const response = await register({ is_existing: false });
+  assert.equal(response.status, 201);
+  assert.equal(emails[0].to, 'stored@example.com');
+  assert.ok(queries.some(q => q.sql.includes('INSERT INTO zoom_registration_jobs')));
+});
+test('duplicate and closed registrations roll back without queueing Zoom or emailing', async () => {
+  for (const kind of ['duplicate', 'closed']) {
+    duplicate = kind === 'duplicate'; closed = kind === 'closed';
+    const response = await register();
+    assert.equal(response.status, 400);
+    assert.ok(queries.some(q => q.sql === 'ROLLBACK'));
+    assert.ok(!queries.some(q => q.sql.includes('INSERT INTO zoom_registration_jobs')));
+    assert.equal(emails.length, 0);
+    assert.equal(releases, 1);
+  }
+  duplicate = closed = false;
+});
+test('outbox database failure rolls back registration instead of silently losing Zoom work', async () => {
+  queueFailure = true;
+  const response = await register();
+  queueFailure = false;
+  assert.equal(response.status, 500);
+  assert.ok(queries.some(q => q.sql === 'ROLLBACK'));
+  assert.ok(!queries.some(q => q.sql === 'COMMIT'));
+  assert.equal(emails.length, 0);
+  assert.equal(releases, 1);
+});
+test('failed CAPTCHA performs no registration database work', async () => {
+  const response = await register({ recaptcha_token: 'invalid' });
+  assert.equal(response.status, 400);
+  assert.equal(queries.length, 0);
+});
+
+test('admin send requires authentication and an existing student registration', async () => {
+  const path = `${base}/api/admin/episodes/1/registrations/7/zoom-invitation`;
+  let response = await nativeFetch(path, { method: 'POST' });
+  assert.equal(response.status, 401);
+  zoomConfigured = true; registered = false;
+  const token = require('jsonwebtoken').sign({ id: 1 }, process.env.JWT_SECRET);
+  response = await nativeFetch(path, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(response.status, 404);
+  registered = true; zoomConfigured = false;
+});
+test('admin send and resend use stored student email and return sent only after SMTP acceptance', async () => {
+  zoomConfigured = true;
+  const token = require('jsonwebtoken').sign({ id: 1 }, process.env.JWT_SECRET);
+  const path = `${base}/api/admin/episodes/1/registrations/7/zoom-invitation`;
+  for (let i = 0; i < 2; i++) {
+    const response = await nativeFetch(path, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).invitation_status, 'sent');
+    assert.equal(emails.at(-1).to, 'stored@example.com');
+    assert.ok(emails.at(-1).text.includes('https://zoom.us/private'));
+  }
+  zoomConfigured = false;
+});
+
+test('first-time student is saved before their registration and invitation job', async () => {
+  firstTimeStudent = true;
+  const response = await register({ is_existing: false, email: 'stored@example.com', full_name: 'Stored Student' });
+  firstTimeStudent = false;
+  assert.equal(response.status, 201);
+  const sql = queries.map(q => q.sql);
+  const studentInsert = sql.findIndex(q => q.includes('INSERT INTO students'));
+  const registrationInsert = sql.findIndex(q => q.includes('INSERT INTO episode_registrations'));
+  const invitationInsert = sql.findIndex(q => q.includes('INSERT INTO zoom_registration_jobs'));
+  assert.ok(studentInsert >= 0 && studentInsert < registrationInsert && registrationInsert < invitationInsert);
+});
