@@ -6,65 +6,62 @@ function database(job, failUpdate = false) {
   const db = { query: async (sql, values) => {
     calls.push({ sql, values });
     if (failUpdate && sql.includes("status = 'registered'")) throw new Error('database unavailable');
-    return { rows: sql.includes('SELECT j.*') && job ? [job] : [] };
+    // Simulate the SELECT's pending-only filter.
+    return { rows: sql.includes('SELECT j.*') && job && job.status !== 'registered' ? [job] : [] };
   }, release: () => calls.push({ sql: 'RELEASE' }) };
   return { calls, pool: { connect: async () => db } };
 }
 const job = { registration_id: 42, meeting_id: '12345678901', email: 'ada@example.com', full_name: 'Ada', attempts: 0 };
-test('successful sync persists private Zoom details and commits', async () => {
+test('successful enrollment records Zoom-managed confirmation without an application email sender', async () => {
   const { pool, calls } = database(job);
   await processZoomJobs(pool, { configured: () => true, addRegistrant: async (id, student) => {
     assert.equal(id, job.meeting_id); assert.equal(student.email, job.email);
     return { registrantId: 'r1', joinUrl: 'https://zoom.us/private' };
-  } }, 1, async () => 'message-id');
-  assert.deepEqual(calls.find(c => c.sql.includes("status = 'registered'")).values, [42, 'r1', 'https://zoom.us/private']);
+  } }, 1);
+  const update = calls.find(c => c.sql.includes("status = 'registered'"));
+  assert.deepEqual(update.values, [42, 'r1', 'https://zoom.us/private']);
+  assert.ok(update.sql.includes("invitation_status = 'zoom_managed'"));
+  assert.ok(!update.sql.includes('invitation_sent_at'));
   assert.deepEqual(calls.slice(-2).map(c => c.sql), ['COMMIT', 'RELEASE']);
 });
-test('Zoom failure preserves the registration and schedules retry with capped backoff', async () => {
+test('Zoom failures preserve application registration and schedule capped retries', async () => {
   for (const [attempts, delay] of [[0, 60], [2, 240], [20, 3600]]) {
     const { pool, calls } = database({ ...job, attempts });
-    await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { throw new Error('timeout'); } }, 1, async () => 'message-id');
-    const retry = calls.find(c => c.sql.includes('last_error = $2'));
-    assert.equal(retry.values[2], delay);
+    await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { throw new Error('timeout'); } }, 1);
+    assert.equal(calls.find(c => c.sql.includes('last_error = $2')).values[2], delay);
     assert.ok(!calls.some(c => c.sql.includes("SET status = 'registered'")));
     assert.deepEqual(calls.slice(-2).map(c => c.sql), ['COMMIT', 'RELEASE']);
   }
 });
-test('DB failure rolls back; a later attempt can reconcile an accepted Zoom registration', async () => {
+test('DB failure rolls back, allowing the next attempt to reconcile the accepted Zoom registration', async () => {
   const { pool, calls } = database(job, true);
-  await assert.rejects(processZoomJobs(pool, { configured: () => true, addRegistrant: async () => ({ registrantId: 'r1', joinUrl: 'private' }) }, 1, async () => 'message-id'));
+  await assert.rejects(processZoomJobs(pool, { configured: () => true, addRegistrant: async () => ({ registrantId: 'r1', joinUrl: 'private' }) }, 1));
   assert.deepEqual(calls.slice(-2).map(c => c.sql), ['ROLLBACK', 'RELEASE']);
 });
-test('empty queue releases the connection and unconfigured Zoom leaves jobs pending', async () => {
+test('unconfigured Zoom leaves work pending and empty queues release connections', async () => {
   const { pool, calls } = database();
   await processZoomJobs(pool, { configured: () => false });
   assert.equal(calls.length, 0);
   await processZoomJobs(pool, { configured: () => true });
   assert.deepEqual(calls.slice(-2).map(c => c.sql), ['COMMIT', 'RELEASE']);
 });
-
-test('email failure keeps Zoom registration and retries email without re-registering the student', async () => {
-  const { pool, calls } = database({ ...job, status: 'registered', registrant_id: 'r1', join_url: 'https://zoom.us/private' });
-  await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { assert.fail('Should reuse existing Zoom registration'); } }, 1,
-    async () => { throw new Error('SMTP unavailable'); });
-  assert.ok(calls.some(c => c.values?.[1]?.includes('Invitation email failed')));
-  assert.ok(!calls.some(c => c.sql.includes("invitation_status = 'sent'")));
+test('already registered students with obsolete SMTP failures are not retried or re-registered', async () => {
+  const { pool, calls } = database({ ...job, status: 'registered', invitation_status: 'failed', last_error: 'Old SMTP error' });
+  await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => assert.fail('Already enrolled') });
+  assert.ok(calls.find(c => c.sql.includes('SELECT j.*')).sql.includes("j.status = 'pending'"));
+  assert.ok(!calls.some(c => /^\s*UPDATE/.test(c.sql)));
 });
-test('admin resend reuses the personal link and records sent status only after email acceptance', async () => {
-  const { pool, calls } = database({ ...job, status: 'registered', registrant_id: 'r1', join_url: 'https://zoom.us/private' });
-  await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { assert.fail('Unexpected Zoom registration'); } }, 1,
-    async (student, link) => { assert.equal(student.email, job.email); assert.equal(link, 'https://zoom.us/private'); return 'email-123'; }, 42);
-  assert.ok(calls.some(c => c.sql.includes("invitation_status = 'sent'") && c.values[1] === 'email-123'));
+test('admin retry targets only the selected pending registration', async () => {
+  const { pool, calls } = database(job);
+  await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => ({ registrantId: 'r1', joinUrl: 'https://zoom.us/private' }) }, 1, 42);
   assert.deepEqual(calls.find(c => c.sql.includes('SELECT j.*')).values, [42]);
 });
-
-test('outbox preserves recognized Zoom guidance and does not leak unknown exception messages', async () => {
+test('outbox preserves safe Zoom guidance and hides arbitrary exception messages', async () => {
   const { ZoomError } = require('../zoom');
   for (const error of [new ZoomError('Zoom requires Last Name for this meeting.', 400), new Error('secret-provider-token')]) {
     const { pool, calls } = database(job);
-    await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { throw error; } }, 1, async () => assert.fail('Must not email after registration failure'));
+    await processZoomJobs(pool, { configured: () => true, addRegistrant: async () => { throw error; } }, 1);
     const retry = calls.find(call => call.sql.includes('last_error = $2'));
-    assert.ok(retry);
     assert.ok(!retry.values[1].includes('secret-provider-token'));
     if (error instanceof ZoomError) assert.match(retry.values[1], /requires Last Name/);
   }

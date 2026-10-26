@@ -217,10 +217,10 @@ export default function Dashboard() {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }
       });
       const result = await response.json();
-      showToast(result.message || result.error || 'Unable to send invitation',
+      showToast(result.message || result.error || 'Unable to register with Zoom',
         result.success && result.invitation_status !== 'failed' ? 'success' : 'error');
       await fetchRegistrations(activeEpisodeId, token, API_URL);
-    } catch { showToast('Unable to send invitation. Refresh the roster to check its status.', 'error'); }
+    } catch { showToast('Unable to register with Zoom. Refresh the roster to check its status.', 'error'); }
   };
 
   const handleDeleteRegistration = async (studentId) => {

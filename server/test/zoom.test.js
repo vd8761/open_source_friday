@@ -84,3 +84,12 @@ test('required Last Name error gives actionable guidance without echoing provide
     return true;
   });
 });
+test('linked meetings must enable Zoom-managed confirmation emails', async () => {
+  for (const settings of [
+    { ...validMeeting.settings, registrants_confirmation_email: false },
+    { ...validMeeting.settings, registrants_email_notification: false },
+  ]) {
+    const { zoom } = setup([token(), reply({ ...validMeeting, settings })]);
+    await assert.rejects(zoom.validateMeeting('12345678901'), /Enable Zoom confirmation emails/);
+  }
+});

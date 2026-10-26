@@ -61,6 +61,9 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
       if (data.type !== 2 || data.settings?.approval_type !== 0) {
         throw new ZoomError('Use a scheduled, non-recurring Zoom meeting with registration enabled and automatic approval.', 400);
       }
+      if (data.settings?.registrants_email_notification !== true || data.settings?.registrants_confirmation_email !== true) {
+        throw new ZoomError('Enable Zoom confirmation emails for registrants under the meeting’s Email Settings before linking it.', 400);
+      }
     },
     async addRegistrant(id, student) {
       if (!student.email || !student.full_name?.trim()) throw new ZoomError('Student name and email are required for Zoom registration.', 400);

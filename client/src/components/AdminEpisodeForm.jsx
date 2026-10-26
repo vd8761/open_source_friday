@@ -390,7 +390,7 @@ const AdminEpisodeForm = () => {
                     <input id="zoom-meeting-id" name="zoom_meeting_id" type="text" inputMode="numeric" maxLength={11}
                       value={formData.zoom_meeting_id} onChange={handleChange} placeholder="e.g. 12345678901"
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos outline-none" />
-                    <p className="text-xs text-slate-500 mt-2">Use a scheduled Zoom meeting with registration, and automatic approval enabled. Students will be added automatically and receive a separate invitation email from this application. Leave blank for events without Zoom.</p>
+                    <p className="text-xs text-slate-500 mt-2">Use a scheduled Zoom meeting with registration, and automatic approval enabled. Students will be added automatically and receive their confirmation email directly from Zoom. Leave blank for events without Zoom.</p>
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -526,7 +526,7 @@ const AdminEpisodeForm = () => {
                       className="h-4 w-4 accent-dos" />
                     Silent mode (no push notifications)
                   </label>
-                  <p className="mt-2 text-xs text-slate-500">Suppresses subscriber announcements, 30-minute reminders, and starting-now alerts for this episode. Student registration confirmations and Zoom invitation emails still send normally. The episode remains visible on the public website.</p>
+                  <p className="mt-2 text-xs text-slate-500">Suppresses subscriber announcements, 30-minute reminders, and starting-now alerts for this episode. Zoom registration and Zoom confirmation emails continue normally. This application sends no emails. The episode remains visible on the public website.</p>
                 </div>
                 <div className="mb-6">
                   <label className="block text-sm font-bold text-slate-700 mb-1">Meta Description (Social Media Link Preview)</label>
