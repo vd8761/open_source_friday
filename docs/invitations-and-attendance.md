@@ -10,13 +10,13 @@ CSV imports create invitation contacts only. They do not create students, episod
 
 1. An existing Sender account with marketing campaign API access and enough subscriber/send allowance. Its public free plan advertises 2,500 subscribers and 15,000 emails/month; confirm the actual account allowance before sending. Account webhooks are not required by this implementation.
 2. A Sender API access token with subscriber, group, campaign and campaign-report access. Create it in Sender Settings → API access tokens. Add it to Render; never paste it into chat or a VITE variable.
-3. Verify `touchmarkdes.com` in Sender, including its SPF, DKIM and DMARC configuration. Confirm `ariyappan@touchmarkdes.com` is an authorized sending address. Supply the real organization mailing address for the footer.
+3. Verify `descienceosclub.com` in Sender, including its SPF, DKIM and DMARC configuration. Confirm `info@descienceosclub.com` is an authorized sending address. Supply the real organization mailing address for the footer.
 4. Configure these variables on the **Render backend**:
 
    ```dotenv
    PUBLIC_APP_URL=https://osf.descienceosclub.com
    SENDER_API_TOKEN=<secret token entered directly in Render>
-   SENDER_FROM_EMAIL=ariyappan@touchmarkdes.com
+   SENDER_FROM_EMAIL=info@descienceosclub.com
    SENDER_FROM_NAME=Descience Open Source Club
    SENDER_POSTAL_ADDRESS=<real organization mailing address>
    ```
