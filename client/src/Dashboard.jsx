@@ -209,6 +209,20 @@ export default function Dashboard() {
     }
   };
 
+  const handleSendZoomInvitation = async (studentId) => {
+    const token = localStorage.getItem('adminToken');
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    try {
+      const response = await fetch(`${API_URL}/api/admin/episodes/${activeEpisodeId}/registrations/${studentId}/zoom-invitation`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }
+      });
+      const result = await response.json();
+      showToast(result.message || result.error || 'Unable to send invitation',
+        result.success && result.invitation_status !== 'failed' ? 'success' : 'error');
+      await fetchRegistrations(activeEpisodeId, token, API_URL);
+    } catch { showToast('Unable to send invitation. Refresh the roster to check its status.', 'error'); }
+  };
+
   const handleDeleteRegistration = async (studentId) => {
     if (!window.confirm('Are you sure you want to delete this registration?')) {
       return;
@@ -716,6 +730,7 @@ export default function Dashboard() {
                 <RegistrationTable
                   data={registrations}
                   onDeleteRegistration={handleDeleteRegistration}
+                  onSendZoomInvitation={handleSendZoomInvitation}
                 />
               )}
             </div>

@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -19,5 +20,8 @@
     "nodemailer": "^9.0.5",
     "pg": "^8.22.0",
     "web-push": "^3.6.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

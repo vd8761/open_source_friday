@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
 import { Mail, GraduationCap, BookOpen, Phone, Search, UserX, Trash2 } from 'lucide-react';
 
-export default function RegistrationTable({ data, onDeleteRegistration }) {
+export default function RegistrationTable({ data, onDeleteRegistration, onSendZoomInvitation }) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sendingStudentId, setSendingStudentId] = useState(null);
+  const sendInvitation = async (studentId) => {
+    setSendingStudentId(studentId);
+    try { await onSendZoomInvitation(studentId); }
+    finally { setSendingStudentId(null); }
+  };
 
   if (!data || data.length === 0) {
     return (
@@ -53,6 +59,7 @@ export default function RegistrationTable({ data, onDeleteRegistration }) {
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Academic Info</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Interests & Club</th>
+              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Zoom Invitation</th>
               <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
@@ -115,6 +122,19 @@ export default function RegistrationTable({ data, onDeleteRegistration }) {
                     </div>
                   </td>
 
+                  <td className="px-6 py-4 text-sm min-w-[220px]">
+                    <div className={row.invitation_status === 'sent' ? 'font-bold text-emerald-700' : row.invitation_status === 'failed' ? 'font-bold text-rose-700' : 'font-bold text-slate-600'}>
+                      {!row.zoom_enabled ? 'Zoom not configured' : ({ sent: 'Invitation sent', pending: 'Invitation pending', failed: 'Invitation failed', not_sent: 'Invitation not sent' }[row.invitation_status] || 'Invitation not sent')}
+                    </div>
+                    {row.invitation_sent_at && <div className="text-xs text-slate-500 mt-1">Last sent: {new Date(row.invitation_sent_at).toLocaleString()}</div>}
+                    {row.invitation_status === 'sent' && <div className="text-xs text-slate-500 mt-1">Accepted by email service; inbox delivery unverified.</div>}
+                    {row.invitation_error && <div className="text-xs text-rose-600 mt-1 max-w-xs">{row.invitation_error}</div>}
+                    {onSendZoomInvitation && <button type="button" disabled={!row.zoom_enabled || sendingStudentId !== null}
+                      onClick={() => sendInvitation(row.id)}
+                      className="mt-2 px-3 py-1.5 rounded-lg bg-dos text-white font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                      {sendingStudentId === row.id ? 'Sending…' : row.invitation_sent_at ? 'Resend invitation' : 'Send invitation'}
+                    </button>}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <button
                       onClick={() => onDeleteRegistration && onDeleteRegistration(row.id)}
@@ -128,7 +148,7 @@ export default function RegistrationTable({ data, onDeleteRegistration }) {
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="px-6 py-12 text-center text-slate-500 font-medium">
+                <td colSpan="6" className="px-6 py-12 text-center text-slate-500 font-medium">
                   <div className="flex flex-col items-center justify-center">
                     <Search className="h-8 w-8 text-slate-300 mb-3" />
                     <p>No participants match your search criteria.</p>
