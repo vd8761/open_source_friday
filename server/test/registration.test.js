@@ -13,6 +13,18 @@ let closed = false;
 let queueFailure = false;
 let firstTimeStudent = false;
 let releases = 0;
+let storedSilent = false;
+let reminderRows = [];
+const pushNotifications = [];
+async function poolQuery(sql, values) {
+  queries.push({ sql, values });
+  if (sql.includes('SELECT invitation_status')) return { rows: [{ invitation_status: invitationStatus }] };
+  if (sql.includes('INSERT INTO episodes')) return { rows: [{ id: 16, episode_number: values[0], title: values[1], is_silent: values[14] }] };
+  if (sql.includes('SELECT * FROM episodes WHERE is_active')) return { rows: reminderRows };
+  if (sql.includes('SELECT * FROM push_subscriptions')) return { rows: [{ endpoint: 'test-endpoint', p256dh: 'key', auth: 'auth' }] };
+  if (sql.includes('INSERT INTO push_notification_history') || sql.includes('UPDATE episodes SET reminder_sent')) return { rows: [] };
+  throw new Error('Registration must use a checked out client');
+}
 const db = {
   async query(sql, values) {
     queries.push({ sql, values });
@@ -20,7 +32,8 @@ const db = {
     if (sql.includes('SELECT j.*')) return { rows: [{ registration_id: 42, email: 'stored@example.com', full_name: 'Stored Student', meeting_id: '12345678901', status: 'registered', registrant_id: 'r1', join_url: 'https://zoom.us/private', attempts: 0 }] };
     if (sql.includes("invitation_status = 'sent'")) invitationStatus = 'sent';
     if (sql.includes("invitation_status = 'pending'")) invitationStatus = 'pending';
-    if (sql.includes('SELECT * FROM episodes')) return { rows: [{ id: 1, is_active: !closed, is_registration_open: true, zoom_meeting_id: '12345678901', event_mode: 'Online', event_date: '2026-12-01', episode_number: 5 }] };
+    if (sql.includes('SELECT * FROM episodes')) return { rows: [{ id: 1, is_active: !closed, is_silent: storedSilent, is_registration_open: true, zoom_meeting_id: '12345678901', event_mode: 'Online', event_date: '2026-12-01', episode_number: 5 }] };
+    if (sql.includes('SET episode_number =')) { storedSilent = values[15]; return { rows: [{ id: 1, is_silent: storedSilent }] }; }
     if (sql.includes('SELECT id FROM episode_registrations')) return { rows: duplicate ? [{ id: 10 }] : [] };
     if (sql.includes('SELECT id FROM students')) return { rows: firstTimeStudent ? [] : [{ id: 7 }] };
     if (sql.includes('INSERT INTO students')) return { rows: [{ id: 7 }] };
@@ -32,13 +45,13 @@ const db = {
 };
 Module._load = function(name, ...args) {
   if (name === './zoom') return { ...originalLoad.call(this, name, ...args), createZoomClient: () => ({ configured: () => zoomConfigured }) };
-  if (name === 'pg') return { Pool: class { connect() { return Promise.resolve(db); } query(sql) { if (sql.includes('SELECT invitation_status')) return Promise.resolve({ rows: [{ invitation_status: invitationStatus }] }); throw new Error('Registration must use a checked out client'); } } };
+  if (name === 'pg') return { Pool: class { connect() { return Promise.resolve(db); } query(sql, values) { return poolQuery(sql, values); } } };
   if (name === 'node-cron') return { schedule() {} };
-  if (name === 'web-push') return { setVapidDetails() {} };
+  if (name === 'web-push') return { setVapidDetails() {}, async sendNotification(subscription, payload) { pushNotifications.push(JSON.parse(payload)); } };
   if (name === 'nodemailer') return { createTransport: () => ({ sendMail: async (mail) => { emails.push(mail); return { accepted: [mail.to], messageId: 'test-email' }; } }) };
   return originalLoad.call(this, name, ...args);
 };
-const { app } = require('../server');
+const { app, sendEpisodeReminders } = require('../server');
 Module._load = originalLoad;
 let server;
 let base;
@@ -136,4 +149,77 @@ test('first-time student is saved before their registration and invitation job',
   const registrationInsert = sql.findIndex(q => q.includes('INSERT INTO episode_registrations'));
   const invitationInsert = sql.findIndex(q => q.includes('INSERT INTO zoom_registration_jobs'));
   assert.ok(studentInsert >= 0 && studentInsert < registrationInsert && registrationInsert < invitationInsert);
+});
+
+function adminHeaders() {
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${require('jsonwebtoken').sign({ id: 1 }, process.env.JWT_SECRET)}` };
+}
+const episodeBody = { episode_number: 16, title: 'Internal Test', presenter_name: 'Test Host', event_date: '2026-12-01', event_time: '8:00 PM - 9:00 PM', event_mode: 'Online' };
+test('silent episode creation persists silent mode and sends no subscriber announcement', async () => {
+  pushNotifications.length = 0; queries.length = 0;
+  const response = await nativeFetch(`${base}/api/episodes`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ ...episodeBody, is_silent: true }) });
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).episode.is_silent, true);
+  assert.equal(pushNotifications.length, 0);
+  assert.ok(!queries.some(q => q.sql.includes('push_subscriptions') || q.sql.includes('push_notification_history')));
+});
+test('regular episodes still announce by default and when silent mode is explicitly false', async () => {
+  for (const extras of [{}, { is_silent: false }]) {
+    pushNotifications.length = 0;
+    const response = await nativeFetch(`${base}/api/episodes`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ ...episodeBody, ...extras }) });
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).episode.is_silent, false);
+    assert.equal(pushNotifications.length, 1);
+    assert.equal(pushNotifications[0].title, '🎉 New Episode Announced!');
+  }
+});
+test('silent mode cannot be accidentally enabled using string booleans', async () => {
+  for (const method of ['POST', 'PUT']) {
+    const response = await nativeFetch(`${base}/api/episodes${method === 'PUT' ? '/1' : ''}`, { method, headers: adminHeaders(), body: JSON.stringify({ ...episodeBody, is_silent: 'false' }) });
+    assert.equal(response.status, 400);
+  }
+});
+test('editing an episode preserves omitted silent mode and supports switching it off', async () => {
+  storedSilent = true;
+  for (const [extras, expected] of [[{}, true], [{ is_silent: false }, false], [{ is_silent: true }, true]]) {
+    const response = await nativeFetch(`${base}/api/episodes/1`, { method: 'PUT', headers: adminHeaders(), body: JSON.stringify({ ...episodeBody, ...extras }) });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).episode.is_silent, expected);
+  }
+  storedSilent = false;
+});
+function reminderEpisode(minutesAway, isSilent) {
+  const time = new Date(Date.now() + minutesAway * 60000);
+  const pad = value => String(value).padStart(2, '0');
+  return { id: 16, episode_number: 16, title: 'Test', is_silent: isSilent,
+    event_date: `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`,
+    event_time: `${pad(time.getHours())}:${pad(time.getMinutes())}` };
+}
+test('silent episodes suppress both reminder types; ordinary reminders still send', async () => {
+  for (const minutesAway of [30, 0]) {
+    pushNotifications.length = 0;
+    reminderRows = [reminderEpisode(minutesAway, true)];
+    await sendEpisodeReminders();
+    assert.equal(pushNotifications.length, 0);
+    reminderRows = [reminderEpisode(minutesAway, false)];
+    await sendEpisodeReminders();
+    assert.equal(pushNotifications.length, 1);
+  }
+  reminderRows = [];
+});
+test('silent episodes still confirm student registration and queue the Zoom invitation', async () => {
+  storedSilent = true; pushNotifications.length = 0;
+  const response = await register();
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).zoom_status, 'pending');
+  assert.equal(emails.length, 1);
+  assert.ok(queries.some(q => q.sql.includes('INSERT INTO zoom_registration_jobs')));
+  assert.equal(pushNotifications.length, 0);
+  storedSilent = false;
+});
+test('authenticated capability check lets the frontend fail safely against older backends', async () => {
+  const path = `${base}/api/admin/episode-capabilities`;
+  assert.equal((await nativeFetch(path)).status, 401);
+  const response = await nativeFetch(path, { headers: adminHeaders() });
+  assert.deepEqual(await response.json(), { success: true, silent_mode: true });
 });
