@@ -18,7 +18,7 @@ Use Node.js 20 or later. Copy `server/.env.example` to `server/.env` and populat
 
 The repository assumes the existing application schema (`students`, `episodes`, and `episode_registrations`) already exists. It does not include the original base schema. On startup the server adds `episodes.zoom_meeting_id` and the `zoom_registration_jobs` table, including invitation status, timestamp, message ID and retry metadata. The database role must have schema migration permissions. Back up the database before deploying schema changes.
 
-Create and activate a [Zoom Server-to-Server OAuth app](https://developers.zoom.us/docs/internal-apps/) in the Zoom account that owns the meetings. Set these values in **server/.env**:
+Create and activate a Server-to-Server OAuth app under [Zoom Marketplace → Developers → Created apps](https://marketplace.zoom.us/user/build) in the Zoom account that owns the meetings. Set these values in **server/.env**:
 
 ```dotenv
 ZOOM_ACCOUNT_ID=...
@@ -43,6 +43,14 @@ Credentials and OAuth tokens remain server-side. Do not add them to `VITE_` vari
 5. Verify sender/domain authentication with your email provider and inspect its logs using the stored message ID if a student still cannot find the invitation.
 
 The application sends the invitation itself; Zoom's own registration confirmation email is optional. Disable Zoom's native confirmation email if you want to avoid two invitation emails. No meeting creation, calendar attendee sync, webinar/recurring-meeting integration, cancellation sync, or email delivery webhooks are included. Deleting an application registration does not revoke a Zoom registration that was already created.
+
+## Silent episodes
+
+In **Create/Edit Episode → Step 4**, enable **Silent mode (no push notifications)** before saving. Silent mode suppresses the new-episode subscriber announcement and automatic 30-minute/starting-now push alerts. The dashboard marks these episodes with a Silent badge. Registration confirmations, Zoom enrollment, invitation emails and admin resend continue normally. Silent episodes remain visible on the public website; this option does not make an episode private.
+
+The setting defaults to off for normal episodes and persists on edits. Turning it on later suppresses future automated episode pushes; it cannot retract an announcement that was already sent. Manually composed push broadcasts remain under admin control.
+
+Deploy **both backend and frontend**, restart the backend to add `episodes.is_silent BOOLEAN NOT NULL DEFAULT FALSE`, then reload the dashboard before recreating Episode 16. The frontend checks the authenticated `/api/admin/episode-capabilities` endpoint before saving a silent episode and blocks the save if the server does not support silent mode. Use Zoom Meeting ID `97640410908` for the test meeting scheduled for October 26, 2026, 8:00–9:00 PM IST.
 
 ## Run and check
 

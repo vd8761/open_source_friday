@@ -86,6 +86,7 @@ async function initDB() {
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS event_mode VARCHAR(50) DEFAULT 'Online'`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_registration_open BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_silent BOOLEAN NOT NULL DEFAULT FALSE`);
 
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS zoom_meeting_id VARCHAR(11)`);
     await pool.query(`CREATE TABLE IF NOT EXISTS zoom_registration_jobs (
@@ -210,11 +211,12 @@ function parseEventDateTime(eventDate, eventTime) {
 async function sendEpisodeReminders() {
   try {
     const result = await pool.query(
-      `SELECT * FROM episodes WHERE is_active = true`
+      `SELECT * FROM episodes WHERE is_active = true AND is_silent = false`
     );
     const now = new Date();
 
     for (const episode of result.rows) {
+      if (episode.is_silent) continue;
       const eventDT = parseEventDateTime(episode.event_date, episode.event_time);
       if (!eventDT) continue;
 
@@ -441,35 +443,45 @@ app.post('/api/students/lookup', async (req, res) => {
 // EPISODE ENDPOINTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Prevent a newer frontend from silently creating a noisy episode on an older backend.
+app.get('/api/admin/episode-capabilities', authenticateToken, (req, res) => {
+  res.json({ success: true, silent_mode: true });
+});
+
 // Admin: Create Episode — sends "New Episode" push notification
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent } = req.body;
   try {
+    if (is_silent !== undefined && typeof is_silent !== 'boolean') {
+      return res.status(400).json({ success: false, error: 'Silent mode must be true or false.' });
+    }
     const zoomId = meetingId(zoom_meeting_id);
     if (zoomId && event_mode === 'Offline') throw new ZoomError('Zoom meetings can only be linked to online episodes.', 400);
     if (zoomId) await zoom.validateMeeting(zoomId);
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, zoomId];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, zoomId, is_silent === true];
     const result = await pool.query(query, values);
     const episode = result.rows[0];
 
-    // 🔔 Send push notification to all subscribers
-    const formattedDate = new Date(event_date).toLocaleDateString('en-IN', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
-    sendPushToAll({
-      title: '🎉 New Episode Announced!',
-      body: `EP ${episode_number}: "${title}" by ${presenter_name} — ${formattedDate} at ${event_time}. Register now!`,
-      icon: cover_photo_url && cover_photo_url.startsWith('http') ? cover_photo_url : '/favicon.png',
-      badge: '/favicon.png',
-      url: `/register/episode-${episode_number}`,
-      tag: `new-episode-${episode_number}`,
-    }).catch((err) => console.error('[Push] New episode notification error:', err));
+    if (!episode.is_silent) {
+      // 🔔 Send push notification to all subscribers
+      const formattedDate = new Date(event_date).toLocaleDateString('en-IN', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+      sendPushToAll({
+        title: '🎉 New Episode Announced!',
+        body: `EP ${episode_number}: "${title}" by ${presenter_name} — ${formattedDate} at ${event_time}. Register now!`,
+        icon: cover_photo_url && cover_photo_url.startsWith('http') ? cover_photo_url : '/favicon.png',
+        badge: '/favicon.png',
+        url: `/register/episode-${episode_number}`,
+        tag: `new-episode-${episode_number}`,
+      }).catch((err) => console.error('[Push] New episode notification error:', err));
+    }
 
     res.status(201).json({ success: true, episode });
   } catch (error) {
@@ -481,8 +493,11 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent } = req.body;
   const { id } = req.params;
+  if (is_silent !== undefined && typeof is_silent !== 'boolean') {
+    return res.status(400).json({ success: false, error: 'Silent mode must be true or false.' });
+  }
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
@@ -500,11 +515,11 @@ app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
       UPDATE episodes 
       SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6,
           presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10,
-          past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13, reminder_sent = false, zoom_meeting_id = $15
+          past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13, reminder_sent = false, zoom_meeting_id = $15, is_silent = $16
       WHERE id = $14 
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, id, zoomId];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, id, zoomId, is_silent === undefined ? old.is_silent : is_silent];
     const result = await db.query(query, values);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Episode not found' });
     await enqueueZoomRegistrations(db, id);
@@ -989,4 +1004,4 @@ if (require.main === module) initDB().then(() => {
   });
 }).catch(async () => { await pool.end(); process.exitCode = 1; });
 
-module.exports = { app };
+module.exports = { app, sendEpisodeReminders };

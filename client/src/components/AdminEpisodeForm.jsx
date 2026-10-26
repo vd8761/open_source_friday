@@ -39,6 +39,7 @@ const AdminEpisodeForm = () => {
     past_cover_photo_url: '',
     event_mode: 'Online',
     zoom_meeting_id: '',
+    is_silent: false,
     is_registration_open: true
   });
   const [eventDate, setEventDate] = useState(null);
@@ -76,6 +77,7 @@ const AdminEpisodeForm = () => {
               past_cover_photo_url: ep.past_cover_photo_url || '',
               event_mode: ep.event_mode || 'Online',
               zoom_meeting_id: ep.zoom_meeting_id || '',
+              is_silent: ep.is_silent === true,
               is_registration_open: ep.is_registration_open !== undefined ? ep.is_registration_open : true
             });
             if (ep.event_date) setEventDate(new Date(ep.event_date));
@@ -198,6 +200,17 @@ const AdminEpisodeForm = () => {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      if (formData.is_silent) {
+        const capabilityResponse = await fetch(`${API_URL}/api/admin/episode-capabilities`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const capabilities = capabilityResponse.ok ? await capabilityResponse.json() : null;
+        if (capabilities?.silent_mode !== true) {
+          setMessage('Silent mode is unavailable on this server. Deploy the updated backend before saving this episode.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
       const url = id ? `${API_URL}/api/episodes/${id}` : `${API_URL}/api/episodes`;
       const method = id ? 'PUT' : 'POST';
       
@@ -507,6 +520,14 @@ const AdminEpisodeForm = () => {
 
             {currentStep === 4 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <label className="flex items-center gap-3 font-bold text-sm text-slate-700">
+                    <input type="checkbox" name="is_silent" checked={formData.is_silent} onChange={handleChange}
+                      className="h-4 w-4 accent-dos" />
+                    Silent mode (no push notifications)
+                  </label>
+                  <p className="mt-2 text-xs text-slate-500">Suppresses subscriber announcements, 30-minute reminders, and starting-now alerts for this episode. Student registration confirmations and Zoom invitation emails still send normally. The episode remains visible on the public website.</p>
+                </div>
                 <div className="mb-6">
                   <label className="block text-sm font-bold text-slate-700 mb-1">Meta Description (Social Media Link Preview)</label>
                   <p className="text-xs text-slate-500 mb-2">This short description appears when sharing the link on WhatsApp, LinkedIn, etc. Keep it around 160 characters.</p>
