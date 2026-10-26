@@ -33,6 +33,7 @@ const input = (csv, extra = {}) => ({
   interval_minutes: 15,
   csv,
   consent_confirmed: true,
+  pause_after_first_batch: false,
   ...extra,
 });
 function senderStub(options = {}) {
@@ -603,4 +604,172 @@ test("expired episodes cannot start a campaign or continue a queued batch", asyn
   } finally {
     await db.query("UPDATE episodes SET event_date='2099-10-26' WHERE id=1");
   }
+});
+
+test("CSV opt-outs win over active duplicates in either order and persist across later imports", async () => {
+  await resetCampaigns();
+  for (const rows of [
+    "mixed@example.com,active\nMIXED@example.com,unsubscribed",
+    "mixed@example.com,unsubscribed\nMIXED@example.com,active",
+  ]) {
+    const parsed = contactImport(
+      `Email,Status\n${rows}\neligible@example.com,active`,
+    );
+    assert.deepEqual(
+      parsed.contacts.map((c) => c.email),
+      ["eligible@example.com"],
+    );
+    assert.deepEqual(parsed.suppressed_emails, ["mixed@example.com"]);
+  }
+  await makeCampaign(
+    "Email,Status\nmixed@example.com,active\nMIXED@example.com,unsubscribed\neligible@example.com,active",
+  );
+  const next = await previewImport(
+    db,
+    1,
+    "Email\nmixed@example.com\nanother@example.com",
+  );
+  assert.deepEqual(
+    next.contacts.map((c) => c.email),
+    ["another@example.com"],
+  );
+  assert.throws(() => contactImport("Email\none@example.com", null), /filters/);
+});
+
+test("first-batch review defaults on and requires explicit review before further batches", async () => {
+  await resetCampaigns();
+  const c = await makeCampaign(undefined, {
+    pause_after_first_batch: undefined,
+  });
+  assert.equal(
+    (
+      await db.query(
+        "SELECT pause_after_first_batch FROM invite_campaigns WHERE id=$1",
+        [c.id],
+      )
+    ).rows[0].pause_after_first_batch,
+    true,
+  );
+  const sender = senderStub();
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [
+    c.id,
+  ]);
+  await processInviteBatch(pool, sender, env);
+  assert.equal(sender.calls.filter((c) => c[0] === "send").length, 1);
+  assert.equal(
+    (await db.query("SELECT status FROM invite_campaigns WHERE id=$1", [c.id]))
+      .rows[0].status,
+    "paused",
+  );
+  await db.query(
+    "UPDATE invite_campaigns SET next_batch_at=NOW() WHERE id=$1",
+    [c.id],
+  );
+  await processInviteBatch(pool, sender, env);
+  assert.equal(sender.calls.filter((c) => c[0] === "send").length, 1);
+  assert.equal(
+    (await request(`/outreach/campaigns/${c.id}/start`, "POST")).status,
+    400,
+  );
+  assert.equal(
+    (
+      await request(`/outreach/campaigns/${c.id}/start`, "POST", {
+        reviewed_first_batch: true,
+      })
+    ).status,
+    200,
+  );
+  assert.ok(
+    (
+      await db.query(
+        "SELECT pilot_reviewed_at FROM invite_campaigns WHERE id=$1",
+        [c.id],
+      )
+    ).rows[0].pilot_reviewed_at,
+  );
+  await processInviteBatch(pool, sender, env);
+  assert.equal(sender.calls.filter((c) => c[0] === "send").length, 2);
+  assert.equal(
+    (await db.query("SELECT status FROM invite_campaigns WHERE id=$1", [c.id]))
+      .rows[0].status,
+    "completed",
+  );
+});
+
+test("reports pause subsequent batches on a complaint or elevated bounces", async () => {
+  const csv =
+    "Email\n" +
+    Array.from({ length: 25 }, (_, i) => `quality${i}@example.com`).join("\n");
+  for (const [kind, expected] of [
+    ["complaints", /spam complaint/],
+    ["hard_bounces", /hard bounce/],
+    ["soft_bounces", /bounce\(s\)/],
+  ]) {
+    await resetCampaigns();
+    const c = await makeCampaign(csv, { batch_size: 20 });
+    const sender = senderStub({
+      events: { [kind]: [{ email: "quality0@example.com" }] },
+    });
+    await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [
+      c.id,
+    ]);
+    await processInviteBatch(pool, sender, env);
+    await db.query(
+      "UPDATE invite_campaigns SET next_batch_at=NOW() WHERE id=$1",
+      [c.id],
+    );
+    await processInviteBatch(pool, sender, env);
+    const state = (
+      await db.query("SELECT * FROM invite_campaigns WHERE id=$1", [c.id])
+    ).rows[0];
+    assert.equal(state.status, "paused");
+    assert.match(state.last_error, expected);
+    assert.equal(sender.calls.filter((c) => c[0] === "send").length, 1);
+    assert.equal(sender.calls.filter((c) => c[0] === "group").length, 1);
+  }
+});
+
+test("missing provider reports pause rather than permit a later batch", async () => {
+  await resetCampaigns();
+  const c = await makeCampaign();
+  const sender = senderStub();
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [
+    c.id,
+  ]);
+  await processInviteBatch(pool, sender, env);
+  sender.report = async () => {
+    throw new SenderError("Sender report unavailable.");
+  };
+  await db.query(
+    "UPDATE invite_campaigns SET next_batch_at=NOW() WHERE id=$1",
+    [c.id],
+  );
+  await processInviteBatch(pool, sender, env);
+  const state = (
+    await db.query("SELECT * FROM invite_campaigns WHERE id=$1", [c.id])
+  ).rows[0];
+  assert.equal(state.status, "paused");
+  assert.match(state.last_error, /report unavailable/);
+  assert.equal(sender.calls.filter((c) => c[0] === "send").length, 1);
+});
+
+test("a single-batch campaign completes without an unnecessary pilot review", async () => {
+  await resetCampaigns();
+  const c = await makeCampaign("Email\nsingle@example.com", {
+    pause_after_first_batch: true,
+  });
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [
+    c.id,
+  ]);
+  const sender = senderStub();
+  await processInviteBatch(pool, sender, env);
+  assert.equal(
+    (await db.query("SELECT status FROM invite_campaigns WHERE id=$1", [c.id]))
+      .rows[0].status,
+    "completed",
+  );
+  const html = sender.calls.find((c) => c[0] === "create")[1];
+  assert.match(html, /<meta charset="utf-8">/);
+  assert.match(html, /opted in to Open Source Friday/);
+  assert.match(html, /\{\$unsubscribe_link\}/);
 });

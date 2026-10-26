@@ -24,6 +24,7 @@ export default function OutreachTool() {
     body: "Join our next Open Source Friday session. Please register to receive your personal Zoom meeting link.",
     batch_size: 50,
     interval_minutes: 15,
+    pause_after_first_batch: true,
   });
   const [filters, setFilters] = useState({
     college: "",
@@ -34,6 +35,14 @@ export default function OutreachTool() {
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [reviewedCampaign, setReviewedCampaign] = useState("");
+  const needsPilotReview = Boolean(
+    detail?.campaign.pause_after_first_batch &&
+    !detail.campaign.pilot_reviewed_at &&
+    detail.batches.some(
+      (b) => b.status === "submitted" && b.provider_campaign_id,
+    ),
+  );
   async function refresh() {
     const [e, c, cfg] = await Promise.all([
       adminApi("/dashboard"),
@@ -111,6 +120,9 @@ export default function OutreachTool() {
     await action(async () => {
       const result = await adminApi(`/outreach/campaigns/${selected}/${kind}`, {
         method: "POST",
+        ...(kind === "start" && needsPilotReview
+          ? { body: { reviewed_first_batch: reviewedCampaign === selected } }
+          : {}),
       });
       setMessage(result.message);
       await refresh();
@@ -353,6 +365,17 @@ export default function OutreachTool() {
         <label className="flex gap-3 text-sm">
           <input
             type="checkbox"
+            checked={form.pause_after_first_batch}
+            onChange={(e) =>
+              update("pause_after_first_batch", e.target.checked)
+            }
+          />
+          Pause after the first batch so I can review inbox placement and Sender
+          reports.
+        </label>
+        <label className="flex gap-3 text-sm">
+          <input
+            type="checkbox"
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
           />
@@ -459,10 +482,32 @@ export default function OutreachTool() {
               {detail.campaign.last_error}
             </p>
           )}
+          <p className="text-sm text-slate-500">
+            {detail.campaign.pause_after_first_batch
+              ? "First-batch review is enabled. Later batches are checked for reported bounces and complaints."
+              : "Automatic pacing enabled. Bounces and complaints are checked before later batches."}
+          </p>
+          {needsPilotReview && (
+            <label className="flex gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={reviewedCampaign === selected}
+                onChange={(e) =>
+                  setReviewedCampaign(e.target.checked ? selected : "")
+                }
+              />
+              I reviewed the first batch in recipient inboxes and Sender
+              reports, and I want to continue.
+            </label>
+          )}
           <div className="flex gap-3 flex-wrap">
             {["draft", "paused"].includes(detail.campaign.status) && (
               <button
-                disabled={busy || !config?.sender.configured}
+                disabled={
+                  busy ||
+                  !config?.sender.configured ||
+                  (needsPilotReview && reviewedCampaign !== selected)
+                }
                 className={buttonClass}
                 onClick={() => {
                   if (

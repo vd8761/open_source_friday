@@ -36,7 +36,7 @@ function registrationUrl(episodeNumber, env = process.env) {
     .href;
 }
 function invitationHtml(campaign, env = process.env) {
-  return `<html><body><h1>${escapeHtml(campaign.subject)}</h1><p>${escapeHtml(campaign.body).replace(/\n/g, "<br>")}</p><p><a href="${escapeHtml(registrationUrl(campaign.episode_number, env))}">Register for this episode</a></p><p>Complete your registration in our application. Zoom will then email your personal meeting link.</p><hr><p>${escapeHtml(env.SENDER_FROM_NAME || "")}<br>${escapeHtml(env.SENDER_POSTAL_ADDRESS || "")}</p><p><a href="{$unsubscribe_link}">Unsubscribe from invitations</a></p></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><h1>${escapeHtml(campaign.subject)}</h1><p>${escapeHtml(campaign.body).replace(/\n/g, "<br>")}</p><p><a href="${escapeHtml(registrationUrl(campaign.episode_number, env))}">Register for this episode</a></p><p>Complete your registration in our application. Zoom will then email your personal meeting link.</p><hr><p>You are receiving this invitation because you opted in to Open Source Friday episode invitations. Reply to this email for help.</p><p>${escapeHtml(env.SENDER_FROM_NAME || "")}<br>${escapeHtml(env.SENDER_POSTAL_ADDRESS || "")}</p><p><a href="{$unsubscribe_link}">Unsubscribe from invitations</a></p></body></html>`;
 }
 async function previewImport(db, episodeId, csv, filters = {}) {
   const episode = (
@@ -90,6 +90,11 @@ async function createInviteCampaign(db, input, adminId, env = process.env) {
     throw new InputError(
       "Use 1–200 recipients per batch and a 1–1440 minute interval.",
     );
+  if (
+    input.pause_after_first_batch !== undefined &&
+    typeof input.pause_after_first_batch !== "boolean"
+  )
+    throw new InputError("First-batch review must be true or false.");
   const preview = await previewImport(
     db,
     input.episode_id,
@@ -113,9 +118,18 @@ async function createInviteCampaign(db, input, adminId, env = process.env) {
   registrationUrl(preview.episode.episode_number, env);
   const id = randomUUID();
   await db.query(
-    `INSERT INTO invite_campaigns(id,episode_id,subject,body,batch_size,interval_minutes,created_by)
-    VALUES($1,$2,$3,$4,$5,$6,$7)`,
-    [id, input.episode_id, subject, body, batchSize, interval, adminId],
+    `INSERT INTO invite_campaigns(id,episode_id,subject,body,batch_size,interval_minutes,created_by,pause_after_first_batch)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [
+      id,
+      input.episode_id,
+      subject,
+      body,
+      batchSize,
+      interval,
+      adminId,
+      input.pause_after_first_batch !== false,
+    ],
   );
   await db.query(
     `INSERT INTO invite_recipients(campaign_id,email,full_name,college,department,year)
@@ -123,6 +137,8 @@ async function createInviteCampaign(db, input, adminId, env = process.env) {
     AS contacts(email TEXT,full_name TEXT,college TEXT,department TEXT,year TEXT)`,
     [id, JSON.stringify(preview.contacts)],
   );
+  for (const email of preview.suppressed_emails)
+    await suppress(db, email, "Opt-out or suppression in imported CSV");
   return { id, recipients: preview.contacts.length };
 }
 async function suppress(db, email, reason) {
@@ -174,6 +190,27 @@ async function processInviteBatch(pool, sender, env = process.env) {
       throw new InputError(
         "A send outcome needs review. Reconcile it with Sender before resuming.",
       );
+    const submitted = (
+      await db.query(
+        "SELECT COUNT(*)::integer AS count FROM invite_batches WHERE campaign_id=$1 AND status='submitted' AND provider_campaign_id IS NOT NULL",
+        [campaign.id],
+      )
+    ).rows[0].count;
+    if (
+      campaign.pause_after_first_batch &&
+      !campaign.pilot_reviewed_at &&
+      submitted > 0
+    )
+      throw new InputError(
+        "First batch submitted. Review inbox placement and Sender reports, then confirm review before resuming.",
+      );
+    if (submitted > 0) {
+      // Refresh complaints/bounces before permitting another batch. If reports
+      // cannot be read, the catch below pauses sending rather than ignoring them.
+      await syncInviteReports(db, sender, campaign.id);
+      const reason = await campaignDeliveryIssue(db, campaign.id);
+      if (reason) throw new InputError(reason);
+    }
     await skipIneligible(db, campaign.id, campaign.episode_id);
     if (!batch) {
       batch = { id: randomUUID() };
@@ -280,10 +317,33 @@ async function processInviteBatch(pool, sender, env = process.env) {
         [batch.id],
       );
     }
-    await db.query(
-      `UPDATE invite_campaigns SET next_batch_at=NOW()+interval_minutes*INTERVAL '1 minute',last_error=NULL WHERE id=$1`,
-      [campaign.id],
-    );
+    const remaining = (
+      await db.query(
+        "SELECT COUNT(*)::integer AS count FROM invite_recipients WHERE campaign_id=$1 AND send_status='queued'",
+        [campaign.id],
+      )
+    ).rows[0].count;
+    if (!remaining) {
+      await db.query(
+        "UPDATE invite_campaigns SET status='completed',last_error=NULL WHERE id=$1",
+        [campaign.id],
+      );
+    } else {
+      const needsReview =
+        campaign.pause_after_first_batch &&
+        !campaign.pilot_reviewed_at &&
+        eligible.length > 0;
+      await db.query(
+        `UPDATE invite_campaigns SET status=$2,next_batch_at=NOW()+interval_minutes*INTERVAL '1 minute',last_error=$3 WHERE id=$1`,
+        [
+          campaign.id,
+          needsReview ? "paused" : "running",
+          needsReview
+            ? "First batch submitted. Review inbox placement and Sender reports, then confirm review before resuming."
+            : null,
+        ],
+      );
+    }
   } catch (error) {
     const message =
       error instanceof SenderError || error instanceof InputError
@@ -300,9 +360,33 @@ async function processInviteBatch(pool, sender, env = process.env) {
         [campaign.id, message, error.retryAfterSeconds || 60],
       );
   } finally {
-    if (locked) await db.query("SELECT pg_advisory_unlock(7410626)");
+    try {
+      if (locked) await db.query("SELECT pg_advisory_unlock(7410626)");
+    } catch (error) {
+      db.release(error);
+      throw error;
+    }
     db.release();
   }
+}
+async function campaignDeliveryIssue(db, campaignId) {
+  const metrics = (
+    await db.query(
+      `SELECT COUNT(*) FILTER(WHERE send_status='submitted')::integer AS submitted,
+    COUNT(*) FILTER(WHERE complained_at IS NOT NULL)::integer AS complaints,
+    COUNT(*) FILTER(WHERE hard_bounced_at IS NOT NULL)::integer AS hard,
+    COUNT(*) FILTER(WHERE hard_bounced_at IS NOT NULL OR soft_bounced_at IS NOT NULL)::integer AS bounced
+    FROM invite_recipients WHERE campaign_id=$1`,
+      [campaignId],
+    )
+  ).rows[0];
+  if (metrics.complaints > 0)
+    return "Campaign paused: Sender reported a spam complaint. Review the audience before sending more invitations.";
+  if (metrics.submitted >= 20 && metrics.hard / metrics.submitted >= 0.005)
+    return `Campaign paused: ${metrics.hard} hard bounce(s) among ${metrics.submitted} submitted recipients. Review list quality before continuing.`;
+  if (metrics.submitted >= 20 && metrics.bounced / metrics.submitted >= 0.02)
+    return `Campaign paused: ${metrics.bounced} bounce(s) among ${metrics.submitted} submitted recipients. Review list quality before continuing.`;
+  return null;
 }
 const reports = {
   "emails-sent": "sent_at",
@@ -350,6 +434,12 @@ async function syncInviteReports(db, sender, campaignId) {
     "UPDATE invite_campaigns SET reports_synced_at=NOW() WHERE id=$1",
     [campaignId],
   );
+  const issue = await campaignDeliveryIssue(db, campaignId);
+  if (issue)
+    await db.query(
+      "UPDATE invite_campaigns SET status='paused',last_error=$2 WHERE id=$1 AND status='running'",
+      [campaignId, issue],
+    );
 }
 async function reconcileBatch(db, sender, batchId) {
   const batch = (
@@ -423,6 +513,7 @@ async function importDeliveryReport(db, campaignId, csv, adminId) {
   return updated;
 }
 module.exports = {
+  campaignDeliveryIssue,
   previewImport,
   createInviteCampaign,
   processInviteBatch,

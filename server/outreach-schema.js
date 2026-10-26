@@ -7,6 +7,9 @@ async function initOutreachDB(db) {
     next_batch_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by INTEGER REFERENCES admins(id), last_error TEXT, reports_synced_at TIMESTAMPTZ
   )`);
+  await db.query(`ALTER TABLE invite_campaigns
+    ADD COLUMN IF NOT EXISTS pause_after_first_batch BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS pilot_reviewed_at TIMESTAMPTZ`);
   await db.query(`CREATE TABLE IF NOT EXISTS invite_batches (
     id UUID PRIMARY KEY, campaign_id UUID NOT NULL REFERENCES invite_campaigns(id) ON DELETE CASCADE,
     group_id TEXT, provider_campaign_id TEXT, status TEXT NOT NULL DEFAULT 'preparing',
