@@ -22,7 +22,7 @@ function setup(responses, override = env) {
         return {
           ok: response.status < 400,
           status: response.status,
-          headers: { get: () => response.retryAfter || null },
+          headers: { get: name => name === "retry-after" ? response.retryAfter || null : response.headers?.[name] || null },
           json: async () => response.body,
         };
       },
@@ -120,4 +120,19 @@ test("Sender errors identify the failed operation without echoing provider data"
     assert.doesNotMatch(error.message, /private|secret/);
     return true;
   });
+});
+test("Forbidden diagnostics redact credentials and contacts and preserve a safe provider reference", async () => {
+  const { client } = setup([
+    { status: 403, headers: { "x-request-id": "test-request-123" }, body: {
+      message: "API sending is disabled. private@example.com private-key Bearer other-secret https://example.com/private-key",
+    } },
+    { status: 403, headers: { "content-type": "text/html", "cf-ray": "abc123-def" }, body: {} },
+  ]);
+  await assert.rejects(client.send("draft1"), error => {
+    assert.match(error.message, /API sending is disabled/);
+    assert.match(error.message, /test-request-123/);
+    assert.doesNotMatch(error.message, /private@example|private-key|other-secret|https:\/\//);
+    return true;
+  });
+  await assert.rejects(client.send("draft2"), /HTML access-denied.*abc123-def/);
 });

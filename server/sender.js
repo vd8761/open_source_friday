@@ -16,7 +16,25 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
     if (path.endsWith("/send")) return "submitting the campaign";
     return method === "GET" ? "reading the campaign or report" : "updating the campaign";
   }
-  function reason(data) {
+  function reason(data, status, headers) {
+    if (status === 403) {
+      const raw = typeof data.message === "string" ? data.message
+        : typeof data.error === "string" ? data.error : "";
+      const redacted = raw
+        .split(env.SENDER_API_TOKEN || "\u0000").join("[redacted token]")
+        .replace(/Bearer\s+\S+/gi, "Bearer [redacted token]")
+        .replace(/https?:\/\/\S+/gi, "[redacted URL]")
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted email]")
+        .replace(/[A-Za-z0-9_-]{40,}/g, "[redacted identifier]")
+        .replace(/[\r\n\t]/g, " ").slice(0, 400);
+      const reference = headers?.get("cf-ray") || headers?.get("x-request-id") || "";
+      const requestId = /^[a-z0-9-]{6,128}$/i.test(reference)
+        ? ` Provider request reference: ${reference}.` : "";
+      return (redacted ? `Sender response: ${redacted}`
+        : /html/i.test(headers?.get("content-type") || "")
+          ? "Sender returned an HTML access-denied page instead of an API response."
+          : "Sender did not provide a JSON explanation for the access denial.") + requestId;
+    }
     // Only return fixed diagnostics. Never echo provider text, which may contain
     // contact information or credentials from an invalid request.
     const message = typeof data.message === "string" ? data.message.toLowerCase() : "";
@@ -70,7 +88,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
       throw new SenderError(
         response.status === 429
           ? "Sender rate limit reached. Wait before resuming."
-          : `Sender request failed while ${operation(path, method)} (HTTP ${response.status}). ${reason(data)}`,
+          : `Sender request failed while ${operation(path, method)} (HTTP ${response.status}). ${reason(data, response.status, response.headers)}`,
         response.status === 429 ? 429 : 502,
         Number.isFinite(seconds) ? Math.max(60, Math.ceil(seconds)) : 60,
       );
