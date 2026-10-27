@@ -156,6 +156,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
       const result = await request("/campaigns", "POST", {
         title,
         subject,
+        preheader: "Register in our application; Zoom will email your personal meeting link.",
         from: env.SENDER_FROM_NAME,
         reply_to: env.SENDER_FROM_EMAIL,
         content_type: "html",
