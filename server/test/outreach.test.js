@@ -799,3 +799,44 @@ test("a single-batch campaign completes without an unnecessary pilot review", as
   assert.match(html, /opted in to Open Source Friday/);
   assert.match(html, /\{\$unsubscribe_link\}/);
 });
+
+test("reconciling a sent final batch clears the failure and completes without another send", async () => {
+  await resetCampaigns();
+  const c = await makeCampaign("Email\none@example.com", { pause_after_first_batch: true });
+  const sender = senderStub({ fail: true });
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [c.id]);
+  await processInviteBatch(pool, sender, env);
+  const batch = (await db.query("SELECT * FROM invite_batches WHERE campaign_id=$1", [c.id])).rows[0];
+  const { reconcileBatch } = require("../invite-service");
+  await reconcileBatch(db, sender, batch.id);
+  const saved = (await db.query("SELECT * FROM invite_campaigns WHERE id=$1", [c.id])).rows[0];
+  assert.equal(saved.status, "completed");
+  assert.equal(saved.last_error, null);
+  await processInviteBatch(pool, sender, env);
+  assert.equal(sender.calls.filter(call => call[0] === "send").length, 1);
+});
+
+test("tracking uses observation time for timezone-less events and repairs future timestamps", async () => {
+  await resetCampaigns();
+  const c = await makeCampaign("Email\none@example.com");
+  const sender = senderStub();
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [c.id]);
+  await processInviteBatch(pool, sender, env);
+  await db.query("UPDATE invite_recipients SET sent_at=NOW()+INTERVAL '6 hours' WHERE campaign_id=$1", [c.id]);
+  await db.query("UPDATE invite_campaigns SET status='paused',last_error='Old submission error' WHERE id=$1", [c.id]);
+  sender.report = async (id, kind) => kind === "emails-sent"
+    ? [{ email: "one@example.com", created_at: "2099-10-27 08:46:29" }]
+    : kind === "opens" ? [{ email: "one@example.com", created_at: "2026-10-26T10:00:00Z" }] : [];
+  const before = Date.now();
+  await syncInviteReports(db, sender, c.id);
+  const first = (await db.query("SELECT sent_at,opened_at FROM invite_recipients WHERE campaign_id=$1", [c.id])).rows[0];
+  assert.ok(new Date(first.sent_at).getTime() >= before - 1000);
+  assert.ok(new Date(first.sent_at).getTime() <= Date.now() + 1000);
+  assert.equal(new Date(first.opened_at).toISOString(), "2026-10-26T10:00:00.000Z");
+  const saved = (await db.query("SELECT status,last_error FROM invite_campaigns WHERE id=$1", [c.id])).rows[0];
+  assert.equal(saved.status, "completed");
+  assert.equal(saved.last_error, null);
+  await syncInviteReports(db, sender, c.id);
+  const again = (await db.query("SELECT sent_at FROM invite_recipients WHERE campaign_id=$1", [c.id])).rows[0];
+  assert.equal(new Date(again.sent_at).getTime(), new Date(first.sent_at).getTime());
+});

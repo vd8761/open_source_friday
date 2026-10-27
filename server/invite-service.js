@@ -397,6 +397,15 @@ const reports = {
   unsubscribes: "unsubscribed_at",
   complaints: "complained_at",
 };
+async function completeSubmittedCampaign(db, campaignId) {
+  await db.query(
+    `UPDATE invite_campaigns c SET status='completed',last_error=NULL WHERE c.id=$1
+      AND EXISTS(SELECT 1 FROM invite_batches b WHERE b.campaign_id=c.id AND b.status='submitted' AND b.provider_campaign_id IS NOT NULL)
+      AND NOT EXISTS(SELECT 1 FROM invite_recipients r WHERE r.campaign_id=c.id AND r.send_status='queued')
+      AND NOT EXISTS(SELECT 1 FROM invite_batches b WHERE b.campaign_id=c.id AND b.status IN ('sending','review'))`,
+    [campaignId],
+  );
+}
 async function syncInviteReports(db, sender, campaignId) {
   const batches = (
     await db.query(
@@ -410,16 +419,21 @@ async function syncInviteReports(db, sender, campaignId) {
       for (const event of events) {
         const email = normalizeEmail(event.email);
         if (!validEmail(email)) continue;
-        const time = Date.parse(
-          String(event.created_at || "").replace(" ", "T") +
-            (/Z$|[+-]\d\d:\d\d$/.test(event.created_at || "") ? "" : "Z"),
-        );
+        // Sender can return account-local times without a timezone. Use the
+        // first observation time rather than incorrectly labelling those UTC.
+        const timestamp = String(event.created_at || "").replace(" ", "T");
+        const time = /(?:Z|[+-]\d\d:\d\d)$/.test(timestamp)
+          ? Date.parse(timestamp)
+          : NaN;
         const result = await db.query(
-          `UPDATE invite_recipients SET ${column}=COALESCE(${column},$3::timestamptz,NOW()) WHERE batch_id=$1 AND email=$2 RETURNING id`,
+          `UPDATE invite_recipients SET ${column}=CASE WHEN ${column} IS NULL OR ${column}>NOW()+INTERVAL '5 minutes'
+            THEN COALESCE($3::timestamptz,NOW()) ELSE ${column} END WHERE batch_id=$1 AND email=$2 RETURNING id`,
           [
             batch.id,
             email,
-            Number.isFinite(time) ? new Date(time).toISOString() : null,
+            Number.isFinite(time) && time <= Date.now() + 5 * 60 * 1000
+              ? new Date(time).toISOString()
+              : null,
           ],
         );
         if (
@@ -434,6 +448,7 @@ async function syncInviteReports(db, sender, campaignId) {
     "UPDATE invite_campaigns SET reports_synced_at=NOW() WHERE id=$1",
     [campaignId],
   );
+  await completeSubmittedCampaign(db, campaignId);
   const issue = await campaignDeliveryIssue(db, campaignId);
   if (issue)
     await db.query(
@@ -478,6 +493,11 @@ async function reconcileBatch(db, sender, batchId) {
     "UPDATE invite_recipients SET send_status='submitted' WHERE batch_id=$1 AND send_status='queued'",
     [batch.id],
   );
+  await db.query(
+    "UPDATE invite_campaigns SET last_error=NULL WHERE id=$1",
+    [batch.campaign_id],
+  );
+  await completeSubmittedCampaign(db, batch.campaign_id);
   return "submitted";
 }
 async function importDeliveryReport(db, campaignId, csv, adminId) {
