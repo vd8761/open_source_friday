@@ -103,3 +103,21 @@ test("unconfigured Sender cannot make network requests", async () => {
   await assert.rejects(client.createGroup("Test"), /Configure Sender/);
   assert.equal(calls.length, 0);
 });
+test("Sender errors identify the failed operation without echoing provider data", async () => {
+  const { client } = setup([
+    { status: 400, body: { message: "Subscriber not found: private@example.com private-key" } },
+    { status: 422, body: { message: "private-key", errors: { email: ["private@example.com"], secret: ["private-key"] } } },
+  ]);
+  await assert.rejects(client.subscriber("private@example.com"), error => {
+    assert.match(error.message, /checking the subscriber status/);
+    assert.match(error.message, /Subscriber not found/);
+    assert.doesNotMatch(error.message, /private/);
+    return true;
+  });
+  await assert.rejects(client.addContact({ email: "private@example.com", full_name: "" }), error => {
+    assert.match(error.message, /creating the invitation contact/);
+    assert.match(error.message, /request fields: email/);
+    assert.doesNotMatch(error.message, /private|secret/);
+    return true;
+  });
+});
