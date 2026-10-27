@@ -1,5 +1,8 @@
 const express = require('express');
 const { Pool } = require('pg');
+const { databaseTypes } = require('./database-types');
+const { episodeStart, validSchedule, registrationIsOpen } = require('./episode-time');
+const { processEpisodeReminders } = require('./episode-reminders');
 const path = require('path');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -23,6 +26,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  types: databaseTypes,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -74,6 +78,7 @@ async function initDB() {
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS cover_photo_url TEXT`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS event_mode VARCHAR(50) DEFAULT 'Online'`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS starting_now_sent BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_registration_open BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_silent BOOLEAN NOT NULL DEFAULT FALSE`);
 
@@ -103,8 +108,9 @@ async function initDB() {
     const result = await pool.query('SELECT COUNT(*) FROM admins');
     if (parseInt(result.rows[0].count) === 0) {
       console.log('Seeding initial admin from .env...');
-      const defaultUser = process.env.ADMIN_USERNAME || 'admin';
-      const defaultPass = process.env.ADMIN_PASSWORD || 'password123';
+      const defaultUser = process.env.ADMIN_USERNAME;
+      const defaultPass = process.env.ADMIN_PASSWORD;
+      if (!defaultUser || !defaultPass) throw new Error('Set ADMIN_USERNAME and ADMIN_PASSWORD before initializing the first administrator.');
       const salt = await bcrypt.genSalt(10);
       const hash = await bcrypt.hash(defaultPass, salt);
       await pool.query('INSERT INTO admins (username, password_hash) VALUES ($1, $2)', [defaultUser, hash]);
@@ -177,84 +183,10 @@ async function sendPushToAll(payload, type = 'Automated') {
   }
 }
 
-// ─── Helper: parse event_date + event_time VARCHAR → JS Date ─────────────────
-function parseEventDateTime(eventDate, eventTime) {
-  try {
-    const [year, month, day] = String(eventDate).split('T')[0].split('-').map(Number);
-    let hours = 0, minutes = 0;
-    const t12 = String(eventTime).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    const t24 = String(eventTime).match(/^(\d{1,2}):(\d{2})$/);
-    if (t12) {
-      hours = parseInt(t12[1], 10);
-      minutes = parseInt(t12[2], 10);
-      const p = t12[3].toUpperCase();
-      if (p === 'PM' && hours !== 12) hours += 12;
-      if (p === 'AM' && hours === 12) hours = 0;
-    } else if (t24) {
-      hours = parseInt(t24[1], 10);
-      minutes = parseInt(t24[2], 10);
-    } else {
-      return null;
-    }
-    // Build as local time (assumes server timezone = IST or as configured)
-    return new Date(year, month - 1, day, hours, minutes, 0);
-  } catch {
-    return null;
-  }
-}
-
-// ─── Cron: runs every minute — checks 30-min reminders + starting-now alerts ──
+// Reminder scheduling uses the same explicit IST clock as registration and attendance.
 async function sendEpisodeReminders() {
-  try {
-    const result = await pool.query(
-      `SELECT * FROM episodes WHERE is_active = true AND is_silent = false`
-    );
-    const now = new Date();
-
-    for (const episode of result.rows) {
-      if (episode.is_silent) continue;
-      const eventDT = parseEventDateTime(episode.event_date, episode.event_time);
-      if (!eventDT) continue;
-
-      const minutesAway = (eventDT - now) / (1000 * 60);
-
-      // ── 30-minute reminder (send once, window: 29–31 min before) ──
-      if (!episode.reminder_sent && minutesAway >= 29 && minutesAway <= 31) {
-        console.log(`[Cron] 30-min reminder → EP ${episode.episode_number}`);
-        await sendPushToAll({
-          title: '⏰ Starting in 30 Minutes!',
-          body: `"${episode.title}" by ${episode.presenter_name} begins soon. Join now!`,
-          icon: episode.cover_photo_url && episode.cover_photo_url.startsWith('http')
-            ? episode.cover_photo_url : '/favicon.png',
-          badge: '/favicon.png',
-          url: `/register/episode-${episode.episode_number}`,
-          tag: `reminder-30-ep-${episode.episode_number}`,
-        });
-        await pool.query(
-          'UPDATE episodes SET reminder_sent = true WHERE id = $1',
-          [episode.id]
-        );
-      }
-
-      // ── Starting now (window: 0–2 min before or after) ────────────────────
-      if (minutesAway >= -2 && minutesAway <= 2) {
-        // Use a separate flag so we don't re-use reminder_sent
-        // Check if we already sent a "starting now" push (tag dedup via SW)
-        console.log(`[Cron] Starting-now alert → EP ${episode.episode_number}`);
-        await sendPushToAll({
-          title: '🚀 Episode Starting Now!',
-          body: `"${episode.title}" by ${episode.presenter_name} is live! Open the app to join.`,
-          icon: episode.cover_photo_url && episode.cover_photo_url.startsWith('http')
-            ? episode.cover_photo_url : '/favicon.png',
-          badge: '/favicon.png',
-          url: `/register/episode-${episode.episode_number}`,
-          tag: `live-ep-${episode.episode_number}`,
-        });
-      }
-    }
-  } catch (err) {
-    console.error('[Cron] Reminder job error:', err);
-  }
+  try { await processEpisodeReminders(pool, sendPushToAll); }
+  catch (error) { console.error('[Cron] Reminder job error:', error); }
 }
 
 
@@ -441,7 +373,7 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Prevent a newer frontend from silently creating a noisy episode on an older backend.
 app.get('/api/admin/episode-capabilities', authenticateToken, (req, res) => {
-  res.json({ success: true, silent_mode: true });
+  res.json({ success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60 });
 });
 
 // Admin: Create Episode — sends "New Episode" push notification
@@ -451,9 +383,10 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
     if (is_silent !== undefined && typeof is_silent !== 'boolean') {
       return res.status(400).json({ success: false, error: 'Silent mode must be true or false.' });
     }
+    if (!validSchedule({ event_date, event_time })) return res.status(400).json({ success: false, error: 'Use a valid event date and a same-day time range with end time after start time (IST).' });
     const zoomId = meetingId(zoom_meeting_id);
     if (zoomId && event_mode === 'Offline') throw new ZoomError('Zoom meetings can only be linked to online episodes.', 400);
-    if (zoomId) await zoom.validateMeeting(zoomId);
+    if (zoomId) await zoom.validateMeeting(zoomId, { event_date, event_time });
     const query = `
       INSERT INTO episodes 
       (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent)
@@ -500,24 +433,36 @@ app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
     const existing = await db.query('SELECT * FROM episodes WHERE id = $1 FOR UPDATE', [id]);
     if (!existing.rows.length) { await db.query('ROLLBACK'); return res.status(404).json({ success: false, error: 'Episode not found' }); }
     const old = existing.rows[0];
+    if (!validSchedule({ event_date, event_time })) throw new ZoomError('Use a valid event date and a same-day time range with end time after start time (IST).', 400);
+    const scheduleChanged = episodeStart(old) !== episodeStart({ event_date, event_time }) || String(old.event_time) !== String(event_time);
+    if (scheduleChanged && (await db.query('SELECT episode_id FROM attendance_syncs WHERE episode_id = $1', [id])).rows.length) {
+      throw new ZoomError('This episode already has attendance records. Create a new episode instead of changing its schedule.', 409);
+    }
+    if (Number(old.episode_number) !== Number(episode_number)) {
+      const published = await db.query('SELECT id FROM episode_registrations WHERE episode_id = $1 UNION ALL SELECT episode_id AS id FROM invite_campaigns WHERE episode_id = $1 LIMIT 1', [id]);
+      if (published.rows.length) throw new ZoomError('Keep the episode number after registrations or invitation campaigns exist. Create a new episode for a different event.', 409);
+    }
     const zoomId = zoom_meeting_id === undefined ? old.zoom_meeting_id : meetingId(zoom_meeting_id);
     if (zoomId && event_mode === 'Offline') throw new ZoomError('Remove the Zoom meeting before changing to offline.', 400);
     if (old.zoom_meeting_id && (zoomId !== old.zoom_meeting_id || event_mode === 'Offline')) {
       const registrations = await db.query('SELECT id FROM episode_registrations WHERE episode_id = $1 LIMIT 1', [id]);
       if (registrations.rows.length) throw new ZoomError('A Zoom meeting cannot be changed or removed after students register. Create a new episode for a different meeting.', 409);
     }
-    if (zoomId && zoomId !== old.zoom_meeting_id) await zoom.validateMeeting(zoomId);
+    if (zoomId && (zoomId !== old.zoom_meeting_id || scheduleChanged)) await zoom.validateMeeting(zoomId, { event_date, event_time });
     const query = `
       UPDATE episodes 
       SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6,
           presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10,
-          past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13, reminder_sent = false, zoom_meeting_id = $15, is_silent = $16
+          past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13,
+          reminder_sent = CASE WHEN event_date IS DISTINCT FROM $5::date OR event_time IS DISTINCT FROM $6 THEN false ELSE reminder_sent END,
+          starting_now_sent = CASE WHEN event_date IS DISTINCT FROM $5::date OR event_time IS DISTINCT FROM $6 THEN false ELSE starting_now_sent END, zoom_meeting_id = $15, is_silent = $16
       WHERE id = $14 
       RETURNING *
     `;
     const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, id, zoomId, is_silent === undefined ? old.is_silent : is_silent];
     const result = await db.query(query, values);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Episode not found' });
+    if (scheduleChanged) await db.query("UPDATE invite_campaigns SET status='paused',last_error='Episode schedule changed. Review the message and schedule before resuming.' WHERE episode_id=$1 AND status='running'", [id]);
     await enqueueZoomRegistrations(db, id);
     await db.query('COMMIT');
     void runZoomWorker();
@@ -666,6 +611,11 @@ app.post('/api/register', async (req, res) => {
     if (epCheck.rows[0].is_registration_open === false) {
       await db.query('ROLLBACK');
       return res.status(400).json({ success: false, error: 'Registration is currently disabled for this episode.' });
+    }
+
+    if (!registrationIsOpen(epCheck.rows[0])) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: 'Registration closes one hour before the scheduled start time (IST).' });
     }
 
     let currentStudentId = student_id;

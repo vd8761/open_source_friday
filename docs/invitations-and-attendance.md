@@ -27,7 +27,7 @@ CSV imports create invitation contacts only. They do not create students, episod
    The host needs an eligible paid Zoom account with a licensed Meetings user and report access. The plan on Render does not determine Zoom reporting availability.
 6. Keep Vercel's `VITE_API_URL` pointed at the backend. No Sender secret belongs on Vercel's frontend.
 7. Backend Node.js >=20 and PostgreSQL are already required. Run `npm ci --omit=dev` in `server/`. New runtime package: `csv-parse`; `@electric-sql/pglite` is a development-only PostgreSQL test runtime. Existing server dependencies received compatible security patches.
-8. Run the backend continuously so its minute/15-minute workers can run. Paid Render's existing web service is sufficient at this scale; no additional queue service is required. PostgreSQL advisory locks coordinate multiple instances.
+8. Run the backend continuously so its minute/15-minute workers can run. The production service was observed on Free compute on 27 October 2026. Free compute sleeps and cannot provide dependable in-process scheduling. Confirm always-on service compute before relying on workers; no plan change is included in this release. PostgreSQL advisory locks coordinate multiple instances.
 
 Deploy the backend first and the frontend second from `qa-zoom-integration`. Startup adds tables and indexes without replacing registrations. All campaigns start as drafts and require an authenticated admin to click Start. Restarting a server cannot start a draft. Do not run a production bulk campaign until the single-recipient test is verified.
 
@@ -35,7 +35,7 @@ Deploy the backend first and the frontend second from `qa-zoom-integration`. Sta
 
 Dashboard → **Email Invitations**:
 
-1. Choose an upcoming active episode with registration open. Campaigns for ended episodes cannot start or continue.
+1. Choose an upcoming active episode with registration open. Campaigns cannot start or continue after the one-hour registration cutoff.
 2. Upload CSV (up to 5 MB / 10,000 rows), or paste CSV. Required `Email`; optional `Full Name`, `College`, `Department`, `Year of Study`, `Status`.
 3. Optionally filter college, department or year. Preview shows valid count, duplicates, exclusions and up to 100 eligible contacts.
 4. Enter subject/message and batch settings. Default: 50 contacts every 15 minutes, with a pause after the first non-empty batch for delivery review. This controls pacing, not inbox placement. Existing Sender subscriber suppression is checked again while processing each batch. This check can further reduce the preview count.
@@ -136,3 +136,7 @@ Code is prepared for a controlled production test. A full 600+ recipient rollout
 The direct Sender test on 26 October 2026 reached `descienceosclub@gmail.com` at 11:36 PM IST but was placed in Spam. SPF, DKIM and DMARC passed. That test confirms receipt only; it does not establish reliable inbox placement or validate the application API worker. No further live email was sent while adding these protections.
 
 Deliverability references: [Sender guidance](https://www.sender.net/help/deliverability-compliance/email-deliverability-best-practices/), [Sender delivery metrics](https://www.sender.net/help/deliverability-compliance/how-email-deliverability-works/), [Gmail sender guidelines](https://support.google.com/mail/answer/81126).
+
+## Current testing status on 27 October 2026
+
+Two approved test recipients confirmed Inbox placement after sending through Sender’s interface. API campaign sends still return HTTP 403 and are paused pending Sender developer support. No successful automated bulk pilot has been established. Follow the [hosting SOP](event-hosting-sop.md); do not treat the earlier morning checklist as activation approval.

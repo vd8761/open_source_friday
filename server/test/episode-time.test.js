@@ -25,6 +25,12 @@ for (const timeZone of ["Asia/Kolkata", "UTC", "America/New_York"]) {
       }};
       const report = { meetingUuid: "session-27", startTime: "2026-10-27T13:30:00Z", participants: [] };
       (async () => {
+        const { databaseTypes } = require('./database-types');
+        assert.equal(JSON.stringify({ event_date: databaseTypes.getTypeParser(1082)('2026-10-27') }), '{"event_date":"2026-10-27"}');
+        const ui = await import('../client/src/utils/episodeTime.js');
+        assert.equal(ui.calendarInputDate('2026-10-27').getDate(), 27);
+        assert.equal(ui.formatEpisodeDate('2026-10-27', { day: '2-digit' }), '27');
+        assert.equal(ui.isRegistrationOpen({ ...episode, event_date: '2026-10-27' }, Date.parse('2026-10-27T12:00:00Z')), true);
         await syncEpisodeAttendance(db, { attendance: async () => report }, episode);
         assert.equal(writes.length, 1);
         await assert.rejects(

@@ -1,3 +1,4 @@
+import { isEpisodeConcluded, isRegistrationOpen, formatEpisodeDate } from '../utils/episodeTime';
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, User, CheckCircle2, ChevronRight, ArrowLeft, Video, MapPin, AlertCircle, Mail, Phone, Search } from 'lucide-react';
@@ -49,97 +50,6 @@ const RegistrationForm = () => {
   const { executeRecaptcha } = useGoogleReCaptcha();
 
   // Returns true if the episode event has already completed based on its date and end time
-  const isEpisodeConcluded = (episode) => {
-    if (!episode) return false;
-    if (episode.is_active === false) return true; // Explicitly marked as concluded by admin
-    
-    try {
-      const dateStr = String(episode.event_date).split('T')[0];
-      const timeStrList = String(episode.event_time).split('-');
-      // Use the end time if available, otherwise use start time
-      const timeStr = (timeStrList.length > 1 ? timeStrList[1] : timeStrList[0]).trim();
-      
-      let hours = 0, minutes = 0;
-      const time12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-      const time24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-      
-      if (time12) {
-        hours = parseInt(time12[1], 10);
-        minutes = parseInt(time12[2], 10);
-        const period = time12[3].toUpperCase();
-        if (period === 'PM' && hours !== 12) hours += 12;
-        if (period === 'AM' && hours === 12) hours = 0;
-      } else if (time24) {
-        hours = parseInt(time24[1], 10);
-        minutes = parseInt(time24[2], 10);
-      } else {
-        // Fallback if time isn't parseable: check if it's the next day
-        const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-        const year = istDateObj.getFullYear();
-        const month = istDateObj.getMonth();
-        const day = istDateObj.getDate();
-        const eventDateEnd = new Date(year, month, day, 23, 59, 59);
-        const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-        return nowIST > eventDateEnd;
-      }
-
-      const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      const year = istDateObj.getFullYear();
-      const month = istDateObj.getMonth();
-      const day = istDateObj.getDate();
-      const eventDateEnd = new Date(year, month, day, hours, minutes, 0);
-      const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      return nowIST > eventDateEnd;
-    } catch {
-      return false;
-    }
-  };
-
-  // Returns true only if episode is active, registration is explicitly open, and event has not concluded
-  const isRegistrationOpen = (episode) => {
-    if (!episode) return false;
-    if (isEpisodeConcluded(episode)) return false;
-    
-    try {
-      const dateStr = String(episode.event_date).split('T')[0];
-      const timeStrList = String(episode.event_time).split('-');
-      const startTimeStr = timeStrList[0].trim();
-      
-      let hours = 0, minutes = 0;
-      const time12 = startTimeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-      const time24 = startTimeStr.match(/^(\d{1,2}):(\d{2})$/);
-      
-      if (time12) {
-        hours = parseInt(time12[1], 10);
-        minutes = parseInt(time12[2], 10);
-        const period = time12[3].toUpperCase();
-        if (period === 'PM' && hours !== 12) hours += 12;
-        if (period === 'AM' && hours === 12) hours = 0;
-      } else if (time24) {
-        hours = parseInt(time24[1], 10);
-        minutes = parseInt(time24[2], 10);
-      }
-      
-      const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      const year = istDateObj.getFullYear();
-      const month = istDateObj.getMonth();
-      const day = istDateObj.getDate();
-      const eventDateStart = new Date(year, month, day, hours, minutes, 0);
-      
-      // Close registration 1 hour before start
-      const registrationCloseTime = new Date(eventDateStart.getTime() - 60 * 60 * 1000);
-      const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      
-      if (nowIST > registrationCloseTime) {
-        return false;
-      }
-    } catch (e) {
-      // ignore
-    }
-
-    return episode.is_registration_open !== false;
-  };
-
   useEffect(() => {
     if (!episodeNumber) {
       setError('No episode number provided.');
@@ -415,7 +325,7 @@ const RegistrationForm = () => {
             <div className="space-y-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
               <div className="flex items-center text-sm font-medium text-slate-700">
                 <Calendar className="h-5 w-5 text-dos mr-3 flex-shrink-0" />
-                {new Date(episodeDetails.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                {formatEpisodeDate(episodeDetails.event_date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>
               <div className="flex items-center text-sm font-medium text-slate-700">
                 <Clock className="h-5 w-5 text-dos mr-3 flex-shrink-0" />
@@ -520,7 +430,7 @@ const RegistrationForm = () => {
                     <p className="text-slate-400 text-sm mb-6">
                       This episode is scheduled for{' '}
                       <span className="font-semibold text-slate-600">
-                        {new Date(episodeDetails.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        {formatEpisodeDate(episodeDetails.event_date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         {' '}at {episodeDetails.event_time}
                       </span>.
                     </p>

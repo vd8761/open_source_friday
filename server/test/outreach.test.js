@@ -840,3 +840,24 @@ test("tracking uses observation time for timezone-less events and repairs future
   const again = (await db.query("SELECT sent_at FROM invite_recipients WHERE campaign_id=$1", [c.id])).rows[0];
   assert.equal(new Date(again.sent_at).getTime(), new Date(first.sent_at).getTime());
 });
+
+test('invitation start and worker honor the same one-hour registration cutoff as the student form', async () => {
+  await resetCampaigns();
+  const campaign = await makeCampaign('Email\ncutoff@example.com');
+  const originalNow = Date.now;
+  try {
+    Date.now = () => Date.parse('2026-10-27T13:00:00Z');
+    await db.query("UPDATE episodes SET event_date='2026-10-27',event_time='7:00 PM - 8:00 PM' WHERE id=1");
+    const response = await request(`/outreach/campaigns/${campaign.id}/start`, 'POST', {});
+    assert.equal(response.status,400);
+    assert.match(response.body.error, /one hour before/);
+    await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [campaign.id]);
+    const sender = senderStub();
+    await processInviteBatch(pool,sender,env);
+    assert.equal(sender.calls.length,0);
+    assert.equal((await db.query('SELECT status FROM invite_campaigns WHERE id=$1',[campaign.id])).rows[0].status,'paused');
+  } finally {
+    Date.now = originalNow;
+    await db.query("UPDATE episodes SET event_date='2099-10-26',event_time='7:00 PM - 8:00 PM' WHERE id=1");
+  }
+});

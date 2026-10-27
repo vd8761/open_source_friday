@@ -6,7 +6,7 @@ const {
   readCsv,
   validEmail,
 } = require("./outreach-csv");
-const { episodeEnd } = require("./episode-time");
+const { episodeEnd, registrationIsOpen } = require("./episode-time");
 const { SenderError } = require("./sender");
 const escapeHtml = (value) =>
   String(value).replace(
@@ -110,6 +110,7 @@ async function createInviteCampaign(db, input, adminId, env = process.env) {
     throw new InputError(
       "This episode has already ended. Choose an upcoming episode.",
     );
+  if (!registrationIsOpen(preview.episode)) throw new InputError("Registration closes one hour before the episode starts (IST). Choose an upcoming episode.");
   if (!preview.contacts.length)
     throw new InputError(
       "No eligible recipients remain after validation and exclusions.",
@@ -180,6 +181,7 @@ async function processInviteBatch(pool, sender, env = process.env) {
       throw new InputError("This episode has ended. Campaign paused.");
     if (!campaign.is_active || campaign.is_registration_open === false)
       throw new InputError("Episode registration is closed. Campaign paused.");
+    if (!registrationIsOpen(campaign)) throw new InputError("Registration has reached its closing time. Campaign paused.");
     batch = (
       await db.query(
         `SELECT * FROM invite_batches WHERE campaign_id=$1 AND status IN ('preparing','ready','sending','review') ORDER BY created_at LIMIT 1`,
@@ -294,12 +296,12 @@ async function processInviteBatch(pool, sender, env = process.env) {
       // Recheck pause/closure immediately before submitting a batch.
       const state = (
         await db.query(
-          `SELECT c.status,e.is_active,e.is_registration_open FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id WHERE c.id=$1`,
+          `SELECT c.status,e.is_active,e.is_registration_open,e.event_date,e.event_time FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id WHERE c.id=$1`,
           [campaign.id],
         )
       ).rows[0];
       if (state.status !== "running") return;
-      if (!state.is_active || state.is_registration_open === false)
+      if (!registrationIsOpen(state))
         throw new InputError(
           "Episode registration is closed. Campaign paused.",
         );

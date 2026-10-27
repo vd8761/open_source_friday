@@ -1,5 +1,5 @@
 const express = require("express");
-const { episodeEnd } = require("./episode-time");
+const { episodeEnd, registrationIsOpen } = require("./episode-time");
 const { InputError, csvExport } = require("./outreach-csv");
 const { SenderError } = require("./sender");
 const { ZoomError } = require("./zoom");
@@ -207,6 +207,7 @@ function createOutreachRouter({
         );
       if (!e.is_active || e.is_registration_open === false)
         throw new InputError("Episode registration must be open.");
+      if (!registrationIsOpen(e)) throw new InputError("Registration closes one hour before the episode starts (IST). Choose an upcoming episode.");
       const blocked = await db.query(
         "SELECT id FROM invite_batches WHERE campaign_id=$1 AND status IN ('sending','review')",
         [c.id],

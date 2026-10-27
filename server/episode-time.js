@@ -1,26 +1,43 @@
 function episodeDate(episode) {
   const value = episode.event_date;
-  // pg parses a PostgreSQL DATE at local midnight. Converting it to UTC can
-  // move the calendar day backwards on servers running in India Standard Time.
+  // Legacy callers may still hold a pg DATE parsed at local midnight.
   if (value instanceof Date)
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-  return String(value || "").slice(0, 10);
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  return String(value || '').slice(0, 10);
 }
-function episodeEnd(episode) {
-  const parts = String(episode.event_time || "").split(/\s*[-–]\s*/);
-  if (parts.length < 2) return null;
-  const match = parts
-    .at(-1)
-    .trim()
-    .match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+function validDay(day) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const instant = Date.parse(`${day}T00:00:00Z`);
+  return Number.isFinite(instant) && new Date(instant).toISOString().slice(0, 10) === day;
+}
+function clockMinutes(value) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
   if (!match) return null;
   let hour = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (match[3]) hour = (hour % 12) + (/PM/i.test(match[3]) ? 12 : 0);
-  if (hour > 23 || minutes > 59) return null;
-  const day = episodeDate(episode);
-  return Date.parse(
-    `${day}T${String(hour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00+05:30`,
-  );
+  const minute = Number(match[2]);
+  if (minute > 59 || (match[3] ? hour < 1 || hour > 12 : hour > 23)) return null;
+  if (match[3]) hour = hour % 12 + (/PM/i.test(match[3]) ? 12 : 0);
+  return hour * 60 + minute;
 }
-module.exports = { episodeDate, episodeEnd };
+function episodeInstant(episode, end = false) {
+  const day = episodeDate(episode);
+  const parts = String(episode.event_time || '').split(/\s*[-–]\s*/);
+  const minutes = clockMinutes(end ? (parts.length === 2 ? parts[1] : '') : parts[0]);
+  if (!validDay(day) || parts.length > 2 || minutes === null) return null;
+  return Date.parse(`${day}T${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}:00+05:30`);
+}
+const episodeStart = episode => episodeInstant(episode);
+const episodeEnd = episode => episodeInstant(episode, true);
+function validSchedule(episode) {
+  const start = episodeStart(episode), end = episodeEnd(episode);
+  return start !== null && end !== null && end > start;
+}
+function registrationClosesAt(episode) {
+  const start = episodeStart(episode);
+  return start === null ? null : start - 60 * 60 * 1000;
+}
+function registrationIsOpen(episode, now = Date.now()) {
+  const close = registrationClosesAt(episode);
+  return episode.is_active !== false && episode.is_registration_open !== false && close !== null && now <= close;
+}
+module.exports = { episodeDate, episodeStart, episodeEnd, validSchedule, registrationClosesAt, registrationIsOpen };

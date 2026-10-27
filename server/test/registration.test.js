@@ -16,6 +16,9 @@ let firstTimeStudent = false;
 let releases = 0;
 let storedSilent = false;
 let reminderRows = [];
+let registrationDate = '2026-12-01';
+let registrationTime = '8:00 PM - 9:00 PM';
+const validatedMeetings = [];
 const pushNotifications = [];
 async function poolQuery(sql, values) {
   queries.push({ sql, values });
@@ -23,7 +26,13 @@ async function poolQuery(sql, values) {
   if (sql.includes('INSERT INTO episodes')) return { rows: [{ id: 16, episode_number: values[0], title: values[1], is_silent: values[14] }] };
   if (sql.includes('SELECT * FROM episodes WHERE is_active')) return { rows: reminderRows };
   if (sql.includes('SELECT * FROM push_subscriptions')) return { rows: [{ endpoint: 'test-endpoint', p256dh: 'key', auth: 'auth' }] };
-  if (sql.includes('INSERT INTO push_notification_history') || sql.includes('UPDATE episodes SET reminder_sent')) return { rows: [] };
+  if (sql.includes('UPDATE episodes SET reminder_sent') || sql.includes('UPDATE episodes SET starting_now_sent')) {
+    const flag = sql.includes('starting_now_sent') ? 'starting_now_sent' : 'reminder_sent';
+    const row = reminderRows.find(r => r.id === values[0] && !r[flag] && !r.is_silent && r.event_date === values[1] && r.event_time === values[2]);
+    if (!row) return { rows: [] };
+    row[flag] = true; return { rows: [{ id: row.id }] };
+  }
+  if (sql.includes('INSERT INTO push_notification_history')) return { rows: [] };
   if (sql.includes('SELECT COUNT(*) FROM admins')) return { rows: [{ count: '1' }] };
   if (/^\s*(CREATE|ALTER)/.test(sql)) return { rows: [] };
   if (sql.includes("WHERE status = 'registered' AND invitation_status <> 'zoom_managed'")) { if (zoomJobStatus === 'registered') invitationStatus = 'zoom_managed'; return { rows: [] }; }
@@ -37,7 +46,7 @@ const db = {
     if (sql.includes("SET status = 'registered'")) { zoomJobStatus = 'registered'; invitationStatus = 'zoom_managed'; }
     if (sql.includes("invitation_status = 'sent'")) invitationStatus = 'sent';
     if (sql.includes("invitation_status = 'pending'")) invitationStatus = 'pending';
-    if (sql.includes('SELECT * FROM episodes')) return { rows: [{ id: 1, is_active: !closed, is_silent: storedSilent, is_registration_open: true, zoom_meeting_id: '12345678901', event_mode: 'Online', event_date: '2026-12-01', episode_number: 5 }] };
+    if (sql.includes('SELECT * FROM episodes')) return { rows: [{ id: 1, is_active: !closed, is_silent: storedSilent, is_registration_open: true, zoom_meeting_id: '12345678901', event_mode: 'Online', event_date: registrationDate, event_time: registrationTime, episode_number: 5 }] };
     if (sql.includes('SET episode_number =')) { storedSilent = values[15]; return { rows: [{ id: 1, is_silent: storedSilent }] }; }
     if (sql.includes('SELECT id FROM episode_registrations')) return { rows: duplicate ? [{ id: 10 }] : [] };
     if (sql.includes('SELECT id FROM students')) return { rows: firstTimeStudent ? [] : [{ id: 7 }] };
@@ -49,7 +58,7 @@ const db = {
   release() { releases++; },
 };
 Module._load = function(name, ...args) {
-  if (name === './zoom') return { ...originalLoad.call(this, name, ...args), createZoomClient: () => ({ configured: () => zoomConfigured, addRegistrant: async (id, student) => { zoomRequests.push({ id, email: student.email, full_name: student.full_name }); return { registrantId: 'r1', joinUrl: 'https://zoom.us/private' }; } }) };
+  if (name === './zoom') return { ...originalLoad.call(this, name, ...args), createZoomClient: () => ({ configured: () => zoomConfigured, validateMeeting: async (...args) => { validatedMeetings.push(args); }, addRegistrant: async (id, student) => { zoomRequests.push({ id, email: student.email, full_name: student.full_name }); return { registrantId: 'r1', joinUrl: 'https://zoom.us/private' }; } }) };
   if (name === 'pg') return { Pool: class { connect() { return Promise.resolve(db); } query(sql, values) { return poolQuery(sql, values); } } };
   if (name === 'node-cron') return { schedule() {} };
   if (name === 'web-push') return { setVapidDetails() {}, async sendNotification(subscription, payload) { pushNotifications.push(JSON.parse(payload)); } };
@@ -202,11 +211,9 @@ test('editing an episode preserves omitted silent mode and supports switching it
   storedSilent = false;
 });
 function reminderEpisode(minutesAway, isSilent) {
-  const time = new Date(Date.now() + minutesAway * 60000);
-  const pad = value => String(value).padStart(2, '0');
+  const time = new Date(Date.now() + minutesAway * 60000 + 330 * 60000);
   return { id: 16, episode_number: 16, title: 'Test', is_silent: isSilent,
-    event_date: `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`,
-    event_time: `${pad(time.getHours())}:${pad(time.getMinutes())}` };
+    event_date: time.toISOString().slice(0,10), event_time: time.toISOString().slice(11,16) };
 }
 test('silent episodes suppress both reminder types; ordinary reminders still send', async () => {
   for (const minutesAway of [30, 0]) {
@@ -234,7 +241,7 @@ test('authenticated capability check lets the frontend fail safely against older
   const path = `${base}/api/admin/episode-capabilities`;
   assert.equal((await nativeFetch(path)).status, 401);
   const response = await nativeFetch(path, { headers: adminHeaders() });
-  assert.deepEqual(await response.json(), { success: true, silent_mode: true });
+  assert.deepEqual(await response.json(), { success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60 });
 });
 
 test('startup clears legacy SMTP failures for successful Zoom registrations without sending anything', async () => {
@@ -257,4 +264,33 @@ test('manual enrollment preserves an active Zoom cooldown', async () => {
     assert.match(update.sql, /invitation_status <> 'rate_limited' OR next_attempt_at <= NOW\(\)/);
     assert.ok(queries.find(q => q.sql.includes('SELECT j.*')).sql.includes('j.next_attempt_at <= NOW()'));
   } finally { zoomConfigured = false; zoomJobStatus = 'registered'; invitationStatus = 'zoom_managed'; }
+});
+
+
+test('registration API rejects a past schedule even when the admin Open flag is still true', async () => {
+  registrationDate = '2020-01-01';
+  try {
+    const response = await register();
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /one hour before/);
+    assert.ok(!queries.some(q => q.sql.includes('INSERT INTO episode_registrations')));
+    assert.ok(!queries.some(q => q.sql.includes('INSERT INTO zoom_registration_jobs')));
+  } finally { registrationDate = '2026-12-01'; }
+});
+test('invalid episode schedules fail before an episode is created or updated', async () => {
+  for (const method of ['POST', 'PUT']) for (const event_time of ['13:00 PM - 2:00 PM', '8:00 PM - 8:00 PM', '9:00 PM - 8:00 PM']) {
+    queries.length = 0;
+    const response = await nativeFetch(`${base}/api/episodes${method === 'PUT' ? '/1' : ''}`, { method, headers: adminHeaders(), body: JSON.stringify({ ...episodeBody, event_time, is_silent: true }) });
+    assert.equal(response.status, 400);
+    assert.ok(!queries.some(q => q.sql.includes('INSERT INTO episodes') || q.sql.includes('SET episode_number =')));
+  }
+});
+test('rescheduling revalidates the existing Zoom meeting and pauses running invitations in the transaction', async () => {
+  queries.length = 0; validatedMeetings.length = 0;
+  const response = await nativeFetch(`${base}/api/episodes/1`, { method: 'PUT', headers: adminHeaders(), body: JSON.stringify({ ...episodeBody, event_date: '2026-12-02', is_silent: true }) });
+  assert.equal(response.status, 200);
+  assert.deepEqual(validatedMeetings[0], ['12345678901', { event_date: '2026-12-02', event_time: episodeBody.event_time }]);
+  const pause = queries.findIndex(q => q.sql.includes('Episode schedule changed'));
+  assert.ok(pause > 0 && pause < queries.findIndex(q => q.sql === 'COMMIT'));
+  assert.match(queries.find(q => q.sql.includes('SET episode_number =')).sql, /starting_now_sent = CASE WHEN/);
 });
