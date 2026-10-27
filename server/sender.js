@@ -7,6 +7,28 @@ class SenderError extends Error {
   }
 }
 function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
+  function operation(path, method) {
+    if (path === "/groups") return "creating the batch group";
+    if (path.startsWith("/subscribers/groups/")) return "assigning the batch audience";
+    if (path === "/subscribers") return "creating the invitation contact";
+    if (path.startsWith("/subscribers/")) return "checking the subscriber status";
+    if (path === "/campaigns") return "creating the campaign draft";
+    if (path.endsWith("/send")) return "submitting the campaign";
+    return method === "GET" ? "reading the campaign or report" : "updating the campaign";
+  }
+  function reason(data) {
+    // Only return fixed diagnostics. Never echo provider text, which may contain
+    // contact information or credentials from an invalid request.
+    const message = typeof data.message === "string" ? data.message.toLowerCase() : "";
+    if (/subscriber.*(not found|does not exist|doesn't exist)/.test(message)) return "Subscriber not found.";
+    if (/domain.*(not verified|unverified)|verif.*domain/.test(message)) return "Verify the sending domain in Sender.";
+    if (/unsubscribe/.test(message)) return "Check the campaign unsubscribe link in Sender.";
+    if (/limit|quota|credit/.test(message)) return "Check the Sender account sending quota.";
+    if (/approv|activat/.test(message)) return "Check account or campaign activation in Sender.";
+    const fields = ["email", "firstname", "lastname", "groups", "subject", "from", "reply_to", "content", "content_type", "subscribers"]
+      .filter(field => Object.hasOwn(data.errors || {}, field));
+    return fields.length ? `Check these request fields: ${fields.join(", ")}.` : "Check account permissions, verified domain and quota in Sender.";
+  }
   const configured = () =>
     Boolean(
       env.SENDER_API_TOKEN &&
@@ -48,7 +70,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
       throw new SenderError(
         response.status === 429
           ? "Sender rate limit reached. Wait before resuming."
-          : `Sender request failed (HTTP ${response.status}). Check account permissions, verified domain and quota in Sender.`,
+          : `Sender request failed while ${operation(path, method)} (HTTP ${response.status}). ${reason(data)}`,
         response.status === 429 ? 429 : 502,
         Number.isFinite(seconds) ? Math.max(60, Math.ceil(seconds)) : 60,
       );
