@@ -578,6 +578,32 @@ test("reconciliation only retries an explicitly unsent provider draft and honors
   assert.equal(sender.calls.length, before);
 });
 
+test("resuming failed preparation uses a new group name without duplicate sends", async () => {
+  await resetCampaigns();
+  const c = await makeCampaign("Email\none@example.com\ntwo@example.com");
+  const sender = senderStub();
+  const groups = new Set();
+  sender.createGroup = async title => {
+    if (groups.has(title)) throw new SenderError("Group title already exists");
+    groups.add(title);
+    return `group${groups.size}`;
+  };
+  const assign = sender.addToGroup;
+  let attempts = 0;
+  sender.addToGroup = async (...args) => {
+    if (++attempts === 1) throw new SenderError("Audience preparation failed");
+    await assign(...args);
+  };
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [c.id]);
+  await processInviteBatch(pool, sender, env);
+  assert.equal(sender.calls.filter(call => call[0] === "send").length, 0);
+  await db.query("UPDATE invite_campaigns SET status='running',next_batch_at=NOW() WHERE id=$1", [c.id]);
+  await processInviteBatch(pool, sender, env);
+  assert.equal(groups.size, 2);
+  assert.equal(sender.calls.filter(call => call[0] === "send").length, 1);
+  assert.equal((await db.query("SELECT status FROM invite_campaigns WHERE id=$1", [c.id])).rows[0].status, "completed");
+});
+
 test("expired episodes cannot start a campaign or continue a queued batch", async () => {
   await resetCampaigns();
   const c = await makeCampaign();
