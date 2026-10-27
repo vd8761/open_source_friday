@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const { readCsv, InputError, normalizeEmail } = require("./outreach-csv");
+const { episodeDate } = require("./episode-time");
 function normalizeParticipant(row) {
   const join = Date.parse(row.join_time || ""),
     leave = Date.parse(row.leave_time || "");
@@ -302,11 +303,7 @@ async function syncEpisodeAttendance(
     episode.zoom_meeting_id,
     previous?.meeting_uuid || meetingUuid,
   );
-  const expected = String(
-    episode.event_date instanceof Date
-      ? episode.event_date.toISOString()
-      : episode.event_date,
-  ).slice(0, 10);
+  const expected = episodeDate(episode);
   const actual = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
     year: "numeric",
