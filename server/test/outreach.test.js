@@ -205,7 +205,7 @@ test("draft, pacing, opt-out suppression and cross-campaign deduplication use re
   );
   assert.match(
     sender.calls.find((c) => c[0] === "create")[1],
-    /\{\$unsubscribe_link\}/,
+    /href="\{\{ unsubscribe_link \}\}"/,
   );
   await processInviteBatch(pool, sender, env);
   assert.equal(sender.calls.filter((c) => c[0] === "send").length, 1);
@@ -797,7 +797,7 @@ test("a single-batch campaign completes without an unnecessary pilot review", as
   const html = sender.calls.find((c) => c[0] === "create")[1];
   assert.match(html, /<meta charset="utf-8">/);
   assert.match(html, /opted in to Open Source Friday/);
-  assert.match(html, /\{\$unsubscribe_link\}/);
+  assert.match(html, /href="\{\{ unsubscribe_link \}\}"/);
 });
 
 test("reconciling a sent final batch clears the failure and completes without another send", async () => {

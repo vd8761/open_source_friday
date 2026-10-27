@@ -54,6 +54,7 @@ test("Sender API keeps secrets server-side, disables automation and uses marketi
   assert.deepEqual(body.groups, ["g1"]);
   assert.equal(body.auto_followup_active, false);
   assert.equal(body.reply_to, "from@example.com");
+  assert.equal(body.preheader, "Register in our application; Zoom will email your personal meeting link.");
   assert.equal(calls[3].url, "https://api.sender.net/v2/campaigns/c1/send");
 });
 test("Sender errors hide response details, preserve throttling, and never retry sends automatically", async () => {
