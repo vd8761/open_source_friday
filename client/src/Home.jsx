@@ -1,3 +1,4 @@
+import { isEpisodeConcluded, isRegistrationOpen, formatEpisodeDate } from './utils/episodeTime';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, User, ArrowRight, PlayCircle, Video, MapPin } from 'lucide-react';
@@ -5,6 +6,7 @@ import { Calendar, Clock, User, ArrowRight, PlayCircle, Video, MapPin } from 'lu
 const Home = () => {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -13,11 +15,10 @@ const Home = () => {
         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
         const response = await fetch(`${API_URL}/api/episodes`);
         const result = await response.json();
-        if (result.success) {
-          setEpisodes(result.episodes);
-        }
+        if (!response.ok || !result.success) throw new Error('Unable to load episodes. Please refresh and try again.');
+        setEpisodes(result.episodes);
       } catch (error) {
-        console.error('Failed to fetch episodes:', error);
+        setLoadError(error.message || 'Unable to load episodes. Please refresh and try again.');
       } finally {
         setLoading(false);
       }
@@ -26,95 +27,8 @@ const Home = () => {
     fetchEpisodes();
   }, []);
 
-  const isEpisodeConcluded = (episode) => {
-    if (!episode) return false;
-    if (episode.is_active === false) return true;
-    
-    try {
-      const dateStr = String(episode.event_date).split('T')[0];
-      const timeStrList = String(episode.event_time).split('-');
-      const timeStr = (timeStrList.length > 1 ? timeStrList[1] : timeStrList[0]).trim();
-      
-      let hours = 0, minutes = 0;
-      const time12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-      const time24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-      
-      if (time12) {
-        hours = parseInt(time12[1], 10);
-        minutes = parseInt(time12[2], 10);
-        const period = time12[3].toUpperCase();
-        if (period === 'PM' && hours !== 12) hours += 12;
-        if (period === 'AM' && hours === 12) hours = 0;
-      } else if (time24) {
-        hours = parseInt(time24[1], 10);
-        minutes = parseInt(time24[2], 10);
-      } else {
-        const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-        const year = istDateObj.getFullYear();
-        const month = istDateObj.getMonth();
-        const day = istDateObj.getDate();
-        const eventDateEnd = new Date(year, month, day, 23, 59, 59);
-        const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-        return nowIST > eventDateEnd;
-      }
-
-      const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      const year = istDateObj.getFullYear();
-      const month = istDateObj.getMonth();
-      const day = istDateObj.getDate();
-      const eventDateEnd = new Date(year, month, day, hours, minutes, 0);
-      const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      return nowIST > eventDateEnd;
-    } catch {
-      return false;
-    }
-  };
-
   const upcomingEpisodes = episodes.filter(episode => !isEpisodeConcluded(episode));
   const completedEpisodes = episodes.filter(episode => isEpisodeConcluded(episode));
-
-  const isRegistrationOpen = (episode) => {
-    if (!episode) return false;
-    if (isEpisodeConcluded(episode)) return false;
-    
-    try {
-      const dateStr = String(episode.event_date).split('T')[0];
-      const timeStrList = String(episode.event_time).split('-');
-      const startTimeStr = timeStrList[0].trim();
-      
-      let hours = 0, minutes = 0;
-      const time12 = startTimeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-      const time24 = startTimeStr.match(/^(\d{1,2}):(\d{2})$/);
-      
-      if (time12) {
-        hours = parseInt(time12[1], 10);
-        minutes = parseInt(time12[2], 10);
-        const period = time12[3].toUpperCase();
-        if (period === 'PM' && hours !== 12) hours += 12;
-        if (period === 'AM' && hours === 12) hours = 0;
-      } else if (time24) {
-        hours = parseInt(time24[1], 10);
-        minutes = parseInt(time24[2], 10);
-      }
-      
-      const istDateObj = new Date(new Date(episode.event_date).toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      const year = istDateObj.getFullYear();
-      const month = istDateObj.getMonth();
-      const day = istDateObj.getDate();
-      const eventDateStart = new Date(year, month, day, hours, minutes, 0);
-      
-      const registrationCloseTime = new Date(eventDateStart.getTime() - 60 * 60 * 1000);
-      const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      
-      if (nowIST > registrationCloseTime) {
-        return false;
-      }
-    } catch (e) {
-      // ignore
-    }
-
-    return episode.is_registration_open !== false;
-  };
 
   const renderEpisodeCard = (episode, isCompleted) => {
     const registrationOpen = isRegistrationOpen(episode);
@@ -163,7 +77,7 @@ const Home = () => {
         <div className="flex flex-col gap-2 mb-6">
           <div className="flex items-center text-sm font-medium text-slate-600">
             <Calendar className="h-4 w-4 text-dos mr-2 flex-shrink-0" />
-            {new Date(episode.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {formatEpisodeDate(episode.event_date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </div>
           <div className="flex items-center text-sm font-medium text-slate-600">
             <Clock className="h-4 w-4 text-dos mr-2 flex-shrink-0" />
@@ -228,6 +142,8 @@ const Home = () => {
           <div className="flex justify-center items-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-dos border-t-transparent"></div>
           </div>
+        ) : loadError ? (
+          <div role="alert" className="rounded-xl bg-rose-50 p-6 text-rose-800">{loadError}</div>
         ) : episodes.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
             <h4 className="text-xl font-bold text-slate-700 mb-2">No episodes found</h4>

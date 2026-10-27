@@ -6,7 +6,7 @@ React/Vite frontend and Express/PostgreSQL backend for student episode registrat
 
 1. A student registers for an episode. The application confirms the registration and saves a durable Zoom enrollment job in the same PostgreSQL transaction.
 2. After that transaction commits, the worker registers the saved student name/email with the episode's Zoom meeting.
-3. Zoom sends its own registration confirmation email with the personal join link. **The application sends no emails**: it has no SMTP transport, registration confirmation email, or separate invitation email.
+3. Zoom sends its own registration confirmation email with the personal join link. **Registration confirmations use Zoom only**: there is no SMTP confirmation transport. The separate admin bulk invitation tool uses Sender campaigns to invite contacts to register.
 4. The admin roster shows **Registered with Zoom**, **Zoom registration pending**, **Zoom registration failed**, or **Not registered with Zoom**. This tracks enrollment, not inbox delivery. The application does not claim that a Zoom email was delivered or read.
 5. Failed Zoom enrollment retries every minute with exponential backoff from one minute to one hour while the episode is active. Admin **Register with Zoom** retries enrollment immediately and can enroll a registered student for an inactive episode too. Already-enrolled students are not re-registered.
 6. For an enrolled student, **Resend in Zoom** opens the meeting management page. In Zoom, open **Registration → Manage Registrants → View**, select the student, and click **Resend Confirmation Email**. See [Zoom's documented resend workflow](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0068036). The application does not use an undocumented resend endpoint or send an email itself.
@@ -88,3 +88,7 @@ Private join links remain in the database for reconciliation. They are not retur
 Admins can use **Dashboard → Email Invitations** to preview a CSV audience and start paced Sender campaigns. Each episode also has an **Attendance** screen for Zoom report synchronization, participant CSV import, review and audited corrections. The default attendance minimum is 30 minutes. CSV contacts still have to register in the application before Zoom enrollment.
 
 See [setup, dependencies and reporting limitations](docs/invitations-and-attendance.md) before activation. Campaigns start as drafts; configuring credentials alone does not send invitations.
+
+## Hosting and audit handoff
+
+See [Event Hosting SOP](docs/event-hosting-sop.md) for scheduling, release gates, known limitations and team responsibilities. The scheduling safeguards require deployment of the current QA changes. A separate owner handoff report records restricted security and operational follow up.

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { rosterCsv } from './utils/rosterCsv';
+import { formatEpisodeDate } from './utils/episodeTime';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RegistrationTable from './RegistrationTable';
 import { Calendar, Users, RefreshCw, ChevronRight, CheckCircle2, Trophy, LogOut, ArrowLeft, Bell, Send } from 'lucide-react';
@@ -22,6 +24,8 @@ export default function Dashboard() {
   const [data, setData] = useState([]); // List of episodes
   const [registrations, setRegistrations] = useState([]); // Registrations for active episode
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const rosterRequest = useRef(0);
   const [viewMode, setViewMode] = useState('summary'); // 'summary' or 'roster' or 'push'
   const [pushHistory, setPushHistory] = useState([]);
   const [pushStats, setPushStats] = useState({ total: 0, welcomeSent: 0 });
@@ -121,11 +125,11 @@ export default function Dashboard() {
       }
 
       const result = await response.json();
-      if (result.success) {
-        setData(result.data);
-      }
+      if (!response.ok || !result.success) throw new Error('Unable to load the dashboard. Refresh before using event data.');
+      setData(result.data);
+      setLoadError('');
     } catch (error) {
-      console.error('Failed to fetch data:', error);
+      setLoadError(error.message || 'Unable to refresh event data.');
     } finally {
       setLoading(false);
     }
@@ -135,6 +139,8 @@ export default function Dashboard() {
     setActiveEpisode(episode.episode_number);
     setActiveEpisodeId(episode.id);
     setViewMode('roster');
+    setRegistrations([]);
+    setLoadError('');
     setLoading(true);
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     const token = localStorage.getItem('adminToken');
@@ -142,23 +148,23 @@ export default function Dashboard() {
   };
 
   const fetchRegistrations = async (episodeId, token, API_URL) => {
+    const requestId = ++rosterRequest.current;
     try {
       const response = await fetch(`${API_URL}/api/admin/episodes/${episodeId}/registrations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      const result = await response.json();
-      if (result.success) {
-        setRegistrations(result.data);
+      if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem('adminToken'); navigate('/login'); return;
       }
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error('Unable to load this roster. Refresh before taking action.');
+      if (requestId === rosterRequest.current) { setRegistrations(result.data); setLoadError(''); }
     } catch (error) {
-      console.error('Failed to fetch registrations:', error);
+      if (requestId === rosterRequest.current) { setRegistrations([]); setLoadError(error.message || 'Unable to load this roster.'); }
     } finally {
-      setLoading(false);
+      if (requestId === rosterRequest.current) setLoading(false);
     }
   };
-
   const fetchPushData = async () => {
     try {
       setLoading(true);
@@ -289,28 +295,7 @@ export default function Dashboard() {
   const handleDownloadCSV = () => {
     if (registrations.length === 0) return;
 
-    const headers = ['Full Name', 'Email', 'WhatsApp', 'Gender', 'College', 'Degree', 'Department', 'Year of Study', 'DOS Member', 'Topic', 'Registered At'];
-
-    const csvRows = [headers.join(',')];
-
-    registrations.forEach(row => {
-      const values = [
-        `"${row.full_name || ''}"`,
-        `"${row.email || ''}"`,
-        `"${row.whatsapp_number || ''}"`,
-        `"${row.gender || ''}"`,
-        `"${row.college || ''}"`,
-        `"${row.degree || ''}"`,
-        `"${row.department || ''}"`,
-        `"${row.year_of_study || ''}"`,
-        `"${row.is_dos_club_member || ''}"`,
-        `"${(row.excited_topic || '').replace(/"/g, '""')}"`,
-        `"${row.registered_at ? new Date(row.registered_at).toLocaleString() : ''}"`
-      ];
-      csvRows.push(values.join(','));
-    });
-
-    const csvData = csvRows.join('\n');
+    const csvData = rosterCsv(registrations);
     const blob = new Blob([csvData], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
 
@@ -407,6 +392,8 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <p className="text-sm text-slate-500">Event times are IST. Registration closes one hour before the start time, even when the registration toggle is enabled.</p>
+        {loadError && <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{loadError}</div>}
 
         {/* Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
@@ -629,7 +616,7 @@ export default function Dashboard() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-slate-900">
-                            {episode.event_date ? new Date(episode.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                            {episode.event_date ? formatEpisodeDate(episode.event_date, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                           </span>
                           <div className="text-xs text-slate-500">
                             {episode.event_time || 'N/A'}
@@ -664,7 +651,7 @@ export default function Dashboard() {
                               <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${episode.is_registration_open !== false ? 'transform translate-x-4' : ''}`}></div>
                             </div>
                             <span className={`text-xs font-bold ${episode.is_registration_open !== false ? 'text-emerald-600' : 'text-slate-500'}`}>
-                              {episode.is_registration_open !== false ? 'Open' : 'Closed'}
+                              {episode.is_registration_open !== false ? 'Enabled' : 'Disabled'}
                             </span>
                           </label>
                         </td>

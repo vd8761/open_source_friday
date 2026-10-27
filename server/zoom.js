@@ -1,3 +1,4 @@
+const { episodeStart, episodeEnd } = require('./episode-time');
 // Zoom credentials and access tokens must remain on the server.
 class ZoomError extends Error {
   constructor(message, status = 502) { super(message); this.status = status; }
@@ -76,13 +77,19 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
   }
   return {
     configured,
-    async validateMeeting(id) {
+    async validateMeeting(id, episode) {
       const data = await request(`/meetings/${meetingId(id)}`);
       if (data.type !== 2 || data.settings?.approval_type !== 0) {
         throw new ZoomError('Use a scheduled, non-recurring Zoom meeting with registration enabled and automatic approval.', 400);
       }
       if (data.settings?.registrants_email_notification !== true || data.settings?.registrants_confirmation_email !== true) {
         throw new ZoomError('Enable Zoom confirmation emails for registrants under the meeting’s Email Settings before linking it.', 400);
+      }
+      if (episode) {
+        const start = episodeStart(episode), end = episodeEnd(episode);
+        if (start === null || end === null || Date.parse(data.start_time) !== start || Number(data.duration) * 60000 !== end - start) {
+          throw new ZoomError('Zoom date, start time or duration does not match this episode. Update the meeting in Zoom first using IST, then save the episode.', 400);
+        }
       }
     },
     async attendance(id, instanceUuid) {
@@ -113,6 +120,7 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
       // Reconcile with Zoom before writing, including after a timeout or a process crash.
       // Zoom has no idempotency key for this endpoint.
       let nextPage = '';
+      const seen = new Set();
       do {
         const query = new URLSearchParams({ status: 'approved', page_size: '300' });
         if (nextPage) query.set('next_page_token', nextPage);
@@ -123,6 +131,9 @@ function createZoomClient({ env = process.env, fetchImpl = fetch, now = Date.now
           return { registrantId: existing.id, joinUrl: existing.join_url };
         }
         nextPage = page.next_page_token || '';
+        if (nextPage && seen.has(nextPage)) throw new ZoomError('Zoom returned a repeated registrant page token. Retry later.');
+        seen.add(nextPage);
+        if (seen.size > 100) throw new ZoomError('Zoom registrant list exceeded the page limit. Retry later.');
       } while (nextPage);
       const [first_name, ...last] = student.full_name.trim().split(/\s+/);
       const registrant = { email: student.email.trim(), first_name, auto_approve: true };

@@ -1,3 +1,4 @@
+import { calendarInputDate } from '../utils/episodeTime';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
@@ -80,7 +81,7 @@ const AdminEpisodeForm = () => {
               is_silent: ep.is_silent === true,
               is_registration_open: ep.is_registration_open !== undefined ? ep.is_registration_open : true
             });
-            if (ep.event_date) setEventDate(new Date(ep.event_date));
+            if (ep.event_date) setEventDate(calendarInputDate(ep.event_date));
             if (ep.event_time) {
               const [startStr, endStr] = ep.event_time.split(' - ');
               if (startStr) setStartTime(parse(startStr, 'h:mm a', new Date()));
@@ -189,6 +190,11 @@ const AdminEpisodeForm = () => {
       return;
     }
 
+    if (endTime <= startTime) {
+      setMessage('End time must be after start time on the same date. All event times are IST.');
+      return;
+    }
+
     const token = localStorage.getItem('adminToken');
     if (!token) {
       navigate('/login');
@@ -200,13 +206,13 @@ const AdminEpisodeForm = () => {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      if (formData.is_silent) {
+      {
         const capabilityResponse = await fetch(`${API_URL}/api/admin/episode-capabilities`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const capabilities = capabilityResponse.ok ? await capabilityResponse.json() : null;
-        if (capabilities?.silent_mode !== true) {
-          setMessage('Silent mode is unavailable on this server. Deploy the updated backend before saving this episode.');
+        if (capabilities?.schedule_validation !== true || (formData.is_silent && capabilities?.silent_mode !== true)) {
+          setMessage('The server needs the latest episode scheduling update. Ask the technical team to deploy the backend before saving this episode.');
           setIsSubmitting(false);
           return;
         }
@@ -390,12 +396,13 @@ const AdminEpisodeForm = () => {
                     <input id="zoom-meeting-id" name="zoom_meeting_id" type="text" inputMode="numeric" maxLength={11}
                       value={formData.zoom_meeting_id} onChange={handleChange} placeholder="e.g. 12345678901"
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos outline-none" />
-                    <p className="text-xs text-slate-500 mt-2">Use a scheduled Zoom meeting with registration, and automatic approval enabled. Students will be added automatically and receive their confirmation email directly from Zoom. Leave blank for events without Zoom.</p>
+                    <p className="text-xs text-slate-500 mt-2">Use a scheduled Zoom meeting with registration and automatic approval enabled. Its date, start time and duration must match this episode. Students will be added automatically and receive their confirmation email directly from Zoom. Leave blank for events without Zoom.</p>
+                    <p className="text-xs text-slate-500 mt-2">To reschedule, update the meeting in Zoom first, then save this episode. Existing confirmations are not resent automatically. Running invitation campaigns will pause for review.</p>
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Event Date</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Event Date (IST)</label>
                     <DatePicker 
                       selected={eventDate} 
                       onChange={(date) => { setEventDate(date); if (errors.eventDate) setErrors(prev => ({ ...prev, eventDate: null })); }} 
@@ -407,7 +414,7 @@ const AdminEpisodeForm = () => {
                     {errors.eventDate && <p className="text-rose-500 text-xs mt-1.5 font-medium">{errors.eventDate}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Start Time</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Start Time (IST)</label>
                     <DatePicker 
                       selected={startTime} 
                       onChange={(time) => { setStartTime(time); if (errors.startTime) setErrors(prev => ({ ...prev, startTime: null })); }} 
@@ -423,7 +430,7 @@ const AdminEpisodeForm = () => {
                     {errors.startTime && <p className="text-rose-500 text-xs mt-1.5 font-medium">{errors.startTime}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">End Time</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">End Time (IST)</label>
                     <DatePicker 
                       selected={endTime} 
                       onChange={(time) => { setEndTime(time); if (errors.endTime) setErrors(prev => ({ ...prev, endTime: null })); }} 

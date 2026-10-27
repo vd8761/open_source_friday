@@ -135,3 +135,18 @@ test('attendance rejects mismatched meetings and reports still processing', asyn
   client=setup([token(),reply({id:12345678901,uuid:'instance'}),reply({participants:[{duration:0}]})]);
   await assert.rejects(client.zoom.attendance('12345678901'),error=>error.status===202&&/processing/.test(error.message));
 });
+
+test('linking or rescheduling rejects Zoom dates, times and durations that differ from the episode', async () => {
+  const episode = { event_date: '2026-10-27', event_time: '7:00 PM - 8:00 PM' };
+  const matching = { ...validMeeting, start_time: '2026-10-27T13:30:00Z', duration: 60 };
+  await setup([token(), reply(matching)]).zoom.validateMeeting('12345678901', episode);
+  for (const change of [{ start_time: '2026-10-26T13:30:00Z' }, { start_time: '2026-10-27T14:30:00Z' }, { duration: 30 }]) {
+    await assert.rejects(setup([token(), reply({ ...matching, ...change })]).zoom.validateMeeting('12345678901', episode), /does not match this episode/);
+  }
+});
+
+test('registrant reconciliation stops on repeated pagination tokens instead of looping or creating another registrant', async () => {
+  const { zoom, calls } = setup([token(), reply({ registrants: [], next_page_token: 'same' }), reply({ registrants: [], next_page_token: 'same' })]);
+  await assert.rejects(zoom.addRegistrant('12345678901', { full_name: 'Student', email: 'student@example.com' }), /repeated registrant page token/);
+  assert.equal(calls.filter(c => c.method === 'POST').length, 1);
+});
