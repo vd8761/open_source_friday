@@ -239,7 +239,7 @@ async function processInviteBatch(pool, sender, env = process.env) {
     {
       // A fresh private group prevents stale membership after a pause or restart.
       batch.group_id = await sender.createGroup(
-        `OSF ${campaign.id} ${batch.id}`,
+        `OSF ${batch.id} ${randomUUID()}`,
       );
       await db.query("UPDATE invite_batches SET group_id=$2 WHERE id=$1", [
         batch.id,
