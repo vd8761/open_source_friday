@@ -289,7 +289,7 @@ function createOutreachRouter({
         message:
           result === "unsent"
             ? "Sender confirmed the draft was not sent. Resume to rebuild and submit this batch."
-            : "Sender confirmed this batch was submitted. Resume the campaign to continue.",
+            : "Sender confirmed this batch was submitted. It will not be resent. Campaigns with no queued recipients are complete.",
       };
     }, true),
   );
