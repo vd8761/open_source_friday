@@ -353,8 +353,8 @@ async function processInviteBatch(pool, sender, env = process.env) {
         : "Campaign paused after a processing error. Check Sender before resuming.";
     if (batch?.status === "sending")
       await db.query(
-        "UPDATE invite_batches SET status='review',last_error=$2 WHERE id=$1",
-        [batch.id, message],
+        "UPDATE invite_batches SET status='review',last_error=$2,provider_diagnostic=COALESCE($3::jsonb,provider_diagnostic) WHERE id=$1",
+        [batch.id, message, error instanceof SenderError && error.providerDiagnostic ? JSON.stringify(error.providerDiagnostic) : null],
       );
     if (campaign)
       await db.query(

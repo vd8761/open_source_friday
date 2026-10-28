@@ -137,3 +137,30 @@ test("Forbidden diagnostics redact credentials and contacts and preserve a safe 
   });
   await assert.rejects(client.send("draft2"), /HTML access-denied.*abc123-def/);
 });
+
+test('403 evidence preserves HTML structure, redacts sensitive values and never retries', async () => {
+  let calls = 0;
+  const client = createSenderClient({ env, fetchImpl: async () => {
+    calls++;
+    return new Response('<html>\n<h1>Forbidden</h1><p>private-key private@example.com 203.0.113.8 Bearer secret-token https://example.com/secret</p></html>',
+      { status: 403, headers: { 'Content-Type': 'text/html', 'CF-Ray': 'support-123' } });
+  } });
+  await assert.rejects(client.send('draft1'), error => {
+    const d = error.providerDiagnostic;
+    assert.equal(d.http_status, 403); assert.equal(d.headers['cf-ray'], 'support-123'); assert.equal(d.method, 'POST');
+    assert.match(d.response_body, /<h1>Forbidden<\/h1>/); assert.match(d.response_body, /\n/);
+    assert.doesNotMatch(JSON.stringify(d), /private-key|private@example|203\.0\.113|secret-token|example.com\/secret/);
+    assert.equal(d.truncated, false); assert.equal(d.read_error, false); return true;
+  });
+  assert.equal(calls, 1);
+});
+test('403 evidence bounds response bytes and distinguishes empty and truncated bodies', async () => {
+  for (const body of ['', 'x'.repeat(70000)]) {
+    const client = createSenderClient({ env, fetchImpl: async () => new Response(body, { status: 403 }) });
+    await assert.rejects(client.send('draft1'), error => {
+      const d = error.providerDiagnostic;
+      assert.equal(d.truncated, body.length > 32768); assert.equal(d.response_body === '', body === '');
+      assert.ok(d.response_body.length <= 32768); assert.equal(d.read_error, false); return true;
+    });
+  }
+});
