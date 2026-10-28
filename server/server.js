@@ -451,7 +451,7 @@ app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
     if (zoomId && (zoomId !== old.zoom_meeting_id || scheduleChanged)) await zoom.validateMeeting(zoomId, { event_date, event_time });
     const query = `
       UPDATE episodes 
-      SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5, event_time = $6,
+      SET episode_number = $1, title = $2, description = $3, meta_description = $4, event_date = $5::date, event_time = $6::text,
           presenter_name = $7, presenter_designation = $8, presenter_photo_url = $9, cover_photo_url = $10,
           past_cover_photo_url = $11, event_mode = $12, is_registration_open = $13,
           reminder_sent = CASE WHEN event_date IS DISTINCT FROM $5::date OR event_time IS DISTINCT FROM $6 THEN false ELSE reminder_sent END,
