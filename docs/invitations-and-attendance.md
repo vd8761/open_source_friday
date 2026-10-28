@@ -140,3 +140,7 @@ Deliverability references: [Sender guidance](https://www.sender.net/help/deliver
 ## Current testing status on 27 October 2026
 
 Two approved test recipients confirmed Inbox placement after sending through Sender’s interface. API campaign sends still return HTTP 403 and are paused pending Sender developer support. No successful automated bulk pilot has been established. Follow the [hosting SOP](event-hosting-sop.md); do not treat the earlier morning checklist as activation approval.
+
+## Sender support response evidence
+
+For a new HTTP 403 from campaign submission, the authenticated campaign detail now retains a redacted provider response. Open **Sender response evidence** and use **Download response evidence**. The JSON records UTC capture time, endpoint, method, status, allowlisted response headers, response text and truncation/read-error flags. The body is capped at 32 KiB before redaction. No request headers or payload are stored; redacted text is not a byte-for-byte original. Review the download before privately sharing it with Sender support. Old failures have no recoverable raw body. Downloading never retries sending; keep outcome reconciliation and a small approved test audience in place.

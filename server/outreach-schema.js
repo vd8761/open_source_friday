@@ -15,6 +15,7 @@ async function initOutreachDB(db) {
     group_id TEXT, provider_campaign_id TEXT, status TEXT NOT NULL DEFAULT 'preparing',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), submitted_at TIMESTAMPTZ, last_error TEXT
   )`);
+  await db.query(`ALTER TABLE invite_batches ADD COLUMN IF NOT EXISTS provider_diagnostic JSONB`);
   await db.query(`CREATE TABLE IF NOT EXISTS invite_recipients (
     id SERIAL PRIMARY KEY, campaign_id UUID NOT NULL REFERENCES invite_campaigns(id) ON DELETE CASCADE,
     batch_id UUID REFERENCES invite_batches(id), email TEXT NOT NULL, full_name TEXT NOT NULL DEFAULT '',

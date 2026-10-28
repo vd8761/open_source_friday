@@ -851,7 +851,7 @@ test('invitation start and worker honor the same one-hour registration cutoff as
     const response = await request(`/outreach/campaigns/${campaign.id}/start`, 'POST', {});
     assert.equal(response.status,400);
     assert.match(response.body.error, /one hour before/);
-    await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [campaign.id]);
+    await db.query("UPDATE invite_campaigns SET status='running',next_batch_at='2000-01-01' WHERE id=$1", [campaign.id]);
     const sender = senderStub();
     await processInviteBatch(pool,sender,env);
     assert.equal(sender.calls.length,0);
@@ -860,4 +860,20 @@ test('invitation start and worker honor the same one-hour registration cutoff as
     Date.now = originalNow;
     await db.query("UPDATE episodes SET event_date='2099-10-26',event_time='7:00 PM - 8:00 PM' WHERE id=1");
   }
+});
+
+test('failed send evidence persists on the authenticated batch and survives reconciliation', async () => {
+  await resetCampaigns(); const c = await makeCampaign();
+  const diagnostic = { http_status: 403, response_body: '<h1>Forbidden</h1>', captured_at: '2026-10-28T01:00:00Z', note: 'redacted' };
+  const sender = senderStub(); let sends = 0;
+  sender.send = async () => { sends++; const e = new SenderError('Forbidden'); e.providerDiagnostic = diagnostic; throw e; };
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1", [c.id]);
+  await processInviteBatch(pool, sender, env);
+  const batch = (await db.query('SELECT * FROM invite_batches WHERE campaign_id=$1', [c.id])).rows[0];
+  assert.equal(batch.status, 'review'); assert.deepEqual(batch.provider_diagnostic, diagnostic);
+  const response = await request(`/outreach/campaigns/${c.id}`);
+  assert.deepEqual(response.body.batches[0].provider_diagnostic, diagnostic);
+  await request(`/outreach/campaigns/${c.id}/reconcile/${batch.id}`, 'POST', {});
+  assert.deepEqual((await db.query('SELECT provider_diagnostic FROM invite_batches WHERE id=$1', [batch.id])).rows[0].provider_diagnostic, diagnostic);
+  assert.equal(sends, 1);
 });

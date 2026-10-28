@@ -577,6 +577,14 @@ export default function OutreachTool() {
                 </button>
               </div>
             ))}
+          {detail.batches.filter(b => b.provider_diagnostic).map(b => (
+            <details key={`diagnostic-${b.id}`} className="rounded-lg border border-slate-200 p-3 text-sm">
+              <summary className="cursor-pointer font-semibold">Sender response evidence ({b.provider_diagnostic.http_status})</summary>
+              <p className="mt-2">Redacted provider response for support. Downloading does not retry sending. Review the file before sharing.</p>
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(b.provider_diagnostic, null, 2)}</pre>
+              <button className="mt-2 text-dos underline" onClick={() => downloadFile(new Blob([JSON.stringify(b.provider_diagnostic, null, 2)], { type: 'application/json' }), `sender-response-${b.id}.json`)}>Download response evidence</button>
+            </details>
+          ))}
           <details>
             <summary className="cursor-pointer text-sm font-semibold">
               Import explicit delivery evidence

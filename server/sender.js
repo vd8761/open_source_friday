@@ -1,4 +1,5 @@
 const { InputError } = require("./outreach-csv");
+const { captureResponse } = require("./sender-diagnostic");
 class SenderError extends Error {
   constructor(message, status = 502, retryAfterSeconds = 60) {
     super(message);
@@ -78,20 +79,27 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
         "Sender request outcome is unknown. Check the campaign in Sender before retrying.",
       );
     }
-    const data = await response.json().catch(() => ({}));
+    const diagnostic = response.status === 403 && /^\/campaigns\/[a-z\d_-]+\/send$/i.test(path)
+      ? await captureResponse(response, path, method, env) : null;
+    let data;
+    if (diagnostic) {
+      try { data = JSON.parse(diagnostic.response_body); } catch { data = {}; }
+    } else data = await response.json().catch(() => ({}));
     if (response.status === 404) return null;
     if (!response.ok || data.success === false) {
       const retry = response.headers?.get("retry-after");
       const seconds = /^\d+$/.test(retry || "")
         ? Number(retry)
         : (Date.parse(retry) - Date.now()) / 1000;
-      throw new SenderError(
+      const error = new SenderError(
         response.status === 429
           ? "Sender rate limit reached. Wait before resuming."
           : `Sender request failed while ${operation(path, method)} (HTTP ${response.status}). ${reason(data, response.status, response.headers)}`,
         response.status === 429 ? 429 : 502,
         Number.isFinite(seconds) ? Math.max(60, Math.ceil(seconds)) : 60,
       );
+      if (diagnostic) error.providerDiagnostic = diagnostic;
+      throw error;
     }
     return data;
   }
