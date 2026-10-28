@@ -1,7 +1,7 @@
 const express = require('express');
 const { Pool } = require('pg');
 const { databaseTypes } = require('./database-types');
-const { episodeStart, validSchedule, registrationIsOpen } = require('./episode-time');
+const { episodeStart, validSchedule, registrationIsOpen, episodeJsonReplacer } = require('./episode-time');
 const { processEpisodeReminders } = require('./episode-reminders');
 const path = require('path');
 const cors = require('cors');
@@ -20,6 +20,7 @@ const { syncRecentInviteReports, syncRecentAttendance } = require('./outreach-wo
 const sender = createSenderClient();
 const zoom = createZoomClient();
 const app = express();
+app.set('json replacer', episodeJsonReplacer);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

@@ -26,6 +26,12 @@ for (const timeZone of ["Asia/Kolkata", "UTC", "America/New_York"]) {
       const report = { meetingUuid: "session-27", startTime: "2026-10-27T13:30:00Z", participants: [] };
       (async () => {
         const { databaseTypes } = require('./database-types');
+        const { episodeJsonReplacer } = require('./episode-time');
+        const legacy = types.getTypeParser(1114)('2026-10-29 00:00:00');
+        const registered = new Date('2026-10-28T14:30:00Z');
+        const api = JSON.parse(JSON.stringify({ nested: [{ event_date: legacy, registered_at: registered }] }, episodeJsonReplacer));
+        assert.equal(api.nested[0].event_date, '2026-10-29');
+        assert.equal(api.nested[0].registered_at, registered.toISOString());
         assert.equal(JSON.stringify({ event_date: databaseTypes.getTypeParser(1082)('2026-10-27') }), '{"event_date":"2026-10-27"}');
         const ui = await import('../client/src/utils/episodeTime.js');
         assert.equal(ui.calendarInputDate('2026-10-27').getDate(), 27);
