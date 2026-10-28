@@ -40,4 +40,9 @@ function registrationIsOpen(episode, now = Date.now()) {
   const close = registrationClosesAt(episode);
   return episode.is_active !== false && episode.is_registration_open !== false && close !== null && now <= close;
 }
-module.exports = { episodeDate, episodeStart, episodeEnd, validSchedule, registrationClosesAt, registrationIsOpen };
+// Legacy databases store event_date as TIMESTAMP. Date.toJSON otherwise shifts
+// local midnight to the preceding UTC day before Express sends the response.
+function episodeJsonReplacer(key, value) {
+  return key === 'event_date' && this[key] instanceof Date ? episodeDate({ event_date: this[key] }) : value;
+}
+module.exports = { episodeDate, episodeStart, episodeEnd, validSchedule, registrationClosesAt, registrationIsOpen, episodeJsonReplacer };
