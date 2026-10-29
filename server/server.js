@@ -14,6 +14,7 @@ const { createZoomClient, meetingId, ZoomError } = require('./zoom');
 const { enqueueZoomRegistrations, processZoomJobs } = require('./zoom-jobs');
 const { createSenderClient } = require('./sender');
 const { initOutreachDB } = require('./outreach-schema');
+const { initEpisodeTrash, createEpisodeTrashRouter } = require('./episode-trash');
 const { processInviteBatch } = require('./invite-service');
 const { createOutreachRouter } = require('./outreach-routes');
 const { syncRecentInviteReports, syncRecentAttendance } = require('./outreach-workers');
@@ -104,6 +105,7 @@ async function initDB() {
       WHERE status = 'registered' AND invitation_status <> 'zoom_managed'`);
 
     await initOutreachDB(pool);
+    await initEpisodeTrash(pool);
 
     // Seed initial admin
     const result = await pool.query('SELECT COUNT(*) FROM admins');
@@ -799,6 +801,7 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
 });
 
 app.use('/api/admin', createOutreachRouter({ pool, sender, zoom, authenticateToken }));
+app.use('/api/admin', createEpisodeTrashRouter({ pool, authenticateToken }));
 let inviteWorkerRunning = false;
 async function runInviteWorker() {
   if (inviteWorkerRunning) return;
