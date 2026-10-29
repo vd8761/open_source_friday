@@ -24,8 +24,8 @@ test('admin event tables page and filter on the server and keep dashboard recent
   INSERT INTO zoom_registration_jobs(registration_id,status,invitation_status) VALUES(1,'registered','failed'),(2,'pending','failed');`);
   await initAdminEvents(db);await initAdminEvents(db);
   await db.exec('CREATE TABLE admins(id INTEGER PRIMARY KEY)');await initOutreachDB(db);
-  const app=express();app.set('json replacer',episodeJsonReplacer);app.use('/api/admin',createAdminEventsRouter({pool:db,authenticateToken:(req,res,next)=>req.headers.authorization==='Bearer test'?next():res.status(401).json({success:false})}));
-  app.use('/api/admin',createOutreachRouter({pool:{connect:async()=>({query:(...args)=>db.query(...args),release(){}})},sender:{},zoom:{},authenticateToken:(req,res,next)=>req.headers.authorization==='Bearer test'?next():res.status(401).json({success:false})}));
+  const app=express();app.use(express.json());app.set('json replacer',episodeJsonReplacer);app.use('/api/admin',createAdminEventsRouter({pool:db,authenticateToken:(req,res,next)=>req.headers.authorization==='Bearer test'?(req.user={id:1},next()):res.status(401).json({success:false})}));
+  app.use('/api/admin',createOutreachRouter({pool:{connect:async()=>({query:(...args)=>db.query(...args),release(){}})},sender:{},zoom:{},authenticateToken:(req,res,next)=>req.headers.authorization==='Bearer test'?(req.user={id:1},next()):res.status(401).json({success:false})}));
   server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base=`http://127.0.0.1:${server.address().port}/api/admin`;
   async function get(path,auth=true){const r=await fetch(base+path,{headers:auth?{Authorization:'Bearer test'}:{}});return {status:r.status,body:await r.json()};}
   assert.equal((await get('/dashboard-overview',false)).status,401);
@@ -34,6 +34,27 @@ test('admin event tables page and filter on the server and keep dashboard recent
   const past=await get('/events?period=past&page_size=1&page=2&sort=number_asc');assert.equal(past.body.total,3);assert.equal(past.body.data.length,1);assert.equal(past.body.data[0].id,4);
   const filtered=(await get('/events?period=past&archive=archived&type=test&mode=Offline&from=2020-02-01&to=2020-02-01&search=Host%20B')).body;assert.equal(filtered.total,1);assert.equal(filtered.data[0].id,5);
   assert.equal((await get('/events?period=past&search=%25')).body.total,0);
+  assert.equal((await get('/episodes/1/attendees?whatsapp=not_recorded')).body.total,65);
+  await db.exec("UPDATE episode_registrations SET whatsapp_opt_in=TRUE,whatsapp_consent_at=NOW(),whatsapp_notice_version='event-whatsapp-2026-10-29',whatsapp_notice_text='Original notice',whatsapp_consent_number='+91 55565',whatsapp_consent_source='public_registration_form' WHERE id=65; UPDATE episode_registrations SET whatsapp_opt_in=FALSE WHERE id=64");
+  assert.equal((await get('/episodes/1/attendees?whatsapp=opted_in')).body.total,1);
+  assert.equal((await get('/episodes/1/attendees?whatsapp=declined')).body.total,1);
+  assert.equal((await get('/episodes/1/attendees?whatsapp=not_recorded')).body.total,63);
+  const withdraw=async(ep,registration,body,auth=true)=>fetch(base+`/episodes/${ep}/attendees/${registration}/whatsapp-withdrawal`,{method:'POST',headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer test'}:{})},body:JSON.stringify(body)});
+  assert.equal((await withdraw(1,65,{confirmation:'WITHDRAW WHATSAPP'},false)).status,401);
+  assert.equal((await withdraw(1,65,{})).status,400);
+  assert.equal((await withdraw(2,65,{confirmation:'WITHDRAW WHATSAPP'})).status,404);
+  assert.equal((await withdraw(1,65,{confirmation:'WITHDRAW WHATSAPP'})).status,200);
+  const withdrawn=(await get('/episodes/1/attendees?whatsapp=withdrawn')).body;
+  assert.equal(withdrawn.total,1);assert.equal(withdrawn.data[0].id,65);
+  assert.equal(withdrawn.data[0].whatsapp_opt_in,true);assert.equal(withdrawn.data[0].whatsapp_notice_text,'Original notice');
+  assert.equal((await get('/episodes/1/attendees?whatsapp=opted_in')).body.total,0);
+  const timestamp=withdrawn.data[0].whatsapp_withdrawn_at;
+  assert.equal((await withdraw(1,65,{confirmation:'WITHDRAW WHATSAPP',whatsapp_opt_in:true})).status,200);
+  assert.equal((await get('/episodes/1/attendees?whatsapp=withdrawn')).body.data[0].whatsapp_withdrawn_at,timestamp);
+  // Legacy and declined records can also be suppressed following an off-platform STOP request.
+  assert.equal((await withdraw(1,63,{confirmation:'WITHDRAW WHATSAPP'})).status,200);
+  assert.equal((await get('/episodes/1/attendees?whatsapp=withdrawn')).body.total,2);
+  assert.equal((await get('/episodes/1/attendees?whatsapp=unknown')).status,400);
   const first=(await get('/episodes/1/attendees')).body;assert.equal(first.total,65);assert.equal(first.data.length,10);assert.equal(first.data[0].id,65);
   const next=(await get('/episodes/1/attendees?page=2&page_size=50&sort=oldest')).body;assert.equal(next.data.length,15);assert.equal(next.data[0].id,51);
   const match=(await get('/episodes/1/attendees?college=Alpha&department=engineer&year=2&member=Yes&zoom=failed')).body;assert.equal(match.total,1);assert.equal(match.data[0].id,2);

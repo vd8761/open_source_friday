@@ -1,6 +1,7 @@
 const express = require('express');
 const {pageOptions}=require('./table-query');
 const { InputError } = require('./outreach-csv');
+const { initWhatsAppConsent, statusSql } = require('./whatsapp-consent');
 // Keep the calendar date for legacy TIMESTAMP columns, and interpret times in IST.
 const eventClockSql = part => {
   const clock=`btrim(split_part(replace(e.event_time,'–','-'),'-',${part}))`;
@@ -9,6 +10,7 @@ const eventClockSql = part => {
 const eventEndSql=eventClockSql(2),eventStartSql=eventClockSql(1);
 const eventFields = 'e.id,e.episode_number,e.title,e.event_date,e.event_time,e.presenter_name,e.event_mode,e.is_active,e.is_registration_open,e.is_test,e.is_silent,e.archived_at';
 async function initAdminEvents(db) {
+  await initWhatsAppConsent(db);
   await db.query('CREATE INDEX IF NOT EXISTS er_recent_idx ON episode_registrations(registered_at DESC,id DESC)');
   await db.query('CREATE INDEX IF NOT EXISTS er_episode_recent_idx ON episode_registrations(episode_id,registered_at DESC,id DESC)');
 }
@@ -33,6 +35,7 @@ function filters(q, kind, episodeId) {
     add('er.episode_id=?',episodeId);text('search',['s.full_name','s.email','s.whatsapp_number']);text('college',['s.college']);text('department',['s.department']);
     choice('member','s.is_dos_club_member',['Yes','No']);choice('year',"CASE WHEN s.year_of_study ~ '^[1-6]' THEN substring(s.year_of_study from '^[1-6]') ELSE s.year_of_study END",['1','2','3','4','5','6','Passed Out']);
     choice('zoom',"CASE WHEN j.status='registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status,'not_sent') END",['zoom_managed','pending','rate_limited','failed','not_sent']);
+    choice('whatsapp',`(${statusSql})`,['opted_in','declined','not_recorded','withdrawn']);
     dates("(er.registered_at::timestamptz AT TIME ZONE 'Asia/Kolkata')::date");
   }
   return {values,where:clauses.join(' AND ')};
@@ -63,11 +66,25 @@ function createAdminEventsRouter({pool,authenticateToken}) {
     const ep=await pool.query(`SELECT ${eventFields} FROM episodes e WHERE e.id=$1`,[req.params.episodeId]);if(!ep.rows.length)throw new InputError('Episode not found.',404);
     const count=await pool.query(`SELECT COUNT(*)::integer AS total ${attendeeFrom} WHERE ${where}`,values);
     const rows=await pool.query(`SELECT s.id,s.full_name,s.email,s.whatsapp_number,s.country_code,s.college,s.degree,s.department,s.year_of_study,s.gender,s.is_dos_club_member,s.excited_topic,er.registered_at::timestamptz AS registered_at,er.id AS registration_id,
+      er.whatsapp_opt_in,er.whatsapp_consent_at,er.whatsapp_notice_version,er.whatsapp_notice_text,er.whatsapp_consent_source,
+      er.whatsapp_consent_number,er.whatsapp_withdrawn_at,(${statusSql}) AS whatsapp_status,
       e.zoom_meeting_id IS NOT NULL AND e.event_mode='Online' AS zoom_enabled,
       CASE WHEN j.status='registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status,'not_sent') END AS invitation_status,
       j.meeting_id AS zoom_meeting_id,j.zoom_registered_at,j.next_attempt_at AS zoom_next_attempt_at,CASE WHEN j.status='registered' THEN NULL ELSE j.last_error END AS invitation_error
       ${attendeeFrom} WHERE ${where} ORDER BY ${orders[sort]} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,page_size,(page-1)*page_size]);
     return {episode:ep.rows[0],data:rows.rows,total:count.rows[0].total,page,page_size};
+  }));
+  router.post('/episodes/:episodeId/attendees/:registrationId/whatsapp-withdrawal',route(async req=>{
+    for (const value of [req.params.episodeId,req.params.registrationId])
+      if(!/^[1-9]\d{0,9}$/.test(value)||Number(value)>2147483647)throw new InputError('Invalid registration.',400);
+    if(req.body?.confirmation!=='WITHDRAW WHATSAPP')throw new InputError('Please confirm the WhatsApp withdrawal.',400);
+    // Withdraw-only: administrators cannot grant consent on a participant's behalf.
+    const result=await pool.query(`UPDATE episode_registrations SET whatsapp_withdrawn_at=COALESCE(whatsapp_withdrawn_at,NOW()),
+      whatsapp_withdrawn_by=COALESCE(whatsapp_withdrawn_by,$3),
+      whatsapp_withdrawal_source=COALESCE(whatsapp_withdrawal_source,'admin_recorded_request')
+      WHERE id=$1 AND episode_id=$2 RETURNING id`,[req.params.registrationId,req.params.episodeId,req.user.id]);
+    if(!result.rows.length)throw new InputError('Registration not found.',404);
+    return {message:'WhatsApp updates stopped for this event. Registration and Zoom access are unchanged.'};
   }));
   return router;
 }

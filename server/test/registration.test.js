@@ -51,7 +51,7 @@ const db = {
     if (sql.includes('SELECT id FROM episode_registrations')) return { rows: duplicate ? [{ id: 10 }] : [] };
     if (sql.includes('SELECT id FROM students')) return { rows: firstTimeStudent ? [] : [{ id: 7 }] };
     if (sql.includes('INSERT INTO students')) return { rows: [{ id: 7 }] };
-    if (sql.includes('SELECT email, full_name FROM students')) return { rows: [{ email: 'stored@example.com', full_name: 'Stored Student' }] };
+    if (sql.includes('SELECT email, full_name')) return { rows: [{ email: 'stored@example.com', full_name: 'Stored Student', country_code: '+91', whatsapp_number: '9000000000' }] };
     if (queueFailure && sql.includes('INSERT INTO zoom_registration_jobs')) throw new Error('outbox unavailable');
     return { rows: [] };
   },
@@ -329,4 +329,33 @@ test('registration API accepts until 30 minutes after start and rejects the firs
     assert.ok(!queries.some(q=>q.sql.includes('INSERT INTO episode_registrations')));
     assert.ok(!queries.some(q=>q.sql.includes('INSERT INTO zoom_registration_jobs')));
   } finally {Date.now=originalNow;}
+});
+
+
+test('WhatsApp consent is optional, event-scoped, versioned and stored with the registration transaction',async()=>{
+  const {NOTICE_VERSION,NOTICE_TEXT}=require('../whatsapp-consent');
+  for(const choice of [undefined,false,true]) {
+    const response=await register(choice===undefined?{}:{whatsapp_opt_in:choice,whatsapp_notice_version:NOTICE_VERSION,whatsapp_notice_text:'untrusted text',whatsapp_number:'untrusted phone'});
+    assert.equal(response.status,201);
+    assert.equal((await response.json()).whatsapp_opt_in,choice??null);
+    const insert=queries.find(q=>q.sql.includes('INSERT INTO episode_registrations'));
+    assert.equal(insert.values[2],choice??null);
+    assert.equal(insert.values[3],choice===undefined?null:NOTICE_VERSION);
+    assert.equal(insert.values[4],choice===undefined?null:NOTICE_TEXT);
+    assert.equal(insert.values[5],choice===undefined?null:'+91 9000000000');
+    assert.equal(insert.values[6],choice===undefined?null:'public_registration_form');
+    assert.ok(queries.findIndex(q=>q===insert)<queries.findIndex(q=>q.sql==='COMMIT'));
+    assert.ok(queries.some(q=>q.sql.includes('INSERT INTO zoom_registration_jobs')));
+  }
+});
+test('invalid WhatsApp choices and obsolete notices do not create a registration or Zoom work',async()=>{
+  const {NOTICE_VERSION}=require('../whatsapp-consent');
+  for(const body of [{whatsapp_opt_in:'true',whatsapp_notice_version:NOTICE_VERSION},{whatsapp_opt_in:true},{whatsapp_opt_in:true,whatsapp_notice_version:'old'},{whatsapp_opt_in:null}]) {
+    const response=await register(body);assert.equal(response.status,400);assert.equal(queries.length,0);
+  }
+});
+test('an outbox failure rolls back an affirmative WhatsApp choice too',async()=>{
+  queueFailure=true;
+  try {const response=await register({whatsapp_opt_in:true,whatsapp_notice_version:require('../whatsapp-consent').NOTICE_VERSION});assert.equal(response.status,500);assert.ok(queries.some(q=>q.sql.includes('INSERT INTO episode_registrations')&&q.values[2]===true));assert.ok(queries.some(q=>q.sql==='ROLLBACK'));assert.ok(!queries.some(q=>q.sql==='COMMIT'));}
+  finally {queueFailure=false;}
 });

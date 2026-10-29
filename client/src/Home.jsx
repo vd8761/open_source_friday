@@ -1,3 +1,4 @@
+import SiteFooter from './components/SiteFooter';
 import { isEpisodeConcluded, isRegistrationOpen, formatEpisodeDate } from './utils/episodeTime';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -180,12 +181,7 @@ const Home = () => {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 py-10 text-center border-t border-slate-800">
-        <p className="text-slate-400 text-sm font-medium">
-          &copy; {new Date().getFullYear()} Descience Open Source Club. All rights reserved.
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 };

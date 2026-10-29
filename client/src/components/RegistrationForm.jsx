@@ -4,6 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, User, CheckCircle2, ChevronRight, ArrowLeft, Video, MapPin, AlertCircle, Mail, Phone, Search } from 'lucide-react';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import 'react-quill-new/dist/quill.snow.css';
+import SiteFooter from './SiteFooter';
+import WhatsAppConsent, { WHATSAPP_NOTICE_VERSION } from './WhatsAppConsent';
 import { countries } from '../utils/countries';
 
 const RegistrationForm = () => {
@@ -16,6 +18,8 @@ const RegistrationForm = () => {
   const [error, setError] = useState('');
 
   const [step, setStep] = useState(1);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
+  const [savedWhatsappChoice, setSavedWhatsappChoice] = useState(null);
   const [identifier, setIdentifier] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
@@ -101,6 +105,7 @@ const RegistrationForm = () => {
     if (!identifier) return;
     setIsSubmitting(true);
     setLookupError('');
+    setWhatsappOptIn(false);
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -222,12 +227,15 @@ const RegistrationForm = () => {
           student_id: studentData.id,
           recaptcha_token: recaptchaToken,
           country_code: countryCode,
-          ...studentData
+          ...studentData,
+          whatsapp_opt_in: whatsappOptIn,
+          whatsapp_notice_version: WHATSAPP_NOTICE_VERSION
         })
       });
       const data = await res.json();
 
       if (data.success) {
+        setSavedWhatsappChoice(typeof data.whatsapp_opt_in === 'boolean' ? data.whatsapp_opt_in : null);
         setZoomPending(data.zoom_status === 'pending');
         setStep(3);
       } else {
@@ -621,6 +629,7 @@ const RegistrationForm = () => {
                 </div>
                 <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Welcome back, {studentData.full_name}!</h3>
                 <p className="text-slate-500 mb-8 max-w-md mx-auto">We found your profile. Please confirm your registration for this upcoming episode.</p>
+                <WhatsAppConsent number={studentData.whatsapp_number ? `${studentData.country_code || countryCode} ${studentData.whatsapp_number}` : ''} checked={whatsappOptIn} onChange={setWhatsappOptIn} disabled={isSubmitting}/>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button
                     onClick={() => setStep(1)}
@@ -732,6 +741,7 @@ const RegistrationForm = () => {
                   </div>
 
 
+                  <WhatsAppConsent number={studentData.whatsapp_number ? `${studentData.country_code || countryCode} ${studentData.whatsapp_number}` : ''} checked={whatsappOptIn} onChange={setWhatsappOptIn} disabled={isSubmitting}/>
                   <div className="pt-4 flex flex-col sm:flex-row gap-4">
                     <button
                       type="button"
@@ -768,6 +778,7 @@ const RegistrationForm = () => {
                 <p className="text-slate-600 text-lg mb-8 max-w-sm mx-auto">
                   Thank you for registering for Episode {episodeDetails.episode_number}. {zoomPending ? 'Your Zoom registration is being processed. Zoom will email your personal meeting link once confirmed.' : 'We look forward to seeing you there!'}
                 </p>
+                <p className="mb-5 text-sm text-slate-500">{savedWhatsappChoice === null ? 'Your WhatsApp preference could not be confirmed. Please contact the event team at' : `WhatsApp event updates: ${savedWhatsappChoice ? 'opted in' : 'not opted in'}. You can request a change at`} <a href="mailto:info@descienceosclub.com" className="text-dos underline">info@descienceosclub.com</a>.</p>
                 <button
                   onClick={() => navigate('/')}
                   className="inline-flex items-center justify-center py-3 px-8 border border-transparent rounded-xl shadow-sm text-base font-bold text-white bg-dos hover:bg-dos-dark transition-all"
@@ -781,12 +792,7 @@ const RegistrationForm = () => {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto py-8 text-center">
-        <p className="text-slate-400 text-sm font-medium">
-          &copy; {new Date().getFullYear()} Descience Open Source Club. All rights reserved.
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 };

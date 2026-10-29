@@ -17,6 +17,8 @@ test('sample Trash preserves related history and profiles and restores without r
       INSERT INTO episode_registrations VALUES(101,16,1),(102,18,1);
       INSERT INTO zoom_registration_jobs VALUES(101,'registered','https://zoom.example/private');`);
     await initOutreachDB(db); await initEpisodeTrash(db); await initEpisodeTrash(db);
+    await require('../whatsapp-consent').initWhatsAppConsent(db);
+    await db.exec("UPDATE episode_registrations SET whatsapp_opt_in=TRUE,whatsapp_notice_version='event-whatsapp-2026-10-29',whatsapp_consent_number='+91 9000000000' WHERE id=101");
     await db.exec('UPDATE episodes SET is_test=TRUE WHERE id IN (16,17)');
     const campaign='11111111-1111-4111-8111-111111111111', batch='22222222-2222-4222-8222-222222222222';
     await db.query(`INSERT INTO invite_campaigns(id,episode_id,subject,body,batch_size,interval_minutes,status) VALUES($1,16,'Support','Body',1,15,'running')`,[campaign]);
@@ -67,6 +69,8 @@ test('sample Trash preserves related history and profiles and restores without r
     const restore=()=>request(`/episode-trash/${moved.body.trash_id}/restore`,'POST');
     assert.equal((await restore()).status,409);
     await db.exec('DELETE FROM episodes WHERE id=19');assert.equal((await restore()).status,200);
+    const restoredConsent=(await db.query('SELECT * FROM episode_registrations WHERE id=101')).rows[0];
+    assert.equal(restoredConsent.whatsapp_opt_in,true);assert.ok(restoredConsent.whatsapp_withdrawn_at);assert.equal(restoredConsent.whatsapp_withdrawal_source,'trash_restore_suppression');
     const restored=(await db.query('SELECT * FROM episodes WHERE id=16')).rows[0];
     assert.equal(restored.is_test,true);assert.equal(restored.is_active,false);assert.equal(restored.is_registration_open,false);
     assert.equal((await db.query('SELECT * FROM invite_campaigns')).rows[0].status,'paused');
