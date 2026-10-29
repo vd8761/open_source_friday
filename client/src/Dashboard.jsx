@@ -3,6 +3,7 @@ import { formatEpisodeDate } from './utils/episodeTime';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RegistrationTable from './RegistrationTable';
+import SampleEpisodeTrash from './components/SampleEpisodeTrash';
 import { Calendar, Users, RefreshCw, ChevronRight, CheckCircle2, Trophy, LogOut, ArrowLeft, Bell, Send } from 'lucide-react';
 
 export default function Dashboard() {
@@ -427,6 +428,7 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {viewMode === 'summary' && <SampleEpisodeTrash episodes={data} onChanged={fetchEpisodes} />}
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Card 1 */}

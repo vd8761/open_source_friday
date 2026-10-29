@@ -85,7 +85,7 @@ Keep the episode number permanent after registrations or invitation campaigns ex
 
 For cancellation, disable application registration and pause invitations. Coordinate the Zoom cancellation and attendee communication separately. Deleting an application registration does not cancel its Zoom enrollment or revoke a join link.
 
-**Samples:** Episodes 16 and 17 are owner-designated samples scheduled for removal, not live-event blockers. Retain the Sender case evidence before cleanup. The technical owner must handle related registrations, jobs, invitation and attendance records safely; there is no application episode archive or delete workflow. Leave Sender case drafts intact while support investigates.
+**Samples:** Episodes 16 and 17 are owner-designated samples scheduled for removal, not live-event blockers. Retain the Sender case evidence before cleanup. Use Dashboard, Manage sample episodes and Trash, review each silent sample and type its confirmation before Move sample to Trash. Related application records are stored in a restricted restore snapshot and its episode number becomes available again. Student profiles and external Zoom/Sender records remain. Restore is available in Trashed sample episodes before its number is reused; restored samples stay inactive and campaigns stay paused. Leave the external Sender case drafts intact while support investigates.
 
 <!-- page -->
 
