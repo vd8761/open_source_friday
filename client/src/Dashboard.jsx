@@ -1,9 +1,9 @@
 import { rosterCsv } from './utils/rosterCsv';
-import { formatEpisodeDate } from './utils/episodeTime';
+import { formatEpisodeDate, eventPolicy } from './utils/episodeTime';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RegistrationTable from './RegistrationTable';
-import SampleEpisodeTrash from './components/SampleEpisodeTrash';
+import EventActions from './components/EventActions';
 import { Calendar, Users, RefreshCw, ChevronRight, CheckCircle2, Trophy, LogOut, ArrowLeft, Bell, Send } from 'lucide-react';
 
 export default function Dashboard() {
@@ -318,6 +318,7 @@ export default function Dashboard() {
     navigate('/login');
   };
 
+  const visibleData = data.filter(e => !e.archived_at);
   const totalRegistrations = data.reduce((acc, ep) => acc + parseInt(ep.registration_count || 0, 10), 0);
   const totalEpisodesCreated = data.length;
   const progressPercentage = (currentWeek / TOTAL_WEEKS) * 100;
@@ -357,15 +358,17 @@ export default function Dashboard() {
               <div className="relative">
                 <button
                   onClick={() => setProfileOpen(!profileOpen)}
-                  className="h-9 w-9 bg-dos-light/20 text-dos hover:bg-dos hover:text-white rounded-full flex items-center justify-center transition-all focus:ring-2 focus:ring-dos focus:outline-none font-bold text-sm shadow-sm"
-                  title="Profile"
+                  className="h-9 px-3 bg-dos-light/20 text-dos hover:bg-dos hover:text-white rounded-full flex items-center justify-center transition-all focus:ring-2 focus:ring-dos focus:outline-none font-bold text-sm shadow-sm"
+                  title="Admin menu" aria-expanded={profileOpen}
                 >
-                  A
+                  Menu
                 </button>
 
                 {profileOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50">
                     <div className="p-2 flex flex-col gap-1">
+                      <button onClick={()=>{setProfileOpen(false);navigate('/admin/archived-events');}} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Archived events</button>
+                      <button onClick={()=>{setProfileOpen(false);navigate('/admin/trash');}} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Trash</button>
                       <button
                         onClick={() => {
                           setProfileOpen(false);
@@ -428,7 +431,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {viewMode === 'summary' && <SampleEpisodeTrash episodes={data} onChanged={fetchEpisodes} />}
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Card 1 */}
@@ -575,7 +577,7 @@ export default function Dashboard() {
                 All Events Summary
               </h3>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-dos-light/20 text-dos">
-                {data.length} Events
+                {visibleData.length} Events
               </span>
             </div>
 
@@ -585,9 +587,9 @@ export default function Dashboard() {
                   <RefreshCw className="h-10 w-10 text-dos animate-spin mb-4" />
                   <p className="text-slate-500 font-medium">Loading events...</p>
                 </div>
-              ) : data.length === 0 ? (
+              ) : visibleData.length === 0 ? (
                 <div className="flex flex-col justify-center items-center py-20 opacity-50">
-                  <p className="text-slate-500 font-medium">No episodes created yet.</p>
+                  <p className="text-slate-500 font-medium">No active-list events. Check Menu → Archived events for saved history.</p>
                 </div>
               ) : (
                 <table className="min-w-full divide-y divide-slate-200">
@@ -603,7 +605,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
-                    {data.map((episode) => (
+                    {visibleData.map((episode) => (
                       <tr key={episode.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-sm font-bold bg-slate-100 text-slate-800">
@@ -614,7 +616,8 @@ export default function Dashboard() {
                           <div className="text-sm font-bold text-slate-900 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg line-clamp-2" title={episode.title}>
                             {episode.title}
                           </div>
-                          {episode.is_silent && <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">Silent • no push notifications</span>}
+                          {episode.is_test && <span className="text-xs font-semibold text-rose-700">Test event</span>}
+                            {episode.is_silent && <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">Silent • no push notifications</span>}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-slate-900">
@@ -659,6 +662,7 @@ export default function Dashboard() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-3">
+                            <EventActions episode={episode} onChanged={async message=>{showToast(message);await fetchEpisodes();}} />
                             <button
                               onClick={() => navigate(`/admin/episodes/edit/${episode.id}`)}
                               className="text-slate-500 hover:text-slate-700 font-medium inline-flex items-center gap-1 transition-colors bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg"
@@ -723,7 +727,7 @@ export default function Dashboard() {
               ) : (
                 <RegistrationTable
                   data={registrations}
-                  onDeleteRegistration={handleDeleteRegistration}
+                  onDeleteRegistration={eventPolicy(data.find(e=>e.id===activeEpisodeId) || {}).can_delete ? handleDeleteRegistration : undefined}
                   onSendZoomInvitation={handleSendZoomInvitation}
                 />
               )}

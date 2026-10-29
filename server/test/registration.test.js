@@ -23,7 +23,7 @@ const pushNotifications = [];
 async function poolQuery(sql, values) {
   queries.push({ sql, values });
   if (sql.includes('SELECT status, meeting_id')) return { rows: [{ status: zoomJobStatus, meeting_id: '12345678901', invitation_status: zoomJobStatus === 'registered' ? 'zoom_managed' : invitationStatus }] };
-  if (sql.includes('INSERT INTO episodes')) return { rows: [{ id: 16, episode_number: values[0], title: values[1], is_silent: values[14] }] };
+  if (sql.includes('INSERT INTO episodes')) return { rows: [{ id: 16, episode_number: values[0], title: values[1], is_silent: values[14], is_test: values[15] }] };
   if (sql.includes('SELECT * FROM episodes WHERE is_active')) return { rows: reminderRows };
   if (sql.includes('SELECT * FROM push_subscriptions')) return { rows: [{ endpoint: 'test-endpoint', p256dh: 'key', auth: 'auth' }] };
   if (sql.includes('UPDATE episodes SET reminder_sent') || sql.includes('UPDATE episodes SET starting_now_sent')) {
@@ -241,7 +241,7 @@ test('authenticated capability check lets the frontend fail safely against older
   const path = `${base}/api/admin/episode-capabilities`;
   assert.equal((await nativeFetch(path)).status, 401);
   const response = await nativeFetch(path, { headers: adminHeaders() });
-  assert.deepEqual(await response.json(), { success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60 });
+  assert.deepEqual(await response.json(), { success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60, test_events: true });
 });
 
 test('startup clears legacy SMTP failures for successful Zoom registrations without sending anything', async () => {
@@ -293,4 +293,23 @@ test('rescheduling revalidates the existing Zoom meeting and pauses running invi
   const pause = queries.findIndex(q => q.sql.includes('Episode schedule changed'));
   assert.ok(pause > 0 && pause < queries.findIndex(q => q.sql === 'COMMIT'));
   assert.match(queries.find(q => q.sql.includes('SET episode_number =')).sql, /starting_now_sent = CASE WHEN/);
+});
+
+
+test('test status is explicit at creation and cannot be used to relabel a real event', async () => {
+  const created=await nativeFetch(`${base}/api/episodes`,{method:'POST',headers:adminHeaders(),body:JSON.stringify({...episodeBody,is_silent:true,is_test:true})});
+  assert.equal(created.status,201);assert.equal((await created.json()).episode.is_test,true);
+  const changed=await nativeFetch(`${base}/api/episodes/1`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({...episodeBody,is_test:true})});
+  assert.equal(changed.status,409);assert.match((await changed.json()).error,/fixed when/);
+});
+test('past real events cannot be rescheduled or have registration history deleted', async () => {
+  registrationDate='2020-01-01';
+  try {
+    const edited=await nativeFetch(`${base}/api/episodes/1`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({...episodeBody,event_date:'2099-01-01'})});
+    assert.equal(edited.status,409);
+    queries.length=0;
+    const removed=await nativeFetch(`${base}/api/admin/episodes/1/registrations/7`,{method:'DELETE',headers:adminHeaders()});
+    assert.equal(removed.status,409);
+    assert.ok(!queries.some(q=>q.sql.includes('DELETE FROM episode_registrations')));
+  } finally {registrationDate='2026-12-01';}
 });
