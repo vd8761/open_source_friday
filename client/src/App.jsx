@@ -5,6 +5,7 @@ import Home from './Home';
 import Dashboard from './Dashboard';
 import OutreachTool from './components/OutreachTool';
 import AttendanceTool from './components/AttendanceTool';
+import EventHistoryPage from './components/EventHistoryPage';
 import Login from './Login';
 import PwaInstallPrompt from './PwaInstallPrompt';
 import RegistrationForm from './components/RegistrationForm';
@@ -42,6 +43,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           {/* Admin Routes */}
+          <Route path="/admin/trash" element={<ProtectedRoute><EventHistoryPage mode="trash" /></ProtectedRoute>} />
+          <Route path="/admin/archived-events" element={<ProtectedRoute><EventHistoryPage mode="archive" /></ProtectedRoute>} />
           <Route path="/admin/invitations" element={<ProtectedRoute><OutreachTool /></ProtectedRoute>} />
           <Route path="/admin/episodes/:id/attendance" element={<ProtectedRoute><AttendanceTool /></ProtectedRoute>} />
           <Route 

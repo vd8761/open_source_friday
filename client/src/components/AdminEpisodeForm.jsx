@@ -41,6 +41,7 @@ const AdminEpisodeForm = () => {
     event_mode: 'Online',
     zoom_meeting_id: '',
     is_silent: false,
+    is_test: false,
     is_registration_open: true
   });
   const [eventDate, setEventDate] = useState(null);
@@ -79,6 +80,7 @@ const AdminEpisodeForm = () => {
               event_mode: ep.event_mode || 'Online',
               zoom_meeting_id: ep.zoom_meeting_id || '',
               is_silent: ep.is_silent === true,
+              is_test: ep.is_test === true,
               is_registration_open: ep.is_registration_open !== undefined ? ep.is_registration_open : true
             });
             if (ep.event_date) setEventDate(calendarInputDate(ep.event_date));
@@ -211,7 +213,7 @@ const AdminEpisodeForm = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         const capabilities = capabilityResponse.ok ? await capabilityResponse.json() : null;
-        if (capabilities?.schedule_validation !== true || (formData.is_silent && capabilities?.silent_mode !== true)) {
+        if (capabilities?.schedule_validation !== true || (formData.is_silent && capabilities?.silent_mode !== true) || (formData.is_test && capabilities?.test_events !== true)) {
           setMessage('The server needs the latest episode scheduling update. Ask the technical team to deploy the backend before saving this episode.');
           setIsSubmitting(false);
           return;
@@ -527,6 +529,13 @@ const AdminEpisodeForm = () => {
 
             {currentStep === 4 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="mb-4 rounded-xl border border-slate-200 p-4">
+                  <label className="flex items-center gap-3 font-bold text-sm text-slate-700">
+                    <input type="checkbox" name="is_test" checked={formData.is_test} disabled={Boolean(id)} onChange={handleChange} />
+                    Test event (disposable sample)
+                  </label>
+                  <p className="mt-2 text-xs text-slate-500">Choose only for testing. Test events can be trashed after they end. This choice is fixed at creation; Silent mode controls notifications separately.</p>
+                </div>
                 <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <label className="flex items-center gap-3 font-bold text-sm text-slate-700">
                     <input type="checkbox" name="is_silent" checked={formData.is_silent} onChange={handleChange}

@@ -14,6 +14,7 @@ const { createZoomClient, meetingId, ZoomError } = require('./zoom');
 const { enqueueZoomRegistrations, processZoomJobs } = require('./zoom-jobs');
 const { createSenderClient } = require('./sender');
 const { initOutreachDB } = require('./outreach-schema');
+const { eventPolicy } = require('./event-policy');
 const { initEpisodeTrash, createEpisodeTrashRouter } = require('./episode-trash');
 const { processInviteBatch } = require('./invite-service');
 const { createOutreachRouter } = require('./outreach-routes');
@@ -376,13 +377,14 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Prevent a newer frontend from silently creating a noisy episode on an older backend.
 app.get('/api/admin/episode-capabilities', authenticateToken, (req, res) => {
-  res.json({ success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60 });
+  res.json({ success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60, test_events: true });
 });
 
 // Admin: Create Episode — sends "New Episode" push notification
 app.post('/api/episodes', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent, is_test } = req.body;
   try {
+    if (is_test !== undefined && typeof is_test !== 'boolean') return res.status(400).json({success:false,error:'Test event must be true or false.'});
     if (is_silent !== undefined && typeof is_silent !== 'boolean') {
       return res.status(400).json({ success: false, error: 'Silent mode must be true or false.' });
     }
@@ -392,11 +394,11 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
     if (zoomId) await zoom.validateMeeting(zoomId, { event_date, event_time });
     const query = `
       INSERT INTO episodes 
-      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      (episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent, is_test)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
-    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, zoomId, is_silent === true];
+    const values = [episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode || 'Online', is_registration_open !== undefined ? is_registration_open : true, zoomId, is_silent === true, is_test === true];
     const result = await pool.query(query, values);
     const episode = result.rows[0];
 
@@ -425,7 +427,7 @@ app.post('/api/episodes', authenticateToken, async (req, res) => {
 
 // Admin: Update Episode
 app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
-  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent } = req.body;
+  const { episode_number, title, description, meta_description, event_date, event_time, presenter_name, presenter_designation, presenter_photo_url, cover_photo_url, past_cover_photo_url, event_mode, is_registration_open, zoom_meeting_id, is_silent, is_test } = req.body;
   const { id } = req.params;
   if (is_silent !== undefined && typeof is_silent !== 'boolean') {
     return res.status(400).json({ success: false, error: 'Silent mode must be true or false.' });
@@ -436,8 +438,11 @@ app.put('/api/episodes/:id', authenticateToken, async (req, res) => {
     const existing = await db.query('SELECT * FROM episodes WHERE id = $1 FOR UPDATE', [id]);
     if (!existing.rows.length) { await db.query('ROLLBACK'); return res.status(404).json({ success: false, error: 'Episode not found' }); }
     const old = existing.rows[0];
+    if (old.archived_at) throw new ZoomError('Archived events cannot be edited. Their registration records are retained.',409);
+    if (is_test !== undefined && is_test !== (old.is_test === true)) throw new ZoomError('Test status is fixed when an event is created. A real event cannot be relabeled as a disposable test.',409);
     if (!validSchedule({ event_date, event_time })) throw new ZoomError('Use a valid event date and a same-day time range with end time after start time (IST).', 400);
     const scheduleChanged = episodeStart(old) !== episodeStart({ event_date, event_time }) || String(old.event_time) !== String(event_time);
+    if (scheduleChanged && !old.is_test && (episodeStart(old) === null || episodeStart(old) <= Date.now())) throw new ZoomError('A real event that has started cannot be rescheduled as an upcoming event. Archive it and create a new event.',409);
     if (scheduleChanged && (await db.query('SELECT episode_id FROM attendance_syncs WHERE episode_id = $1', [id])).rows.length) {
       throw new ZoomError('This episode already has attendance records. Create a new episode instead of changing its schedule.', 409);
     }
@@ -486,7 +491,7 @@ app.put('/api/episodes/:id/toggle-registration', authenticateToken, async (req, 
     const query = `
       UPDATE episodes 
       SET is_registration_open = $1 
-      WHERE id = $2 
+      WHERE id = $2 AND archived_at IS NULL
       RETURNING *
     `;
     const result = await pool.query(query, [is_registration_open, id]);
@@ -747,17 +752,18 @@ app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitat
 });
 
 app.delete('/api/admin/episodes/:episode_id/registrations/:student_id', authenticateToken, async (req, res) => {
+  const db=await pool.connect();
   try {
-    const query = `DELETE FROM episode_registrations WHERE episode_id = $1 AND student_id = $2 RETURNING *`;
-    const result = await pool.query(query, [req.params.episode_id, req.params.student_id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Registration not found' });
-    }
-    res.json({ success: true, message: 'Registration deleted successfully' });
-  } catch (error) {
-    console.error('Delete registration error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
+    await db.query('BEGIN');
+    const ep=(await db.query('SELECT * FROM episodes WHERE id=$1 FOR UPDATE',[req.params.episode_id])).rows[0];
+    if (!ep) throw new ZoomError('Episode not found.',404);
+    if (!eventPolicy(ep).can_delete) throw new ZoomError('Registration records for past, started or archived real events are retained.',409);
+    const result=await db.query('DELETE FROM episode_registrations WHERE episode_id=$1 AND student_id=$2 RETURNING id',[req.params.episode_id,req.params.student_id]);
+    if (!result.rows.length) throw new ZoomError('Registration not found.',404);
+    await db.query('COMMIT');res.json({success:true,message:'Registration deleted successfully'});
+  } catch(error) {
+    await db.query('ROLLBACK');res.status(error instanceof ZoomError?error.status:500).json({success:false,error:error instanceof ZoomError?error.message:'Unable to remove registration.'});
+  } finally {db.release();}
 });
 
 // ─── Admin: Subscriber count (for dashboard insight) ─────────────────────────
