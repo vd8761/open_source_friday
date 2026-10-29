@@ -3,7 +3,7 @@ import { formatIST } from './utils/dateTime';
 import InfoTooltip from './components/InfoTooltip';
 import { Mail, GraduationCap, BookOpen, Phone, Search, UserX, Trash2 } from 'lucide-react';
 
-export default function RegistrationTable({ data, onDeleteRegistration, onSendZoomInvitation, startIndex=0 }) {
+export default function RegistrationTable({ data, onDeleteRegistration, onSendZoomInvitation, onWithdrawWhatsApp, startIndex=0 }) {
   const [sendingStudentId, setSendingStudentId] = useState(null);
   const sendInvitation = async (studentId) => {
     setSendingStudentId(studentId);
@@ -79,6 +79,16 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     </div>
                     <div className="text-xs text-slate-500 mt-1 uppercase tracking-wide">
                       {row.gender}
+                    </div>
+                    <div className="mt-2 text-xs normal-case whitespace-normal">
+                      <span className={row.whatsapp_status==='opted_in'?'font-semibold text-emerald-700':'text-slate-500'}>WhatsApp: {({opted_in:'Event updates opted in',declined:'Declined',withdrawn:'Withdrawn'}[row.whatsapp_status]||'Not recorded')}</span>
+                      <InfoTooltip label={`WhatsApp preference for ${row.full_name}`}>
+                        <p>This permission covers this event only. A saved phone number alone is not consent. The public form does not verify phone ownership.</p>
+                        {row.whatsapp_consent_at&&<p className="mt-2">Choice recorded: {formatIST(row.whatsapp_consent_at)} · {row.whatsapp_notice_version}</p>}
+                        {row.whatsapp_consent_number&&<p className="mt-2">Applies to: {row.whatsapp_consent_number}</p>}
+                        {row.whatsapp_withdrawn_at&&<p className="mt-2">Withdrawn: {formatIST(row.whatsapp_withdrawn_at)}</p>}
+                      </InfoTooltip>
+                      {onWithdrawWhatsApp&&row.whatsapp_status!=='withdrawn'&&<button type="button" onClick={()=>onWithdrawWhatsApp(row)} className="mt-2 block text-xs text-slate-600 underline underline-offset-2">Record WhatsApp withdrawal</button>}
                     </div>
                   </td>
 

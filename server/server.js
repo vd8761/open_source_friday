@@ -16,6 +16,8 @@ const { createSenderClient } = require('./sender');
 const { initOutreachDB } = require('./outreach-schema');
 const { eventPolicy } = require('./event-policy');
 const { initAdminEvents, createAdminEventsRouter } = require('./admin-events');
+const { InputError } = require('./outreach-csv');
+const { registrationConsent, NOTICE_VERSION, NOTICE_TEXT } = require('./whatsapp-consent');
 const { initEpisodeTrash, createEpisodeTrashRouter } = require('./episode-trash');
 const { processInviteBatch } = require('./invite-service');
 const { createOutreachRouter } = require('./outreach-routes');
@@ -606,6 +608,7 @@ app.post('/api/register', async (req, res) => {
   let db;
   let committed = false;
   try {
+    const whatsappChoice = registrationConsent(req.body);
     const isTokenValid = await verifyRecaptchaToken(recaptcha_token);
     if (!isTokenValid) {
       return res.status(400).json({ success: false, error: 'Security check failed. Please refresh and try again.' });
@@ -654,23 +657,31 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'You are already registered for this episode.' });
     }
 
-    await db.query('INSERT INTO episode_registrations (student_id, episode_id) VALUES ($1, $2)', [currentStudentId, episode_id]);
-    const savedStudent = await db.query('SELECT email, full_name FROM students WHERE id = $1', [currentStudentId]);
+    const savedStudent = await db.query('SELECT email, full_name, country_code, whatsapp_number FROM students WHERE id = $1', [currentStudentId]);
     if (!savedStudent.rows.length) throw new Error('Student not found');
+    const student = savedStudent.rows[0];
+    const consentNumber = student.whatsapp_number ? `${student.country_code || '+91'} ${student.whatsapp_number}` : null;
+    if (whatsappChoice === true && !consentNumber) throw new InputError('Please contact the event team to update your WhatsApp number before opting in.', 400);
+    await db.query(`INSERT INTO episode_registrations (student_id, episode_id, whatsapp_opt_in, whatsapp_consent_at,
+      whatsapp_notice_version, whatsapp_notice_text, whatsapp_consent_number, whatsapp_consent_source)
+      VALUES ($1,$2,$3,CASE WHEN $3::boolean IS NULL THEN NULL ELSE NOW() END,$4,$5,$6,$7)`,
+      [currentStudentId, episode_id, whatsappChoice, whatsappChoice === null ? null : NOTICE_VERSION,
+       whatsappChoice === null ? null : NOTICE_TEXT, whatsappChoice === null ? null : consentNumber,
+       whatsappChoice === null ? null : 'public_registration_form']);
     await enqueueZoomRegistrations(db, episode_id);
     await db.query('COMMIT');
     committed = true;
     // Zoom enrollment starts only after the application registration has committed.
     const episode = epCheck.rows[0];
     void runZoomWorker();
-    res.status(201).json({ success: true, message: 'Registration successful', zoom_status: episode.zoom_meeting_id ? 'pending' : 'not_required' });
+    res.status(201).json({ success: true, message: 'Registration successful', whatsapp_opt_in: whatsappChoice, zoom_status: episode.zoom_meeting_id ? 'pending' : 'not_required' });
   } catch (error) {
     if (db && !committed) await db.query('ROLLBACK');
     console.error('Registration error:', error);
     if (error.code === '23505') {
       return res.status(400).json({ success: false, error: 'You are already registered for this episode' });
     }
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(error instanceof InputError ? error.status : 500).json({ success: false, error: error instanceof InputError ? error.message : 'Internal server error' });
   } finally { if (db) db.release(); }
 });
 

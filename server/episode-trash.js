@@ -66,6 +66,9 @@ async function restoreFromTrash(db, trashId, adminId) {
   // Restoring records must never restart an invitation campaign or send notifications.
   const legacyTest = (row.episode_number === 16 && row.title === 'Zoom Self-Registration Link') || (row.episode_number === 17 && row.title === 'Sender API invitation test (silent)');
   snapshot.episodes[0] = { ...snapshot.episodes[0], is_test: snapshot.episodes[0].is_test ?? legacyTest, is_active: false, is_registration_open: false, is_silent: true };
+  // A restored snapshot must not revive permission after an off-platform withdrawal.
+  snapshot.episode_registrations = snapshot.episode_registrations.map(r => r.whatsapp_opt_in === true
+    ? { ...r, whatsapp_withdrawn_at: r.whatsapp_withdrawn_at || new Date().toISOString(), whatsapp_withdrawal_source: r.whatsapp_withdrawal_source || 'trash_restore_suppression' } : r);
   snapshot.invite_campaigns = snapshot.invite_campaigns.map(c => c.status === 'running' ? { ...c, status: 'paused' } : c);
   snapshot.attendance_tasks = snapshot.attendance_tasks.map(t => ({ ...t, status: 'paused' }));
   for (const [table] of tables) if (snapshot[table].length)

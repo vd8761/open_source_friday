@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import Home from './Home';
+import PolicyPage from './components/PolicyPage';
+import { policyLinks } from './utils/policyLinks';
 import Dashboard from './Dashboard';
 import OutreachTool from './components/OutreachTool';
 import AttendanceTool from './components/AttendanceTool';
@@ -50,6 +52,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<Home />} />
+          {policyLinks.map(([url])=><Route key={url} path={url} element={<PolicyPage slug={url.slice(1)}/>}/>)}
           <Route path="/register/:episode_number" element={<GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}><RegistrationForm /></GoogleReCaptchaProvider>} />
           <Route path="/login" element={<Login />} />
           
