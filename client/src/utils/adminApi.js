@@ -16,7 +16,9 @@ export async function adminApi(path, options = {}) {
     window.location.assign("/login");
     throw new Error("Please sign in again.");
   }
-  const result = await response.json();
+  const result = await response.json().catch(() => {
+    throw new Error("The server is temporarily unavailable. Please refresh in a moment.");
+  });
   if (!response.ok || !result.success)
     throw new Error(result.error || "Unable to complete this operation.");
   return result;

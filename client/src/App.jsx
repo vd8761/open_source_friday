@@ -40,13 +40,12 @@ function App() {
   }, []);
 
   return (
-    <GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}>
       <Router>
         <PwaInstallPrompt />
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<Home />} />
-          <Route path="/register/:episode_number" element={<RegistrationForm />} />
+          <Route path="/register/:episode_number" element={<GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}><RegistrationForm /></GoogleReCaptchaProvider>} />
           <Route path="/login" element={<Login />} />
           
           {/* Admin Routes */}
@@ -85,7 +84,6 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
-    </GoogleReCaptchaProvider>
   );
 }
 

@@ -312,9 +312,9 @@ export default function Dashboard() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total registrations</p><p className="mt-1 text-2xl font-bold">{loading?'—':totalRegistrations}</p><p className="mt-1 text-xs text-slate-400">Across all events, including past</p></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total registrations</p><p className="mt-1 text-2xl font-bold">{loading||loadError?'—':totalRegistrations}</p><p className="mt-1 text-xs text-slate-400">Across all events, including past</p></div>
           <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Program progress</p><p className="mt-1 text-2xl font-bold">Week {currentWeek} / {TOTAL_WEEKS}</p><div className="mt-3 h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-dos" style={{width:`${progressPercentage}%`}}/></div></div>
-          <div className="rounded-xl bg-dos p-4 text-white"><p className="text-xs font-semibold uppercase tracking-wide opacity-80">Total episodes created</p><p className="mt-1 text-2xl font-bold">{loading?'—':totalEpisodesCreated}</p><p className="mt-1 text-xs opacity-80">Includes completed and archived events</p></div>
+          <div className="rounded-xl bg-dos p-4 text-white"><p className="text-xs font-semibold uppercase tracking-wide opacity-80">Total episodes created</p><p className="mt-1 text-2xl font-bold">{loading||loadError?'—':totalEpisodesCreated}</p><p className="mt-1 text-xs opacity-80">Includes completed and archived events</p></div>
         </div>
 
         {viewMode === 'push' ? (
