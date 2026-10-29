@@ -1,3 +1,4 @@
+const {pageOptions}=require('./table-query');
 const { createHash } = require("node:crypto");
 const { readCsv, InputError, normalizeEmail } = require("./outreach-csv");
 const { episodeDate } = require("./episode-time");
@@ -226,7 +227,15 @@ async function saveAttendance(
     ],
   );
 }
-async function attendanceReport(db, episodeId) {
+async function attendanceReport(db, episodeId, options) {
+  let paging,search='',college='';
+  if(options){
+    paging=pageOptions(options);
+    for(const key of ['search','college'])if(options[key]&&(typeof options[key]!=='string'||options[key].length>150))throw new InputError('Please use a search up to 150 characters.',400);
+    search=String(options.search||'').trim().toLowerCase();college=String(options.college||'').trim().toLowerCase();
+    if(options.status&&!['present','partial','absent','not_synced'].includes(options.status))throw new InputError('Invalid attendance status.',400);
+    if(options.joined&&!['yes','no'].includes(options.joined))throw new InputError('Invalid joined filter.',400);
+  }
   const sync =
     (
       await db.query("SELECT * FROM attendance_syncs WHERE episode_id=$1", [
@@ -241,16 +250,16 @@ async function attendanceReport(db, episodeId) {
   ).rows;
   const registrations = (
     await db.query(
-      `SELECT er.id AS registration_id,s.full_name,s.email,o.status AS override_status,o.note AS override_note
+      `SELECT er.id AS registration_id,s.full_name,s.email,s.college,er.registered_at::timestamptz AS registered_at,o.status AS override_status,o.note AS override_note
     FROM episode_registrations er JOIN students s ON s.id=er.student_id LEFT JOIN attendance_overrides o ON o.registration_id=er.id
-    WHERE er.episode_id=$1 ORDER BY s.full_name,er.id`,
+    WHERE er.episode_id=$1 ORDER BY er.registered_at DESC,er.id DESC`,
       [episodeId],
     )
   ).rows;
+  const sessionsByRegistration=new Map();
+  for(const participant of participants){const key=participant.registration_id;if(!sessionsByRegistration.has(key))sessionsByRegistration.set(key,[]);sessionsByRegistration.get(key).push(participant);}
   const data = registrations.map((row) => {
-    const sessions = participants.filter(
-      (p) => p.registration_id === row.registration_id,
-    );
+    const sessions=sessionsByRegistration.get(row.registration_id)||[];
     const seconds = combinedSeconds(sessions);
     return {
       ...row,
@@ -270,6 +279,8 @@ async function attendanceReport(db, episodeId) {
       duration_estimated: sessions.some((s) => !s.join_time || !s.leave_time),
     };
   });
+  const counts=data.reduce((acc,row)=>({...acc,[row.status]:(acc[row.status]||0)+1}),{});
+  const filtered=paging?data.filter(row=>(!search||`${row.full_name} ${row.email} ${row.college||''}`.toLowerCase().includes(search))&&(!college||String(row.college||'').toLowerCase().includes(college))&&(!options.status||row.status===options.status)&&(!options.joined||(row.joined?'yes':'no')===options.joined)):data;
   return {
     sync,
     automatic_sync:
@@ -278,7 +289,8 @@ async function attendanceReport(db, episodeId) {
           episodeId,
         ])
       ).rows[0] || null,
-    data,
+    data:paging?filtered.slice((paging.page-1)*paging.page_size,paging.page*paging.page_size):data,
+    ...(paging?{total:filtered.length,...paging,counts,registration_options:participants.some(p=>!p.registration_id)?registrations.map(r=>({registration_id:r.registration_id,full_name:r.full_name,email:r.email})):[]}:{}),
     unmatched: participants.filter((p) => !p.registration_id),
     audit: (
       await db.query(

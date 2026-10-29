@@ -1,492 +1,71 @@
-import React, { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import {
-  adminApi,
-  downloadAdminCsv,
-  fieldClass,
-  buttonClass,
-} from "../utils/adminApi";
-export default function AttendanceTool() {
-  const { id } = useParams();
-  const [episode, setEpisode] = useState(null),
-    [report, setReport] = useState(null),
-    [threshold, setThreshold] = useState(30),
-    [instance, setInstance] = useState("");
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [message, setMessage] = useState(""),
-    [csv, setCsv] = useState(""),
-    [complete, setComplete] = useState(false);
-  const [matches, setMatches] = useState({}),
-    [correction, setCorrection] = useState({
-      registration_id: "",
-      status: "present",
-      note: "",
-    });
-  const [filter, setFilter] = useState("all");
-  const endpoint = `/episodes/${id}/attendance`;
-  async function refresh() {
-    const r = await adminApi(endpoint);
-    setReport(r);
-    if (r.sync) {
-      setThreshold(r.sync.threshold_minutes);
-      setInstance(r.sync.meeting_uuid);
-    }
-  }
-  async function action(work) {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      await work();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  useEffect(() => {
-    let live = true;
-    Promise.all([
-      adminApi(`/episodes/${id}`),
-      adminApi(`/episodes/${id}/attendance`),
-    ])
-      .then(([e, r]) => {
-        if (live) {
-          setEpisode(e.episode);
-          setReport(r);
-          if (r.sync) {
-            setThreshold(r.sync.threshold_minutes);
-            setInstance(r.sync.meeting_uuid);
-          }
-        }
-      })
-      .catch((err) => {
-        if (live) setError(err.message);
-      });
-    return () => {
-      live = false;
-    };
-  }, [id]);
-  const rows = (report?.data || []).filter(
-    (r) => filter === "all" || r.status === filter,
-  );
-  const counts = (report?.data || []).reduce(
-    (acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }),
-    {},
-  );
-  return (
-    <main className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6 text-slate-800">
-      <Link to="/dashboard" className="text-dos font-semibold">
-        ← Dashboard
-      </Link>
-      <div>
-        <h1 className="text-3xl font-extrabold">
-          Episode {episode?.episode_number || ""} attendance
-        </h1>
-        <p className="mt-2 text-slate-500">{episode?.title}</p>
-      </div>
-      {error && (
-        <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">
-          {error}
-        </div>
-      )}
-      {message && (
-        <div
-          role="status"
-          className="rounded-xl bg-emerald-50 p-4 text-emerald-800"
-        >
-          {message}
-        </div>
-      )}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
-        <h2 className="text-xl font-bold">Import attendance from Zoom</h2>
-        <p className="text-sm text-slate-500">
-          Present means at least {threshold} minutes. Partial means the student
-          joined for less time. Unmatched guests require review. Missing
-          students remain “Not synced” until a complete report is available.
-        </p>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <label className="text-sm font-semibold">
-            Minimum minutes for Present
-            <input
-              type="number"
-              min="1"
-              max="1440"
-              className={fieldClass}
-              value={threshold}
-              onChange={(e) => setThreshold(e.target.value)}
-            />
-          </label>
-          <label className="text-sm font-semibold">
-            Meeting instance UUID / CSV session reference
-            <input
-              className={fieldClass}
-              value={instance}
-              onChange={(e) => setInstance(e.target.value)}
-              placeholder="Optional for first Zoom sync; required for CSV"
-              disabled={Boolean(report?.sync)}
-            />
-          </label>
-        </div>
-        <div className="flex gap-3 flex-wrap">
-          <button
-            className={buttonClass}
-            disabled={busy || !episode?.zoom_meeting_id}
-            onClick={() =>
-              action(async () => {
-                const result = await adminApi(`${endpoint}/sync`, {
-                  method: "POST",
-                  body: {
-                    threshold_minutes: Number(threshold),
-                    meeting_uuid: instance || undefined,
-                  },
-                });
-                setReport(result);
-                setInstance(result.sync.meeting_uuid);
-                setMessage(result.message);
-              })
-            }
-          >
-            Sync from Zoom
-          </button>
-          <button
-            className={buttonClass}
-            disabled={busy}
-            onClick={() => action(refresh)}
-          >
-            Refresh
-          </button>
-          <button
-            className={buttonClass}
-            disabled={busy || !report?.data.length}
-            onClick={() =>
-              action(() =>
-                downloadAdminCsv(`${endpoint}/export`, "attendance_report.csv"),
-              )
-            }
-          >
-            Export attendance CSV
-          </button>
-        </div>
-        <p className="text-xs text-slate-500">
-          Reports require Zoom reporting permissions and an eligible paid Zoom
-          account. They may take time to process after the meeting ends. Joined
-          time is evidence of connection, not attention or identity
-          verification.
-        </p>
-        <details>
-          <summary className="font-semibold cursor-pointer text-sm">
-            Import a Zoom participant CSV instead
-          </summary>
-          <div className="space-y-3 mt-3">
-            <p className="text-xs text-slate-500">
-              Columns: Email or User Email, Name, Duration (Minutes). Optional:
-              Registrant ID, Join Time, Leave Time. Times must be ISO with
-              timezone; omit time columns if the export uses a local display
-              format. Repeated imports replace the same session snapshot.
-              Without time intervals, overlapping device sessions cannot be
-              detected.
-            </p>
-            <input
-              aria-label="Zoom participant CSV"
-              className={fieldClass}
-              type="file"
-              accept=".csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  if (file.size > 5 * 1024 * 1024) {
-                    setError("Choose a CSV up to 5 MB.");
-                    return;
-                  }
-                  action(async () => setCsv(await file.text()));
-                }
-              }}
-            />
-            <label className="flex gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={complete}
-                onChange={(e) => setComplete(e.target.checked)}
-              />
-              This is the complete report for this episode/session; unmatched
-              registrations may be marked absent.
-            </label>
-            <button
-              className={buttonClass}
-              disabled={busy || !csv || !instance.trim()}
-              onClick={() =>
-                action(async () => {
-                  const result = await adminApi(`${endpoint}/import`, {
-                    method: "POST",
-                    body: {
-                      csv,
-                      meeting_uuid: instance,
-                      threshold_minutes: Number(threshold),
-                      report_complete: complete,
-                    },
-                  });
-                  setReport(result);
-                  setMessage(result.message);
-                })
-              }
-            >
-              Import participant report
-            </button>
-          </div>
-        </details>
-        {report?.automatic_sync?.last_error && (
-          <p className="text-sm text-amber-700">
-            Automatic sync: {report.automatic_sync.last_error} Next attempt:{" "}
-            {new Date(report.automatic_sync.next_attempt_at).toLocaleString()}
-          </p>
-        )}
-        {report?.sync && (
-          <p className="text-xs text-slate-500">
-            Last sync: {new Date(report.sync.synced_at).toLocaleString()} ·{" "}
-            {report.sync.source} ·{" "}
-            {report.sync.report_complete
-              ? "Complete report"
-              : "Incomplete report"}{" "}
-            · Session {report.sync.meeting_uuid}
-          </p>
-        )}
-      </section>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          ["present", "Present"],
-          ["partial", "Partial"],
-          ["absent", "Absent"],
-          ["not_synced", "Not synced"],
-        ].map(([key, label]) => (
-          <div
-            key={key}
-            className="rounded-xl border border-slate-200 bg-white p-4"
-          >
-            <p className="text-sm text-slate-500">{label}</p>
-            <p className="text-2xl font-bold">{counts[key] || 0}</p>
-          </div>
-        ))}
-      </div>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
-        <div className="flex justify-between gap-4">
-          <h2 className="text-xl font-bold">Registered students</h2>
-          <label className="text-sm">
-            Show
-            <select
-              className={fieldClass}
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            >
-              {["all", "present", "partial", "absent", "not_synced"].map(
-                (k) => (
-                  <option key={k} value={k}>
-                    {k.replace("_", " ")}
-                  </option>
-                ),
-              )}
-            </select>
-          </label>
-        </div>
-        <div className="overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr>
-                {[
-                  "Student",
-                  "Joined",
-                  "Attendance",
-                  "Minutes",
-                  "Sessions",
-                  "Action",
-                ].map((h) => (
-                  <th key={h} className="p-3 bg-slate-50">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={row.registration_id}
-                  className="border-t border-slate-100"
-                >
-                  <td className="p-3">
-                    {row.full_name}
-                    <br />
-                    {row.email}
-                  </td>
-                  <td className="p-3">{row.joined ? "Yes" : "No evidence"}</td>
-                  <td className="p-3 capitalize">
-                    {row.status.replace("_", " ")}
-                    {row.override_status && (
-                      <p className="text-xs text-slate-500">
-                        Admin correction: {row.override_note}
-                      </p>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {row.minutes}
-                    {row.duration_estimated && (
-                      <p className="text-xs text-amber-700">
-                        Estimated; no full intervals
-                      </p>
-                    )}
-                  </td>
-                  <td className="p-3">{row.sessions}</td>
-                  <td className="p-3">
-                    <button
-                      className="text-dos underline"
-                      onClick={() =>
-                        setCorrection({
-                          registration_id: String(row.registration_id),
-                          status:
-                            row.status === "not_synced"
-                              ? "present"
-                              : row.status,
-                          note: "",
-                        })
-                      }
-                    >
-                      Correct
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!rows.length && (
-          <p className="text-slate-500">No matching registrations.</p>
-        )}
-        {correction.registration_id && (
-          <div className="rounded-xl bg-slate-50 p-4 space-y-3">
-            <h3 className="font-bold">
-              Correct attendance for{" "}
-              {
-                report?.data.find(
-                  (r) =>
-                    String(r.registration_id) === correction.registration_id,
-                )?.full_name
-              }
-            </h3>
-            <select
-              aria-label="Attendance correction status"
-              className={fieldClass}
-              value={correction.status}
-              onChange={(e) =>
-                setCorrection({ ...correction, status: e.target.value })
-              }
-            >
-              {["present", "partial", "absent", "clear"].map((s) => (
-                <option key={s} value={s}>
-                  {s === "clear" ? "Clear correction and use Zoom evidence" : s}
-                </option>
-              ))}
-            </select>
-            <input
-              aria-label="Reason for attendance correction"
-              placeholder="Reason for correction"
-              className={fieldClass}
-              value={correction.note}
-              maxLength={1000}
-              onChange={(e) =>
-                setCorrection({ ...correction, note: e.target.value })
-              }
-            />
-            <button
-              className={buttonClass}
-              disabled={busy || correction.note.trim().length < 3}
-              onClick={() =>
-                action(async () => {
-                  const result = await adminApi(`${endpoint}/override`, {
-                    method: "POST",
-                    body: correction,
-                  });
-                  setMessage(result.message);
-                  setCorrection({ ...correction, registration_id: "" });
-                  await refresh();
-                })
-              }
-            >
-              Save correction
-            </button>
-          </div>
-        )}
-      </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
-        <h2 className="text-xl font-bold">
-          Participants needing review ({report?.unmatched.length || 0})
-        </h2>
-        <p className="text-sm text-slate-500">
-          Names are not automatically matched. Select the registered student
-          only after checking their identity.
-        </p>
-        {report?.unmatched.map((p) => (
-          <div
-            className="border-t border-slate-100 pt-3 grid sm:grid-cols-3 gap-3 text-sm"
-            key={p.id}
-          >
-            <div>
-              {p.name || "Unnamed participant"}
-              <br />
-              {p.email || "No email returned"} ·{" "}
-              {Math.round(p.duration_seconds / 60)} minutes
-            </div>
-            <select
-              aria-label={`Match ${p.name || "unnamed participant"}`}
-              className={fieldClass}
-              value={matches[p.id] || ""}
-              onChange={(e) =>
-                setMatches({ ...matches, [p.id]: e.target.value })
-              }
-            >
-              <option value="">Choose registration</option>
-              {report.data.map((r) => (
-                <option key={r.registration_id} value={r.registration_id}>
-                  {r.full_name} · {r.email}
-                </option>
-              ))}
-            </select>
-            <button
-              className={buttonClass}
-              disabled={busy || !matches[p.id]}
-              onClick={() =>
-                action(async () => {
-                  const result = await adminApi(`${endpoint}/match`, {
-                    method: "POST",
-                    body: {
-                      participant_id: p.id,
-                      registration_id: matches[p.id],
-                    },
-                  });
-                  setMessage(result.message);
-                  await refresh();
-                })
-              }
-            >
-              Match participant
-            </button>
-          </div>
-        ))}
-      </section>
-      <details className="rounded-xl border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer font-semibold">
-          Attendance audit history
-        </summary>
-        {report?.audit.map((a) => (
-          <p key={a.id} className="text-xs text-slate-500 mt-2">
-            {new Date(a.created_at).toLocaleString()} · {a.action} · {a.detail}
-          </p>
-        ))}
-      </details>
-      {busy && (
-        <p role="status" className="text-sm text-slate-500">
-          Working…
-        </p>
-      )}
-    </main>
-  );
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { adminApi, downloadAdminCsv, fieldClass, buttonClass } from '../utils/adminApi';
+import { useAdminPage } from '../utils/useAdminPage';
+import { formatIST } from '../utils/dateTime';
+import { TableFilters, TablePager } from './AdminDataTable';
+import ConfirmDialog from './ConfirmDialog';
+const defaults={};
+const fields=[{key:'search',label:'Search attendees',placeholder:'Name, email or college'},{key:'college',label:'College',placeholder:'College contains…'},
+  {key:'status',label:'Attendance status',options:[['','All statuses'],['present','Present'],['partial','Partial'],['absent','Absent'],['not_synced','Not synced']]},
+  {key:'joined',label:'Joined meeting',options:[['','All registrations'],['yes','Join evidence found'],['no','No join evidence']]}];
+export default function AttendanceTool(){
+  const {id}=useParams(),endpoint=`/episodes/${id}/attendance`;
+  const [episode,setEpisode]=useState(null),[filters,setFilters]=useState(defaults);
+  const table=useAdminPage(endpoint,filters),report=table.result;
+  const [threshold,setThreshold]=useState(30),[instance,setInstance]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[csv,setCsv]=useState(''),[complete,setComplete]=useState(false);
+  const [matches,setMatches]=useState({}),[correction,setCorrection]=useState(null),[confirmation,setConfirmation]=useState(null);
+  const initialized=useRef(false);
+  useEffect(()=>{const controller=new AbortController();adminApi(`/episodes/${id}`,{signal:controller.signal}).then(r=>setEpisode(r.episode)).catch(e=>{if(!controller.signal.aborted)setError(e.message);});return()=>controller.abort();},[id]);
+  useEffect(()=>{if(!initialized.current&&report.sync){initialized.current=true;setThreshold(report.sync.threshold_minutes);setInstance(report.sync.meeting_uuid);}},[report.sync]);
+  async function action(work){setBusy(true);setError('');setMessage('');try{await work();}catch(e){setError(e.message);}finally{setBusy(false);}}
+  function confirm(kind){setError('');setConfirmation(kind);}
+  async function apply(){await action(async()=>{
+    let result;
+    if(confirmation.kind==='sync')result=await adminApi(`${endpoint}/sync`,{method:'POST',body:{threshold_minutes:Number(threshold),meeting_uuid:instance||undefined}});
+    if(confirmation.kind==='import')result=await adminApi(`${endpoint}/import`,{method:'POST',body:{csv,meeting_uuid:instance,threshold_minutes:Number(threshold),report_complete:complete}});
+    if(confirmation.kind==='correct')result=await adminApi(`${endpoint}/override`,{method:'POST',body:{registration_id:correction.registration_id,status:correction.status,note:correction.note}});
+    if(confirmation.kind==='match')result=await adminApi(`${endpoint}/match`,{method:'POST',body:{participant_id:confirmation.participant.id,registration_id:matches[confirmation.participant.id]}});
+    if(result.sync){setThreshold(result.sync.threshold_minutes);setInstance(result.sync.meeting_uuid);}
+    if(confirmation.kind==='correct')setCorrection(null);
+    setMessage(result.message);setConfirmation(null);table.refresh();
+  });}
+  const counts=report.counts||{},options=report.registration_options||[];
+  const disabled=busy||table.loading;
+  return <main className="mx-auto max-w-7xl space-y-6 p-4 text-slate-800 sm:p-8">
+    <div className="flex flex-wrap gap-4 text-sm"><Link to="/dashboard" className="font-semibold text-dos">← Dashboard</Link><Link to={`/admin/episodes/${id}/attendees`} className="text-dos underline">Attendees</Link></div>
+    <div><h1 className="text-2xl font-bold">Episode {episode?.episode_number||''} · Meeting attendance</h1><p className="mt-2 text-sm text-slate-500">{episode?.title}</p></div>
+    {(error||table.error)&&<p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-800">{error||table.error} <button onClick={table.refresh} className="underline">Refresh attendance</button></p>}{message&&<p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{message}</p>}
+    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+      <h2 className="text-lg font-bold">Import attendance from Zoom</h2><p className="text-sm text-slate-500">Present means at least {threshold} minutes. Partial means less time. Missing students remain “Not synced” until a complete report is available. Unmatched guests require review.</p>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">Minimum minutes for Present<input className={fieldClass} type="number" min="1" max="1440" value={threshold} onChange={e=>setThreshold(e.target.value)}/></label><label className="text-sm font-semibold">Meeting instance UUID / CSV session reference<input className={fieldClass} value={instance} disabled={Boolean(report.sync)} onChange={e=>setInstance(e.target.value)} placeholder="Optional for first Zoom sync; required for CSV"/></label></div>
+      <div className="flex flex-wrap gap-3"><button disabled={disabled||!episode?.zoom_meeting_id} className={buttonClass} onClick={()=>confirm({kind:'sync'})}>Sync from Zoom</button><button disabled={disabled} className={buttonClass} onClick={table.refresh}>Refresh</button><button disabled={disabled||!Object.values(counts).some(Boolean)} className={buttonClass} onClick={()=>action(()=>downloadAdminCsv(`${endpoint}/export`,`episode-${episode.episode_number}-attendance.csv`))}>Export full attendance CSV</button></div>
+      <p className="text-xs text-slate-500">Zoom reports may take time to process after a meeting ends and require reporting permissions and an eligible paid Zoom account. Joined time is evidence of connection, not attention or identity verification.</p>
+      <details><summary className="cursor-pointer text-sm font-semibold">Import a Zoom participant CSV instead</summary><div className="mt-3 space-y-3"><p className="text-xs text-slate-500">Columns: Email or User Email, Name, Duration (Minutes). Optional: Registrant ID, Join Time, Leave Time. Times must be ISO with a timezone; omit ambiguous local time columns. Repeated imports replace the same session snapshot. Without intervals, overlapping device sessions cannot be detected.</p>
+      <input aria-label="Zoom participant CSV" type="file" accept=".csv" className={fieldClass} onChange={e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>5*1024*1024){setError('Please choose a CSV up to 5 MB.');return;}action(async()=>setCsv(await file.text()));}}/>
+      <label className="flex gap-2 text-sm"><input type="checkbox" checked={complete} onChange={e=>setComplete(e.target.checked)}/>This is the complete report; unmatched registrations may be marked absent.</label><button disabled={disabled||!csv||!instance.trim()} className={buttonClass} onClick={()=>confirm({kind:'import'})}>Import participant report</button></div></details>
+      {report.automatic_sync?.last_error&&<p className="text-sm text-amber-700">Automatic sync: {report.automatic_sync.last_error} · Next attempt: {formatIST(report.automatic_sync.next_attempt_at)}</p>}
+      {report.sync&&<p className="text-xs text-slate-500">Last sync: {formatIST(report.sync.synced_at)} · {report.sync.source} · {report.sync.report_complete?'Complete report':'Incomplete report'} · Session {report.sync.meeting_uuid}</p>}
+    </section>
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">{[['present','Present'],['partial','Partial'],['absent','Absent'],['not_synced','Not synced']].map(([key,label])=><div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-sm text-slate-500">{label}</p><p className="text-2xl font-bold">{!report.counts&&table.loading?'—':counts[key]||0}</p></div>)}</div>
+    <section className="space-y-4"><div><h2 className="text-lg font-bold">Registered attendees</h2><p className="mt-1 text-sm text-slate-500">Newest registrations first. Summary counts above include all attendees.</p></div>
+      <TableFilters fields={fields} defaults={defaults} onApply={f=>{table.setPage(1);setFilters(f);}}/>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-busy={table.loading}><div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Meeting attendance for registered attendees</caption><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>{['S.No.','Attendee','Joined','Attendance','Minutes','Sessions','Action'].map(h=><th scope="col" key={h} className="p-4">{h}</th>)}</tr></thead><tbody>
+      {!table.loading&&!table.error&&report.data.map((row,index)=><tr key={row.registration_id} className="border-t border-slate-100"><td className="p-4 text-slate-500">{(table.page-1)*table.pageSize+index+1}</td><td className="p-4"><p className="font-semibold">{row.full_name}</p><p className="text-xs text-slate-500">{row.email}</p><p className="mt-1 text-xs text-slate-400">{row.college}</p></td><td className="p-4">{row.joined?'Yes':'No evidence'}</td><td className="p-4 capitalize">{row.status.replace('_',' ')}{row.override_status&&<p className="mt-1 text-xs text-slate-500">Admin correction: {row.override_note}</p>}</td><td className="p-4">{row.minutes}{row.duration_estimated&&<p className="text-xs text-amber-700">Estimated; no full intervals</p>}</td><td className="p-4">{row.sessions}</td><td className="p-4"><button className="text-dos underline" disabled={disabled} onClick={()=>{setError('');setCorrection({registration_id:String(row.registration_id),name:row.full_name,status:row.status==='not_synced'?'present':row.status,note:''});}}>Correct</button></td></tr>)}
+      {(table.loading||table.error||!report.data.length)&&<tr><td colSpan="7" className="p-10 text-center text-slate-500">{table.loading?'Loading attendance…':table.error?'Attendance could not be loaded.':'No attendees match these filters.'}</td></tr>}
+      </tbody></table></div><TablePager table={table}/></div>
+      {correction&&<div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"><h3 className="font-semibold">Correct attendance for {correction.name}</h3><select aria-label="Attendance correction status" className={fieldClass} value={correction.status} onChange={e=>setCorrection({...correction,status:e.target.value})}>{['present','partial','absent','clear'].map(s=><option key={s} value={s}>{s==='clear'?'Clear correction and use Zoom evidence':s}</option>)}</select><input aria-label="Reason for attendance correction" className={fieldClass} value={correction.note} maxLength={1000} placeholder="Please explain this correction" onChange={e=>setCorrection({...correction,note:e.target.value})}/><div className="flex gap-3"><button className={buttonClass} disabled={disabled||correction.note.trim().length<3} onClick={()=>confirm({kind:'correct'})}>Save correction</button><button className="text-sm underline" disabled={busy} onClick={()=>setCorrection(null)}>Cancel</button></div></div>}
+    </section>
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5"><h2 className="text-lg font-bold">Participants needing review ({report.unmatched?.length||0})</h2><p className="text-sm text-slate-500">Names are not automatically matched. Please verify identity before choosing a registered attendee.</p>
+      {report.unmatched?.map(p=><div key={p.id} className="grid gap-3 border-t border-slate-100 pt-3 text-sm sm:grid-cols-3"><div>{p.name||'Unnamed participant'}<p className="text-xs text-slate-500">{p.email||'No email returned'} · {Math.round(p.duration_seconds/60)} minutes</p></div><select aria-label={`Match ${p.name||'unnamed participant'}`} className={fieldClass} value={matches[p.id]||''} onChange={e=>setMatches({...matches,[p.id]:e.target.value})}><option value="">Choose registration</option>{options.map(r=><option key={r.registration_id} value={r.registration_id}>{r.full_name} · {r.email}</option>)}</select><button className={buttonClass} disabled={disabled||!matches[p.id]} onClick={()=>confirm({kind:'match',participant:p})}>Match participant</button></div>)}
+    </section>
+    <details className="rounded-xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer font-semibold">Attendance audit history</summary>{report.audit?.map(a=><p key={a.id} className="mt-2 text-xs text-slate-500">{formatIST(a.created_at)} · {a.action} · {a.detail}</p>)}</details>
+    {confirmation&&<ConfirmDialog title={{sync:'Refresh attendance from Zoom?',import:'Import this attendance report?',correct:'Save attendance correction?',match:'Match this participant?'}[confirmation.kind]} confirmLabel={{sync:'Sync attendance',import:'Import report',correct:'Save correction',match:'Confirm match'}[confirmation.kind]} busy={busy} error={error} onCancel={()=>setConfirmation(null)} onConfirm={apply}>
+      {confirmation.kind==='sync'&&<p>Would you like to refresh the attendance evidence from Zoom? Saved manual corrections will remain in place.</p>}
+      {confirmation.kind==='import'&&<><p>Please confirm that this CSV belongs to the correct episode and meeting session. It will replace the current session snapshot.</p>{complete&&<p className="font-semibold text-amber-700">You marked this report complete. Registrations without matching join evidence may be marked absent.</p>}</>}
+      {confirmation.kind==='correct'&&<p>Please review the change for <strong>{correction?.name}</strong>: <strong>{correction?.status==='clear'?'use Zoom evidence':correction?.status}</strong>. Your reason will be saved in the audit history.</p>}
+      {confirmation.kind==='match'&&<p>Please confirm that <strong>{confirmation.participant.name||'this participant'}</strong> is <strong>{options.find(r=>String(r.registration_id)===String(matches[confirmation.participant.id]))?.full_name}</strong>. This changes the attendee’s recorded join evidence.</p>}
+    </ConfirmDialog>}
+    {busy&&<p role="status" className="text-sm text-slate-500">Please wait…</p>}
+  </main>;
 }

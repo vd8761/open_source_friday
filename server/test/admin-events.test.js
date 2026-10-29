@@ -1,3 +1,5 @@
+const {initOutreachDB}=require('../outreach-schema');
+const {createOutreachRouter}=require('../outreach-routes');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const express=require('express');
@@ -21,7 +23,9 @@ test('admin event tables page and filter on the server and keep dashboard recent
   INSERT INTO episode_registrations SELECT i,1,i,'2020-01-01T20:00:00Z'::timestamptz+i*INTERVAL '1 minute' FROM generate_series(1,65) i;
   INSERT INTO zoom_registration_jobs(registration_id,status,invitation_status) VALUES(1,'registered','failed'),(2,'pending','failed');`);
   await initAdminEvents(db);await initAdminEvents(db);
+  await db.exec('CREATE TABLE admins(id INTEGER PRIMARY KEY)');await initOutreachDB(db);
   const app=express();app.set('json replacer',episodeJsonReplacer);app.use('/api/admin',createAdminEventsRouter({pool:db,authenticateToken:(req,res,next)=>req.headers.authorization==='Bearer test'?next():res.status(401).json({success:false})}));
+  app.use('/api/admin',createOutreachRouter({pool:{connect:async()=>({query:(...args)=>db.query(...args),release(){}})},sender:{},zoom:{},authenticateToken:(req,res,next)=>req.headers.authorization==='Bearer test'?next():res.status(401).json({success:false})}));
   server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base=`http://127.0.0.1:${server.address().port}/api/admin`;
   async function get(path,auth=true){const r=await fetch(base+path,{headers:auth?{Authorization:'Bearer test'}:{}});return {status:r.status,body:await r.json()};}
   assert.equal((await get('/dashboard-overview',false)).status,401);
@@ -40,6 +44,13 @@ test('admin event tables page and filter on the server and keep dashboard recent
   for(const time of ['7:00 PM - 8:00 PM','07:00 PM – 08:00 PM','19:00 - 20:00','11:00 PM - 11:59 PM','12:00 AM - 12:30 AM','invalid','7:00 PM - 8:00 PM - 9:00 PM']){
    const r=await db.query(`SELECT ${eventEndSql} AS ends FROM (SELECT '2026-10-29'::timestamp AS event_date,$1::text AS event_time) e`,[time]);const ends=r.rows[0].ends;assert.equal(ends?new Date(ends).getTime():null,episodeEnd({event_date:'2026-10-29',event_time:time}),time);
   }
+  let attendance=await get('/episodes/1/attendance?page=1&page_size=10');assert.equal(attendance.status,200);assert.equal(attendance.body.total,65);assert.equal(attendance.body.data.length,10);assert.equal(attendance.body.data[0].registration_id,65);assert.equal(attendance.body.counts.not_synced,65);assert.ok(attendance.body.data.every(r=>r.status==='not_synced'));
+  await db.exec("INSERT INTO attendance_syncs(episode_id,meeting_uuid,source,report_complete) VALUES(1,'test-session','zoom_api',FALSE); INSERT INTO attendance_participants(id,episode_id,registration_id,duration_seconds) VALUES('present',1,65,2000),('partial',1,64,1200),('unmatched',1,NULL,300)");
+  attendance=await get('/episodes/1/attendance?page=2&page_size=10');assert.equal(attendance.body.data[0].registration_id,55);assert.equal(attendance.body.counts.present,1);assert.equal(attendance.body.counts.partial,1);assert.equal(attendance.body.counts.not_synced,63);assert.equal(attendance.body.unmatched.length,1);assert.equal(attendance.body.registration_options.length,65);
+  const partial=(await get('/episodes/1/attendance?page=1&search=Attendee%2064&college=Alpha&status=partial&joined=yes')).body;assert.equal(partial.total,1);assert.equal(partial.data[0].registration_id,64);assert.equal(partial.counts.not_synced,63);
+  await db.exec('UPDATE attendance_syncs SET report_complete=TRUE');
+  const absent=(await get('/episodes/1/attendance?page=1&status=absent&joined=no')).body;assert.equal(absent.total,63);assert.equal(absent.counts.absent,63);assert.equal(absent.data.length,10);
+  for(const path of ['/episodes/1/attendance?page=0','/episodes/1/attendance?page_size=51','/episodes/1/attendance?page=1&status=unknown','/episodes/1/attendance?page=1&joined=maybe'])assert.equal((await get(path)).status,400,path);
   assert.equal((await db.query('SELECT COUNT(*)::integer AS n FROM episode_registrations')).rows[0].n,65);
  }finally{if(server)await new Promise(r=>server.close(r));await db.close();}
 });

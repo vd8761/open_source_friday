@@ -313,7 +313,7 @@ function createOutreachRouter({
     "/episodes/:episodeId/attendance",
     route(async (req, db) => {
       await episode(db, req.params.episodeId);
-      return attendanceReport(db, req.params.episodeId);
+      return attendanceReport(db, req.params.episodeId, Object.keys(req.query).length?req.query:undefined);
     }),
   );
   router.post(

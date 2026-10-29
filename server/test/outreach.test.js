@@ -83,6 +83,7 @@ before(async () => {
     INSERT INTO students VALUES(1,'registered@example.com','Registered Student'),(2,'second@example.com','Second Student');
     INSERT INTO episode_registrations VALUES(1,1,1),(2,1,2);
     INSERT INTO zoom_registration_jobs VALUES(1,'zoom1'),(2,'zoom2');`);
+  await db.exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS college TEXT; ALTER TABLE episode_registrations ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ DEFAULT NOW();");
   await initOutreachDB(db);
   await initOutreachDB(db);
   const app = express();
@@ -385,7 +386,7 @@ test("attendance combines overlapping/rejoined sessions, matches IDs before emai
     complete: true,
   });
   report = await attendanceReport(db, 1);
-  assert.equal(report.data[0].sessions, 2);
+  assert.equal(report.data.find(r=>r.registration_id===1).sessions, 2);
   await assert.rejects(
     saveAttendance(db, {
       episodeId: 1,
