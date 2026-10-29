@@ -33,6 +33,19 @@ for (const timeZone of ["Asia/Kolkata", "UTC", "America/New_York"]) {
         assert.equal(api.nested[0].event_date, '2026-10-29');
         assert.equal(api.nested[0].registered_at, registered.toISOString());
         assert.equal(JSON.stringify({ event_date: databaseTypes.getTypeParser(1082)('2026-10-27') }), '{"event_date":"2026-10-27"}');
+        const {formatIST}=await import('../client/src/utils/dateTime.js');
+        const {PGlite}=require('@electric-sql/pglite');
+        const timestamps=new PGlite();
+        try {
+          await timestamps.exec("SET TIME ZONE 'UTC'; CREATE TABLE legacy_times(signup TIMESTAMP,zoom TIMESTAMPTZ); INSERT INTO legacy_times VALUES('2026-10-29 12:07:29','2026-10-29T12:07:29Z');");
+          const row=(await timestamps.query('SELECT signup::timestamptz AS signup,zoom FROM legacy_times')).rows[0];
+          assert.equal(row.signup.toISOString(),'2026-10-29T12:07:29.000Z');
+          for(const value of [row.signup.toISOString(),row.zoom.toISOString(),'2026-10-29T17:37:29+05:30'])assert.equal(formatIST(value),'29 Oct 2026, 5:37:29 PM IST');
+          assert.equal(formatIST('2026-10-29T18:30:00Z'),'30 Oct 2026, 12:00:00 AM IST');
+          assert.equal(formatIST('2026-10-29T06:30:00Z'),'29 Oct 2026, 12:00:00 PM IST');
+          assert.equal(formatIST('2026-10-29 12:07:29'),'—');
+          assert.equal(formatIST('invalid'),'—');
+        } finally {await timestamps.close();}
         const ui = await import('../client/src/utils/episodeTime.js');
         assert.equal(ui.calendarInputDate('2026-10-27').getDate(), 27);
         assert.equal(ui.formatEpisodeDate('2026-10-27', { day: '2-digit' }), '27');

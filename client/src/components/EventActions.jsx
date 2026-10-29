@@ -1,28 +1,22 @@
 import React, { useState } from 'react';
 import { adminApi } from '../utils/adminApi';
 import { eventPolicy } from '../utils/episodeTime';
-export default function EventActions({ episode, onChanged, buttonClass = "rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold" }) {
+import ConfirmDialog from './ConfirmDialog';
+export default function EventActions({episode,onChanged,buttonClass='rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold'}) {
   const policy=eventPolicy(episode);
   const [dialog,setDialog]=useState(null),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  async function work(fn) {setBusy(true);setError('');try{await fn();}catch(e){setError(e.message);}finally{setBusy(false);}}
-  async function reviewDelete(){await work(async()=>{const p=await adminApi(`/episodes/${episode.id}/trash-preview`);setDialog({type:'delete',preview:p});setConfirmation('');});}
-  const deleting=dialog?.type==='delete';
-  const phrase=`${deleting?'DELETE':'ARCHIVE'} EPISODE ${episode.episode_number}`;
+  async function work(fn){setBusy(true);setError('');try{await fn();}catch(e){setError(e.message);}finally{setBusy(false);}}
+  async function reviewDelete(){await work(async()=>{const preview=await adminApi(`/episodes/${episode.id}/trash-preview`);setDialog({type:'delete',preview});setConfirmation('');});}
+  const deleting=dialog?.type==='delete',phrase=`${deleting?'DELETE':'ARCHIVE'} EPISODE ${episode.episode_number}`;
+  async function confirm(){await work(async()=>{await adminApi(`/episodes/${episode.id}/${deleting?'trash':'archive'}`,{method:'POST',body:deleting?{confirmation:`TRASH EPISODE ${episode.episode_number}`,fingerprint:dialog.preview.fingerprint}:{confirmation}});setDialog(null);await onChanged(deleting?'Event moved to Trash. Restore is available from Menu → Trash.':'Event archived. Registration records are retained.');});}
   return <>
-    {policy.can_delete && <button aria-label={`${policy.is_test?'Trash test':'Delete'} Episode ${episode.episode_number}`} title={policy.is_test?'Trash test event':'Delete event'} className={`${buttonClass} text-rose-700 hover:bg-rose-50`} disabled={busy} onClick={reviewDelete}>{policy.is_test?'Trash test':'Delete'}</button>}
-    {policy.can_archive && <button className={`${buttonClass} text-amber-800 hover:bg-amber-50`} disabled={busy} onClick={()=>{setDialog({type:'archive'});setConfirmation('');setError('');}}>Archive</button>}
-    {dialog && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 text-left whitespace-normal">
-      <div role="dialog" aria-modal="true" aria-label={`${deleting?'Delete':'Archive'} Episode ${episode.episode_number}`} className="w-full max-w-lg rounded-2xl bg-white p-6 space-y-4 shadow-xl">
-        <h3 className="text-lg font-bold">{deleting?'Delete':'Archive'} Episode {episode.episode_number}</h3><p>{episode.title}</p>
-        {deleting ? <><p>This moves the event to the separate Trash menu. The preview includes {dialog.preview.counts.episode_registrations} registrations and {dialog.preview.counts.invite_campaigns} invitation campaigns. Records are retained in a restore snapshot. Its episode number becomes available again.</p><p>Zoom meetings and Sender campaigns are not cancelled. Already sent emails cannot be recalled; coordinate participant communication separately.</p></> : <p>Archive this completed event. Find it in Menu → Past events using the Archive status filter. All registrations and attendance remain available there, and totals are preserved. The episode number stays reserved. This does not delete records or send notifications.</p>}
-        <label className="block text-sm font-semibold">Type {phrase}<input className="mt-2 block w-full rounded-lg border border-slate-300 p-2" value={confirmation} onChange={e=>setConfirmation(e.target.value)} autoComplete="off" /></label>
-        {error && <p role="alert" className="text-rose-700">{error}</p>}
-        <div className="flex gap-3"><button className="rounded-lg bg-dos px-4 py-2 text-white disabled:opacity-40" disabled={busy || confirmation!==phrase} onClick={()=>work(async()=>{
-          await adminApi(`/episodes/${episode.id}/${deleting?'trash':'archive'}`,{method:'POST',body:deleting?{confirmation:`TRASH EPISODE ${episode.episode_number}`,fingerprint:dialog.preview.fingerprint}:{confirmation}});
-          setDialog(null);await onChanged(deleting?'Event moved to Trash. Restore is available from Menu → Trash.':'Event archived. Registration records are retained.');
-        })}>{busy?'Saving…':deleting?'Move to Trash':'Archive event'}</button><button disabled={busy} className="underline" onClick={()=>{setDialog(null);setError('');}}>Cancel</button></div>
-      </div>
-    </div>}
-    {!dialog && error && <span role="alert" className="text-sm text-rose-700">{error}</span>}
+    {policy.can_delete&&<button aria-label={`${policy.is_test?'Trash test':'Delete'} Episode ${episode.episode_number}`} className={`${buttonClass} text-rose-700 hover:bg-rose-50`} disabled={busy} onClick={reviewDelete}>{policy.is_test?'Trash test':'Delete'}</button>}
+    {policy.can_archive&&<button className={`${buttonClass} text-amber-800 hover:bg-amber-50`} disabled={busy} onClick={()=>{setDialog({type:'archive'});setConfirmation('');setError('');}}>Archive</button>}
+    {dialog&&<ConfirmDialog title={`${deleting?'Move':'Archive'} Episode ${episode.episode_number}${deleting?' to Trash':''}?`} confirmLabel={deleting?'Move to Trash':'Archive event'} cancelLabel="Keep event" danger={deleting} busy={busy} disabled={confirmation!==phrase} error={error} onConfirm={confirm} onCancel={()=>{setDialog(null);setError('');}}>
+      <p>Would you like to {deleting?'move':'archive'} <strong>{episode.title}</strong>{deleting?' in Trash':' in Past events'}?</p>
+      {deleting?<><p>Please review the linked records: {dialog.preview.counts.episode_registrations} registrations and {dialog.preview.counts.invite_campaigns} invitation campaigns. A restore snapshot is retained, and the episode number becomes available again.</p><p>Zoom meetings and Sender campaigns are not cancelled, and sent emails cannot be recalled. Please coordinate any participant communication separately.</p></>:<p>All registrations and attendance will remain available in Past events. The episode number stays reserved. No notification will be sent.</p>}
+      <label className="block font-semibold text-slate-700">Please type {phrase} to confirm<input className="mt-2 block w-full rounded-lg border border-slate-300 p-2 font-normal" value={confirmation} onChange={e=>setConfirmation(e.target.value)} autoComplete="off"/></label>
+    </ConfirmDialog>}
+    {!dialog&&error&&<span role="alert" className="text-sm text-rose-700">{error}</span>}
   </>;
 }

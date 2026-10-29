@@ -1,3 +1,5 @@
+import { formatIST } from './utils/dateTime';
+import ConfirmDialog from './components/ConfirmDialog';
 import { useAdminPage } from './utils/useAdminPage';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +33,7 @@ export default function Dashboard() {
   const [pushForm, setPushForm] = useState({ title: '', body: '', url: '' });
   const [sendingPush, setSendingPush] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [registrationChange,setRegistrationChange]=useState(null),[changingRegistration,setChangingRegistration]=useState(false),[registrationError,setRegistrationError]=useState('');
 
   // Toast Notification State
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
@@ -157,37 +160,15 @@ export default function Dashboard() {
     }
   };
 
-  const handleToggleRegistration = async (episodeId, currentStatus) => {
+  const handleToggleRegistration = (episodeId,currentStatus) => {setRegistrationError('');setRegistrationChange({episodeId,currentStatus});};
+  const confirmRegistrationChange = async () => {
+    const {episodeId,currentStatus}=registrationChange;setChangingRegistration(true);setRegistrationError('');
     try {
-      const token = localStorage.getItem('adminToken');
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/episodes/${episodeId}/toggle-registration`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ is_registration_open: !currentStatus })
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        console.error('Server returned error status:', response.status, text);
-        showToast(`Server Error (${response.status}): The backend might need to be restarted.`, 'error');
-        return;
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        upcoming.refresh();
-        showToast(`Registration ${!currentStatus ? 'opened' : 'closed'} successfully`, 'success');
-      } else {
-        showToast(result.error || 'Failed to toggle registration status', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to toggle registration:', error);
-      showToast('An error occurred while updating status.', 'error');
-    }
+      const response=await fetch(`${import.meta.env.VITE_API_URL||'http://localhost:5000'}/api/episodes/${episodeId}/toggle-registration`,{method:'PUT',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('adminToken')}`},body:JSON.stringify({is_registration_open:!currentStatus})});
+      if(response.status===401||response.status===403){localStorage.removeItem('adminToken');navigate('/login');return;}
+      const result=await response.json();if(!response.ok||!result.success)throw new Error(result.error||'Unable to update registrations. Please try again.');
+      upcoming.refresh();setRegistrationChange(null);showToast(`Registration ${currentStatus?'closed':'opened'} successfully.`);
+    } catch(e){setRegistrationError(e.message);}finally{setChangingRegistration(false);}
   };
 
   useEffect(() => {
@@ -382,7 +363,7 @@ export default function Dashboard() {
                     {pushHistory.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                          {new Date(item.sent_at).toLocaleString()}
+                          {formatIST(item.sent_at)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 text-xs font-bold rounded-md ${item.type === 'Manual' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
@@ -414,11 +395,13 @@ export default function Dashboard() {
               <TablePager table={upcoming} compact/>
             </section>
             <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="min-h-[88px] border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Users className="h-5 w-5 text-dos"/>Recently registered</h2><p className="mt-1 text-xs text-slate-500">Latest 5 registrations · all workshops</p></div>
-              {loading?<p className="p-5 text-slate-500">Loading recent attendees…</p>:loadError?<p className="p-5 text-sm text-rose-700">Recent registrations could not be refreshed.</p>:recent.length?<ol className="divide-y divide-slate-100">{recent.map((r,i)=><li key={i} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3"><span aria-label={`Episode ${r.episode_number}`} className="rounded-md bg-dos-light/10 px-1 py-1.5 text-center text-xs font-bold text-dos">#{r.episode_number}</span><div className="min-w-0"><p className="truncate text-sm font-semibold" title={r.full_name}>{r.full_name}</p><p className="mt-0.5 truncate text-xs text-slate-500" title={r.college||'College not provided'}>{r.college||'College not provided'}</p></div></li>)}</ol>:<p className="p-5 text-sm text-slate-500">No registrations yet.</p>}
+              {loading?<p className="p-5 text-slate-500">Loading recent attendees…</p>:loadError?<p className="p-5 text-sm text-rose-700">Recent registrations could not be refreshed.</p>:recent.length?<ol className="divide-y divide-slate-100">{recent.map((r,i)=><li key={i} className="grid grid-cols-[1rem_2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3"><span className="text-xs text-slate-400" aria-label={`Serial number ${i+1}`}>{i+1}</span><span aria-label={`Episode ${r.episode_number}`} className="rounded-md bg-dos-light/10 px-1 py-1.5 text-center text-xs font-bold text-dos">#{r.episode_number}</span><div className="min-w-0"><p className="truncate text-sm font-semibold" title={r.full_name}>{r.full_name}</p><p className="mt-0.5 truncate text-xs text-slate-500" title={r.college||'College not provided'}>{r.college||'College not provided'}</p></div></li>)}</ol>:<p className="p-5 text-sm text-slate-500">No registrations yet.</p>}
             </section>
           </div>
         )}
       </main>
+
+      {registrationChange&&<ConfirmDialog title={`${registrationChange.currentStatus?'Close':'Open'} registrations?`} confirmLabel={registrationChange.currentStatus?'Close registrations':'Open registrations'} cancelLabel="Keep current setting" danger={registrationChange.currentStatus} busy={changingRegistration} error={registrationError} onConfirm={confirmRegistrationChange} onCancel={()=>setRegistrationChange(null)}><p>Would you like to {registrationChange.currentStatus?'pause':'allow'} new registrations for <strong>Episode {upcoming.result.data.find(e=>e.id===registrationChange.episodeId)?.episode_number}</strong>?</p><p>{registrationChange.currentStatus?'Existing registrations will be kept. Please reopen registrations when you are ready to accept more attendees.':'Registration can remain open until 30 minutes after the scheduled start, provided the event is active.'}</p></ConfirmDialog>}
 
       {/* Change Password Modal */}
       {changePasswordModalOpen && (

@@ -1,3 +1,4 @@
+import { formatIST } from '../utils/dateTime';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../utils/adminApi';
@@ -11,6 +12,6 @@ export default function EventHistoryPage() {
     <p>Deleted upcoming events and disposable tests are stored here with related history. Restore before reusing the episode number, or resolve the number conflict first. Restoration leaves the event inactive, registration closed and campaigns paused. Completed restored events appear in Past events.</p>
     {error&&<p role="alert" className="rounded bg-rose-50 p-3 text-rose-800">{error}</p>}{message&&<p role="status" className="rounded bg-emerald-50 p-3 text-emerald-800">{message}</p>}
     {busy&&<p role="status">Loading…</p>}{!busy&&!error&&!rows.length&&<p>Trash is empty.</p>}
-    <div className="space-y-3">{rows.map(e=><article key={e.id} className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-bold">Episode {e.episode_number} · {e.title}</h2><p className="mt-1 text-sm text-slate-500">Moved to Trash {new Date(e.deleted_at).toLocaleString()}</p><button disabled={busy} className="mt-3 text-sm text-dos underline" onClick={()=>work(async()=>{await adminApi(`/episode-trash/${e.id}/restore`,{method:'POST'});await load();setMessage(`Episode ${e.episode_number} restored inactive. No notification or campaign was started.`);})}>Restore Episode {e.episode_number}</button></article>)}</div>
+    <div className="space-y-3">{rows.map(e=><article key={e.id} className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-bold">Episode {e.episode_number} · {e.title}</h2><p className="mt-1 text-sm text-slate-500">Moved to Trash {formatIST(e.deleted_at)}</p><button disabled={busy} className="mt-3 text-sm text-dos underline" onClick={()=>work(async()=>{await adminApi(`/episode-trash/${e.id}/restore`,{method:'POST'});await load();setMessage(`Episode ${e.episode_number} restored inactive. No notification or campaign was started.`);})}>Restore Episode {e.episode_number}</button></article>)}</div>
   </main>;
 }

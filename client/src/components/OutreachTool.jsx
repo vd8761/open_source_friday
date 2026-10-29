@@ -1,3 +1,5 @@
+import ConfirmDialog from './ConfirmDialog';
+import { formatIST } from '../utils/dateTime';
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -7,7 +9,7 @@ import {
   fieldClass,
   buttonClass,
 } from "../utils/adminApi";
-const date = (value) => (value ? new Date(value).toLocaleString() : "—");
+const date = formatIST;
 export default function OutreachTool() {
   const [episodes, setEpisodes] = useState([]),
     [config, setConfig] = useState(null),
@@ -35,6 +37,7 @@ export default function OutreachTool() {
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [campaignConfirmation,setCampaignConfirmation]=useState(null);
   const [reviewedCampaign, setReviewedCampaign] = useState("");
   const needsPilotReview = Boolean(
     detail?.campaign.pause_after_first_batch &&
@@ -509,14 +512,7 @@ export default function OutreachTool() {
                   (needsPilotReview && reviewedCampaign !== selected)
                 }
                 className={buttonClass}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Start this invitation campaign for ${detail.data.length} contacts? Sender will send paced batches.`,
-                    )
-                  )
-                    campaignAction("start");
-                }}
+                onClick={() => setCampaignConfirmation("start")}
               >
                 {detail.campaign.status === "draft"
                   ? "Start sending"
@@ -527,7 +523,7 @@ export default function OutreachTool() {
               <button
                 disabled={busy}
                 className={buttonClass}
-                onClick={() => campaignAction("pause")}
+                onClick={() => setCampaignConfirmation("pause")}
               >
                 Pause
               </button>
@@ -679,6 +675,7 @@ export default function OutreachTool() {
           Working…
         </p>
       )}
+      {campaignConfirmation&&<ConfirmDialog title={campaignConfirmation==='start'?'Send invitation campaign?':'Pause invitation campaign?'} confirmLabel={campaignConfirmation==='start'?'Start sending':'Pause sending'} busy={busy} onCancel={()=>setCampaignConfirmation(null)} onConfirm={()=>{const kind=campaignConfirmation;setCampaignConfirmation(null);campaignAction(kind);}}><p>{campaignConfirmation==='start'?`Please confirm that you would like to send this invitation campaign to ${detail?.data.length||0} contacts. Sender will deliver it in paced batches.`:'Would you like to pause future batches? Invitations already sent cannot be recalled.'}</p></ConfirmDialog>}
     </main>
   );
 }

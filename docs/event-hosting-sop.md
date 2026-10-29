@@ -158,3 +158,12 @@ The dashboard loads a paginated list of upcoming/live workshops and the latest f
 Past events supports search by episode/title/presenter, IST event date range, mode, real/test status, archive status, sorting and 10/25/50 rows per page. Select **Apply filters** to query the server. Select **Reset filters** to start over. Event titles open their public page in a new tab; the grouped Edit button edits an event and Delete moves eligible events to Trash after confirmation.
 
 Choose **Attendees** on an event to see its saved registrations. Search by name/email/phone and filter by college, department, year, membership, registration dates (IST) or Zoom status. Filters and pagination run on the server. **Export matching attendees CSV** fetches all matching records only when requested; it is not limited to the current page. Meeting attendance remains a separate view and does not imply that every registered attendee joined.
+
+
+## Times, attendee status and confirmations
+
+All admin timestamps and attendee CSV signup timestamps display in **12-hour IST**, including AM/PM and the IST label. Zoom enrollment and application signup are separate instants. The Attendees table shows Zoom enrollment time once in the Zoom invitation column; the information icon explains the status and shows the application signup time. A red information icon indicates a returned error. Do not treat successful Zoom enrollment as proof of inbox delivery.
+
+Attendee lists and Meeting attendance default to newest registration first, with serial numbers continuing across pages. Meeting attendance now supports search, college, attendance-status and joined-evidence filters, plus 10/25/50 rows per page. Summary counts always cover the whole episode. “Not synced” remains until a complete report is available. Full attendance CSV exports all registrations.
+
+Sensitive actions use an in-app confirmation: closing/opening registrations, deleting attendee registrations, moving events to Trash, archiving, starting/pausing campaigns, importing/syncing attendance, and saving corrections or participant matches. Please review the named episode/student before confirming. Cancelling keeps the current setting. Event Trash/archive still require the typed episode confirmation.

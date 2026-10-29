@@ -1,4 +1,5 @@
 const express = require('express');
+const {pageOptions}=require('./table-query');
 const { InputError } = require('./outreach-csv');
 // Keep the calendar date for legacy TIMESTAMP columns, and interpret times in IST.
 const eventClockSql = part => {
@@ -10,14 +11,6 @@ const eventFields = 'e.id,e.episode_number,e.title,e.event_date,e.event_time,e.p
 async function initAdminEvents(db) {
   await db.query('CREATE INDEX IF NOT EXISTS er_recent_idx ON episode_registrations(registered_at DESC,id DESC)');
   await db.query('CREATE INDEX IF NOT EXISTS er_episode_recent_idx ON episode_registrations(episode_id,registered_at DESC,id DESC)');
-}
-function pageOptions(q) {
-  const integer = (v, fallback, max) => {
-    if (v === undefined) return fallback;
-    if (!/^\d+$/.test(String(v)) || Number(v)<1 || Number(v)>max) throw new InputError('Invalid page or page size.',400);
-    return Number(v);
-  };
-  return {page:integer(q.page,1,100000),page_size:integer(q.page_size,10,50)};
 }
 function filters(q, kind, episodeId) {
   const values=[], clauses=[];
@@ -69,7 +62,7 @@ function createAdminEventsRouter({pool,authenticateToken}) {
     const sort=req.query.sort||'newest';if(!Object.hasOwn(orders,sort))throw new InputError('Invalid sort order.',400);
     const ep=await pool.query(`SELECT ${eventFields} FROM episodes e WHERE e.id=$1`,[req.params.episodeId]);if(!ep.rows.length)throw new InputError('Episode not found.',404);
     const count=await pool.query(`SELECT COUNT(*)::integer AS total ${attendeeFrom} WHERE ${where}`,values);
-    const rows=await pool.query(`SELECT s.id,s.full_name,s.email,s.whatsapp_number,s.country_code,s.college,s.degree,s.department,s.year_of_study,s.gender,s.is_dos_club_member,s.excited_topic,er.registered_at,er.id AS registration_id,
+    const rows=await pool.query(`SELECT s.id,s.full_name,s.email,s.whatsapp_number,s.country_code,s.college,s.degree,s.department,s.year_of_study,s.gender,s.is_dos_club_member,s.excited_topic,er.registered_at::timestamptz AS registered_at,er.id AS registration_id,
       e.zoom_meeting_id IS NOT NULL AND e.event_mode='Online' AS zoom_enabled,
       CASE WHEN j.status='registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status,'not_sent') END AS invitation_status,
       j.meeting_id AS zoom_meeting_id,j.zoom_registered_at,j.next_attempt_at AS zoom_next_attempt_at,CASE WHEN j.status='registered' THEN NULL ELSE j.last_error END AS invitation_error

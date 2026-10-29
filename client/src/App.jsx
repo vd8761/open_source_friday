@@ -30,6 +30,11 @@ function AttendeesRoute() {
   return <AttendeesPage key={id}/>;
 }
 
+function AttendanceRoute() {
+  const {id}=useParams();
+  return <AttendanceTool key={id}/>;
+}
+
 function App() {
   React.useEffect(() => {
     // If a user previously granted notification permissions but the service worker
@@ -54,7 +59,7 @@ function App() {
           <Route path="/admin/archived-events" element={<ProtectedRoute><PastEventsPage archivedOnly /></ProtectedRoute>} />
           <Route path="/admin/episodes/:id/attendees" element={<ProtectedRoute><AttendeesRoute /></ProtectedRoute>} />
           <Route path="/admin/invitations" element={<ProtectedRoute><OutreachTool /></ProtectedRoute>} />
-          <Route path="/admin/episodes/:id/attendance" element={<ProtectedRoute><AttendanceTool /></ProtectedRoute>} />
+          <Route path="/admin/episodes/:id/attendance" element={<ProtectedRoute><AttendanceRoute /></ProtectedRoute>} />
           <Route 
             path="/dashboard" 
             element={

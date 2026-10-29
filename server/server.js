@@ -698,7 +698,7 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
 app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, async (req, res) => {
   try {
     const query = `
-      SELECT s.*, er.registered_at, er.id AS registration_id,
+      SELECT s.*, er.registered_at::timestamptz AS registered_at, er.id AS registration_id,
         e.zoom_meeting_id IS NOT NULL AND e.event_mode = 'Online' AS zoom_enabled,
         CASE WHEN j.status = 'registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status, 'not_sent') END AS invitation_status,
         COALESCE(j.status, 'not_registered') AS zoom_registration_status,

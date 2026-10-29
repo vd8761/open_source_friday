@@ -1,3 +1,4 @@
+import ConfirmDialog from './ConfirmDialog';
 import { calendarInputDate } from '../utils/episodeTime';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -28,6 +29,7 @@ const quillModules = {
 };
 
 const AdminEpisodeForm = () => {
+  const [originalRegistrationOpen,setOriginalRegistrationOpen]=useState(false),[closeConfirmation,setCloseConfirmation]=useState(false);
   const [formData, setFormData] = useState({
     episode_number: '',
     title: '',
@@ -67,6 +69,7 @@ const AdminEpisodeForm = () => {
           const result = await response.json();
           if (result.success) {
             const ep = result.episode;
+            setOriginalRegistrationOpen(ep.is_registration_open!==false);
             setFormData({
               episode_number: ep.episode_number,
               title: ep.title,
@@ -142,7 +145,8 @@ const AdminEpisodeForm = () => {
       setCroppingType('none');
     } catch (e) {
       console.error(e);
-      alert('Failed to crop image.');
+      setMessage('We could not crop this image. Please choose it again and retry.');
+      setIsCropping(false);
     }
   }, [imageSrc, croppedAreaPixels, formData, croppingType]);
 
@@ -183,8 +187,9 @@ const AdminEpisodeForm = () => {
     setCurrentStep(prev => prev + 1);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, confirmed=false) => {
     e.preventDefault();
+    if(id&&originalRegistrationOpen&&!formData.is_registration_open&&!confirmed){setCloseConfirmation(true);return;}
     setMessage('');
     
     if (!eventDate || !startTime || !endTime) {
@@ -251,6 +256,7 @@ const AdminEpisodeForm = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
+      {closeConfirmation&&<ConfirmDialog title="Save changes and close registrations?" confirmLabel="Save and close registrations" cancelLabel="Keep editing" busy={isSubmitting} danger error={message} onCancel={()=>setCloseConfirmation(false)} onConfirm={()=>handleSubmit({preventDefault(){}},true)}><p>Would you like to save these changes and pause new registrations for this episode? Existing attendee records will be kept.</p></ConfirmDialog>}
       {/* Top Navigation Bar */}
       <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
