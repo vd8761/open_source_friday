@@ -1,0 +1,81 @@
+const express = require('express');
+const { InputError } = require('./outreach-csv');
+// Keep the calendar date for legacy TIMESTAMP columns, and interpret times in IST.
+const eventClockSql = part => {
+  const clock=`btrim(split_part(replace(e.event_time,'–','-'),'-',${part}))`;
+  return `CASE WHEN array_length(string_to_array(replace(e.event_time,'–','-'),'-'),1)=2 AND ${clock} ~* '^((0?[1-9]|1[0-2]):[0-5][0-9][[:space:]]*[AP]M|([01]?[0-9]|2[0-3]):[0-5][0-9])$' THEN (e.event_date::date + ${clock}::time) AT TIME ZONE 'Asia/Kolkata' END`;
+};
+const eventEndSql=eventClockSql(2),eventStartSql=eventClockSql(1);
+const eventFields = 'e.id,e.episode_number,e.title,e.event_date,e.event_time,e.presenter_name,e.event_mode,e.is_active,e.is_registration_open,e.is_test,e.is_silent,e.archived_at';
+async function initAdminEvents(db) {
+  await db.query('CREATE INDEX IF NOT EXISTS er_recent_idx ON episode_registrations(registered_at DESC,id DESC)');
+  await db.query('CREATE INDEX IF NOT EXISTS er_episode_recent_idx ON episode_registrations(episode_id,registered_at DESC,id DESC)');
+}
+function pageOptions(q) {
+  const integer = (v, fallback, max) => {
+    if (v === undefined) return fallback;
+    if (!/^\d+$/.test(String(v)) || Number(v)<1 || Number(v)>max) throw new InputError('Invalid page or page size.',400);
+    return Number(v);
+  };
+  return {page:integer(q.page,1,100000),page_size:integer(q.page_size,10,50)};
+}
+function filters(q, kind, episodeId) {
+  const values=[], clauses=[];
+  const add=(sql,value)=>{values.push(value);clauses.push(sql.replaceAll('?',`$${values.length}`));};
+  const text = (key,columns) => {if(q[key]) {if(typeof q[key]!=='string'||q[key].length>150)throw new InputError('Filter is too long.',400);add(`(${columns.map(c=>`${c} ILIKE ? ESCAPE '\\'`).join(' OR ')})`,`%${q[key].trim().replace(/[\\%_]/g,'\\$&')}%`);}};
+  const choice=(key,column,options)=>{if(q[key]) {if(!options.includes(q[key]))throw new InputError(`Invalid ${key} filter.`,400);add(`${column}=?`,q[key]);}};
+  const dates=(column)=>{for(const [key,op] of [['from','>='],['to','<=']])if(q[key]){
+    if(typeof q[key]!=='string'||Number(q[key].slice(0,4))<1||!/^\d{4}-\d{2}-\d{2}$/.test(q[key])||Number.isNaN(Date.parse(q[key]))||new Date(q[key]).toISOString().slice(0,10)!==q[key])throw new InputError('Use valid filter dates.',400);
+    add(`${column} ${op} ?::date`,q[key]);
+  }if(q.from&&q.to&&q.from>q.to)throw new InputError('Start date must be before end date.',400);};
+  if(kind==='events') {
+    if(!['upcoming','past'].includes(q.period))throw new InputError('Choose upcoming or past events.',400);
+    clauses.push(q.period==='upcoming'?`e.archived_at IS NULL AND ${eventEndSql}>NOW()`:`(${eventEndSql}<=NOW() OR ${eventEndSql} IS NULL)`);
+    text('search',['e.title','e.presenter_name','e.episode_number::text']);
+    choice('mode','e.event_mode',['Online','Offline','Hybrid']);
+    if(q.type){if(!['test','real'].includes(q.type))throw new InputError('Invalid event type.',400);clauses.push(`e.is_test=${q.type==='test'?'TRUE':'FALSE'}`);}
+    if(q.archive){if(!['archived','unarchived'].includes(q.archive))throw new InputError('Invalid archive filter.',400);clauses.push(`e.archived_at IS ${q.archive==='archived'?'NOT ':''}NULL`);}
+    dates('e.event_date::date');
+  } else {
+    add('er.episode_id=?',episodeId);text('search',['s.full_name','s.email','s.whatsapp_number']);text('college',['s.college']);text('department',['s.department']);
+    choice('member','s.is_dos_club_member',['Yes','No']);choice('year',"CASE WHEN s.year_of_study ~ '^[1-6]' THEN substring(s.year_of_study from '^[1-6]') ELSE s.year_of_study END",['1','2','3','4','5','6','Passed Out']);
+    choice('zoom',"CASE WHEN j.status='registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status,'not_sent') END",['zoom_managed','pending','rate_limited','failed','not_sent']);
+    dates("(er.registered_at::timestamptz AT TIME ZONE 'Asia/Kolkata')::date");
+  }
+  return {values,where:clauses.join(' AND ')};
+}
+const attendeeFrom='FROM episode_registrations er JOIN students s ON s.id=er.student_id JOIN episodes e ON e.id=er.episode_id LEFT JOIN zoom_registration_jobs j ON j.registration_id=er.id';
+function createAdminEventsRouter({pool,authenticateToken}) {
+  const router=express.Router();router.use(authenticateToken);
+  const route=fn=>async(req,res)=>{try{res.json({success:true,...await fn(req)});}catch(e){res.status(e instanceof InputError?e.status:500).json({success:false,error:e instanceof InputError?e.message:'Unable to load event data. Please try again.'});}};
+  router.get('/dashboard-overview',route(async()=>{
+    const [totals,recent]=await Promise.all([
+      pool.query('SELECT (SELECT COUNT(*)::integer FROM episodes) AS episodes,(SELECT COUNT(*)::integer FROM episode_registrations) AS registrations'),
+      pool.query('SELECT e.episode_number,s.full_name,s.college FROM episode_registrations er JOIN episodes e ON e.id=er.episode_id JOIN students s ON s.id=er.student_id ORDER BY er.registered_at DESC,er.id DESC LIMIT 5')
+    ]);return {totals:totals.rows[0],recent:recent.rows};
+  }));
+  router.get('/events',route(async req=>{
+    const {page,page_size}=pageOptions(req.query),{where,values}=filters(req.query,'events');
+    const orders={date_desc:'e.event_date DESC,e.id DESC',date_asc:`${eventStartSql} ASC NULLS LAST,e.id ASC`,number_desc:'e.episode_number DESC',number_asc:'e.episode_number ASC',title:'e.title ASC,e.id ASC'};
+    const sort=req.query.sort || (req.query.period==='upcoming'?'date_asc':'date_desc');if(!Object.hasOwn(orders,sort))throw new InputError('Invalid sort order.',400);
+    const count=await pool.query(`SELECT COUNT(*)::integer AS total FROM episodes e WHERE ${where}`,values);
+    const rows=await pool.query(`SELECT ${eventFields},(${eventEndSql}) AS ends_at,(SELECT COUNT(*)::integer FROM episode_registrations er WHERE er.episode_id=e.id) AS registration_count FROM episodes e WHERE ${where} ORDER BY ${orders[sort]} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,page_size,(page-1)*page_size]);
+    return {data:rows.rows,total:count.rows[0].total,page,page_size};
+  }));
+  router.get('/episodes/:episodeId/attendees',route(async req=>{
+    if(!/^[1-9]\d{0,9}$/.test(req.params.episodeId)||Number(req.params.episodeId)>2147483647)throw new InputError('Invalid episode.',400);
+    const {page,page_size}=pageOptions(req.query),{where,values}=filters(req.query,'attendees',req.params.episodeId);
+    const orders={newest:'er.registered_at DESC,er.id DESC',oldest:'er.registered_at ASC,er.id ASC',name:'s.full_name ASC,er.id ASC',college:'s.college ASC,s.full_name ASC,er.id ASC'};
+    const sort=req.query.sort||'newest';if(!Object.hasOwn(orders,sort))throw new InputError('Invalid sort order.',400);
+    const ep=await pool.query(`SELECT ${eventFields} FROM episodes e WHERE e.id=$1`,[req.params.episodeId]);if(!ep.rows.length)throw new InputError('Episode not found.',404);
+    const count=await pool.query(`SELECT COUNT(*)::integer AS total ${attendeeFrom} WHERE ${where}`,values);
+    const rows=await pool.query(`SELECT s.id,s.full_name,s.email,s.whatsapp_number,s.country_code,s.college,s.degree,s.department,s.year_of_study,s.gender,s.is_dos_club_member,s.excited_topic,er.registered_at,er.id AS registration_id,
+      e.zoom_meeting_id IS NOT NULL AND e.event_mode='Online' AS zoom_enabled,
+      CASE WHEN j.status='registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status,'not_sent') END AS invitation_status,
+      j.meeting_id AS zoom_meeting_id,j.zoom_registered_at,j.next_attempt_at AS zoom_next_attempt_at,CASE WHEN j.status='registered' THEN NULL ELSE j.last_error END AS invitation_error
+      ${attendeeFrom} WHERE ${where} ORDER BY ${orders[sort]} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,page_size,(page-1)*page_size]);
+    return {episode:ep.rows[0],data:rows.rows,total:count.rows[0].total,page,page_size};
+  }));
+  return router;
+}
+module.exports={initAdminEvents,createAdminEventsRouter,eventEndSql};

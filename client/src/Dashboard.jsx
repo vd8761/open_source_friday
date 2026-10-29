@@ -1,10 +1,11 @@
-import { rosterCsv } from './utils/rosterCsv';
-import { formatEpisodeDate, eventPolicy } from './utils/episodeTime';
-import React, { useState, useEffect, useRef } from 'react';
+import { useAdminPage } from './utils/useAdminPage';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import RegistrationTable from './RegistrationTable';
-import EventActions from './components/EventActions';
-import { Calendar, Users, RefreshCw, ChevronRight, CheckCircle2, Trophy, LogOut, ArrowLeft, Bell, Send } from 'lucide-react';
+import { adminApi } from './utils/adminApi';
+import { TablePager } from './components/AdminDataTable';
+import { UpcomingEvents } from './components/EventList';
+import { Link } from 'react-router-dom';
+import { Calendar, Users, RefreshCw, CheckCircle2, LogOut, ArrowLeft, Bell, Send } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -20,14 +21,11 @@ export default function Dashboard() {
 
   const currentWeek = getCurrentWeek();
 
-  const [activeEpisode, setActiveEpisode] = useState(null);
-  const [activeEpisodeId, setActiveEpisodeId] = useState(null);
-  const [data, setData] = useState([]); // List of episodes
-  const [registrations, setRegistrations] = useState([]); // Registrations for active episode
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const rosterRequest = useRef(0);
-  const [viewMode, setViewMode] = useState('summary'); // 'summary' or 'roster' or 'push'
+  const [totals,setTotals]=useState({registrations:0,episodes:0});
+  const [recent,setRecent]=useState([]);
+  const upcoming=useAdminPage('/events',{period:'upcoming',sort:'date_asc'});
+  const [loading,setLoading]=useState(true),[loadError,setLoadError]=useState('');
+  const [viewMode,setViewMode]=useState('summary');
   const [pushHistory, setPushHistory] = useState([]);
   const [pushStats, setPushStats] = useState({ total: 0, welcomeSent: 0 });
   const [pushForm, setPushForm] = useState({ title: '', body: '', url: '' });
@@ -103,69 +101,12 @@ export default function Dashboard() {
   const TOTAL_WEEKS = 52;
 
   const fetchEpisodes = async () => {
-    setLoading(true);
-    const token = localStorage.getItem('adminToken');
-
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/admin/dashboard`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        localStorage.removeItem('adminToken');
-        navigate('/login');
-        return;
-      }
-
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error('Unable to load the dashboard. Refresh before using event data.');
-      setData(result.data);
-      setLoadError('');
-    } catch (error) {
-      setLoadError(error.message || 'Unable to refresh event data.');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);setLoadError('');
+    try {const r=await adminApi('/dashboard-overview');setTotals(r.totals);setRecent(r.recent);}
+    catch(error){setLoadError(error.message);}
+    finally{setLoading(false);}
   };
-
-  const handleViewRoster = (episode) => {
-    setActiveEpisode(episode.episode_number);
-    setActiveEpisodeId(episode.id);
-    setViewMode('roster');
-    setRegistrations([]);
-    setLoadError('');
-    setLoading(true);
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const token = localStorage.getItem('adminToken');
-    fetchRegistrations(episode.id, token, API_URL);
-  };
-
-  const fetchRegistrations = async (episodeId, token, API_URL) => {
-    const requestId = ++rosterRequest.current;
-    try {
-      const response = await fetch(`${API_URL}/api/admin/episodes/${episodeId}/registrations`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.status === 401 || response.status === 403) {
-        localStorage.removeItem('adminToken'); navigate('/login'); return;
-      }
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error('Unable to load this roster. Refresh before taking action.');
-      if (requestId === rosterRequest.current) { setRegistrations(result.data); setLoadError(''); }
-    } catch (error) {
-      if (requestId === rosterRequest.current) { setRegistrations([]); setLoadError(error.message || 'Unable to load this roster.'); }
-    } finally {
-      if (requestId === rosterRequest.current) setLoading(false);
-    }
-  };
+  const refreshDashboard = () => {fetchEpisodes();upcoming.refresh();};
   const fetchPushData = async () => {
     try {
       setLoading(true);
@@ -216,48 +157,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleSendZoomInvitation = async (studentId) => {
-    const token = localStorage.getItem('adminToken');
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    try {
-      const response = await fetch(`${API_URL}/api/admin/episodes/${activeEpisodeId}/registrations/${studentId}/zoom-invitation`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }
-      });
-      const result = await response.json();
-      showToast(result.message || result.error || 'Unable to register with Zoom',
-        result.success && result.invitation_status !== 'failed' ? 'success' : 'error');
-      await fetchRegistrations(activeEpisodeId, token, API_URL);
-    } catch { showToast('Unable to register with Zoom. Refresh the roster to check its status.', 'error'); }
-  };
-
-  const handleDeleteRegistration = async (studentId) => {
-    if (!window.confirm('Are you sure you want to delete this registration?')) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('adminToken');
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/admin/episodes/${activeEpisodeId}/registrations/${studentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        setRegistrations(prev => prev.filter(r => r.id !== studentId));
-        showToast('Registration deleted successfully', 'success');
-      } else {
-        showToast(result.error || 'Failed to delete registration', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to delete registration:', error);
-      showToast('An error occurred while deleting.', 'error');
-    }
-  };
-
   const handleToggleRegistration = async (episodeId, currentStatus) => {
     try {
       const token = localStorage.getItem('adminToken');
@@ -280,9 +179,7 @@ export default function Dashboard() {
 
       const result = await response.json();
       if (result.success) {
-        setData(prev => prev.map(ep =>
-          ep.id === episodeId ? { ...ep, is_registration_open: !currentStatus } : ep
-        ));
+        upcoming.refresh();
         showToast(`Registration ${!currentStatus ? 'opened' : 'closed'} successfully`, 'success');
       } else {
         showToast(result.error || 'Failed to toggle registration status', 'error');
@@ -291,22 +188,6 @@ export default function Dashboard() {
       console.error('Failed to toggle registration:', error);
       showToast('An error occurred while updating status.', 'error');
     }
-  };
-
-  const handleDownloadCSV = () => {
-    if (registrations.length === 0) return;
-
-    const csvData = rosterCsv(registrations);
-    const blob = new Blob([csvData], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.setAttribute('hidden', '');
-    a.setAttribute('href', url);
-    a.setAttribute('download', `episode_${activeEpisode}_registrations.csv`);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
   };
 
   useEffect(() => {
@@ -318,9 +199,8 @@ export default function Dashboard() {
     navigate('/login');
   };
 
-  const visibleData = data.filter(e => !e.archived_at);
-  const totalRegistrations = data.reduce((acc, ep) => acc + parseInt(ep.registration_count || 0, 10), 0);
-  const totalEpisodesCreated = data.length;
+  const totalRegistrations = totals.registrations;
+  const totalEpisodesCreated = totals.episodes;
   const progressPercentage = (currentWeek / TOTAL_WEEKS) * 100;
 
   return (
@@ -367,7 +247,7 @@ export default function Dashboard() {
                 {profileOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50">
                     <div className="p-2 flex flex-col gap-1">
-                      <button onClick={()=>{setProfileOpen(false);navigate('/admin/archived-events');}} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Archived events</button>
+                      <button onClick={()=>{setProfileOpen(false);navigate('/admin/past-events');}} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Past events</button>
                       <button onClick={()=>{setProfileOpen(false);navigate('/admin/trash');}} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Trash</button>
                       <button
                         onClick={() => {
@@ -395,15 +275,15 @@ export default function Dashboard() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <p className="text-sm text-slate-500">Event times are IST. Registration closes one hour before the start time, even when the registration toggle is enabled.</p>
         {loadError && <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{loadError}</div>}
 
         {/* Header & Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard Overview</h2>
-            <p className="mt-1 text-slate-500 text-sm">Real-time metrics for your 52-week program.</p>
+            <p className="mt-1 text-slate-500 text-sm">Plan the next workshop and follow new registrations.</p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             <button
@@ -422,7 +302,7 @@ export default function Dashboard() {
               + Create Episode
             </button>
             <button
-              onClick={viewMode === 'summary' ? fetchEpisodes : () => fetchRegistrations(activeEpisodeId, localStorage.getItem('adminToken'), import.meta.env.VITE_API_URL || 'http://localhost:5000')}
+              onClick={viewMode === 'push' ? fetchPushData : refreshDashboard} disabled={loading || upcoming.loading}
               className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-semibold rounded-xl text-white bg-dos hover:bg-dos-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
             >
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -431,56 +311,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Registrations</p>
-                <p className="mt-2 text-4xl font-extrabold text-slate-900">{totalRegistrations}</p>
-              </div>
-              <div className="bg-blue-50 p-4 rounded-xl">
-                <Users className="h-8 w-8 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Program Progress</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900">Week {currentWeek} / {TOTAL_WEEKS}</p>
-              </div>
-              <div className="bg-emerald-50 p-4 rounded-xl">
-                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-              </div>
-            </div>
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-100 rounded-full h-2.5">
-              <div
-                className="bg-emerald-500 h-2.5 rounded-full transition-all duration-1000 ease-out"
-                style={{ width: `${Math.max(progressPercentage, 2)}%` }}
-              ></div>
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="bg-gradient-to-br from-dos to-dos-dark rounded-2xl shadow-md p-6 text-white flex flex-col justify-between relative overflow-hidden">
-            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl"></div>
-            <div>
-              <p className="text-white/80 text-sm font-medium uppercase tracking-wider">Total Episodes Created</p>
-              <h3 className="mt-2 text-4xl font-extrabold text-white">{totalEpisodesCreated}</h3>
-            </div>
-            <p className="text-white mt-4 text-sm flex justify-between items-center bg-white/10 px-3 py-2 rounded-lg backdrop-blur-sm">
-              <span>Goal</span>
-              <span className="font-bold text-lg">{TOTAL_WEEKS} Episodes</span>
-            </p>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total registrations</p><p className="mt-1 text-2xl font-bold">{loading?'—':totalRegistrations}</p><p className="mt-1 text-xs text-slate-400">Across all events, including past</p></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Program progress</p><p className="mt-1 text-2xl font-bold">Week {currentWeek} / {TOTAL_WEEKS}</p><div className="mt-3 h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-dos" style={{width:`${progressPercentage}%`}}/></div></div>
+          <div className="rounded-xl bg-dos p-4 text-white"><p className="text-xs font-semibold uppercase tracking-wide opacity-80">Total episodes created</p><p className="mt-1 text-2xl font-bold">{loading?'—':totalEpisodesCreated}</p><p className="mt-1 text-xs opacity-80">Includes completed and archived events</p></div>
         </div>
 
-        {/* Data Table Section */}
         {viewMode === 'push' ? (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
@@ -569,169 +405,18 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-        ) : viewMode === 'summary' ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-dos" />
-                All Events Summary
-              </h3>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-dos-light/20 text-dos">
-                {visibleData.length} Events
-              </span>
-            </div>
-
-            <div className="p-0 overflow-x-auto">
-              {loading ? (
-                <div className="flex flex-col justify-center items-center py-20 opacity-50">
-                  <RefreshCw className="h-10 w-10 text-dos animate-spin mb-4" />
-                  <p className="text-slate-500 font-medium">Loading events...</p>
-                </div>
-              ) : visibleData.length === 0 ? (
-                <div className="flex flex-col justify-center items-center py-20 opacity-50">
-                  <p className="text-slate-500 font-medium">No active-list events. Check Menu → Archived events for saved history.</p>
-                </div>
-              ) : (
-                <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Episode</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Title</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Presenter</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Registrations</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-200">
-                    {visibleData.map((episode) => (
-                      <tr key={episode.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-sm font-bold bg-slate-100 text-slate-800">
-                            #{episode.episode_number}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-bold text-slate-900 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg line-clamp-2" title={episode.title}>
-                            {episode.title}
-                          </div>
-                          {episode.is_test && <span className="text-xs font-semibold text-rose-700">Test event</span>}
-                            {episode.is_silent && <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">Silent • no push notifications</span>}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-medium text-slate-900">
-                            {episode.event_date ? formatEpisodeDate(episode.event_date, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                          </span>
-                          <div className="text-xs text-slate-500">
-                            {episode.event_time || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            {episode.presenter_photo_url && (
-                              <img className="h-8 w-8 rounded-full object-cover mr-3" src={episode.presenter_photo_url} alt="" />
-                            )}
-                            <div>
-                              <div className="text-sm font-medium text-slate-900">{episode.presenter_name}</div>
-                              <div className="text-xs text-slate-500">{episode.presenter_designation}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-bold bg-dos-light/20 text-dos">
-                            {episode.registration_count || 0}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <label className="flex items-center justify-center space-x-2 cursor-pointer">
-                            <div className="relative">
-                              <input
-                                type="checkbox"
-                                checked={episode.is_registration_open !== false}
-                                onChange={() => handleToggleRegistration(episode.id, episode.is_registration_open !== false)}
-                                className="sr-only"
-                              />
-                              <div className={`block w-10 h-6 rounded-full transition-colors ${episode.is_registration_open !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-                              <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${episode.is_registration_open !== false ? 'transform translate-x-4' : ''}`}></div>
-                            </div>
-                            <span className={`text-xs font-bold ${episode.is_registration_open !== false ? 'text-emerald-600' : 'text-slate-500'}`}>
-                              {episode.is_registration_open !== false ? 'Enabled' : 'Disabled'}
-                            </span>
-                          </label>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-3">
-                            <EventActions episode={episode} onChanged={async message=>{showToast(message);await fetchEpisodes();}} />
-                            <button
-                              onClick={() => navigate(`/admin/episodes/edit/${episode.id}`)}
-                              className="text-slate-500 hover:text-slate-700 font-medium inline-flex items-center gap-1 transition-colors bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg"
-                            >
-                              Edit
-                            </button>
-                            <button onClick={() => navigate(`/admin/episodes/${episode.id}/attendance`)} className="text-dos font-semibold text-sm">Attendance</button>
-                            <button
-                              onClick={() => handleViewRoster(episode)}
-                              className="text-dos hover:text-dos-dark font-bold inline-flex items-center gap-1 transition-colors bg-dos-light/10 hover:bg-dos-light/20 px-3 py-1.5 rounded-lg"
-                            >
-                              View Roster
-                              <ChevronRight className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setViewMode('summary')}
-                  className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
-                  title="Back to Events Summary"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-                <h3 className="text-lg font-bold text-slate-900">Episode {activeEpisode} Roster</h3>
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => navigate(`/admin/episodes/${activeEpisodeId}/attendance`)} className="text-dos font-semibold text-sm">Attendance</button>
-                <button
-                  onClick={handleDownloadCSV}
-                  disabled={registrations.length === 0}
-                  className="inline-flex items-center px-3 py-1.5 border border-slate-200 shadow-sm text-xs font-bold rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Download CSV
-                </button>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                  {registrations.length} Participants
-                </span>
-              </div>
-            </div>
-
-            <div className="p-0">
-              {loading ? (
-                <div className="flex flex-col justify-center items-center py-20 opacity-50">
-                  <RefreshCw className="h-10 w-10 text-dos animate-spin mb-4" />
-                  <p className="text-slate-500 font-medium">Loading data...</p>
-                </div>
-              ) : registrations.length === 0 ? (
-                <div className="flex flex-col justify-center items-center py-20 opacity-50">
-                  <p className="text-slate-500 font-medium">No registrations for this episode yet.</p>
-                </div>
-              ) : (
-                <RegistrationTable
-                  data={registrations}
-                  onDeleteRegistration={eventPolicy(data.find(e=>e.id===activeEpisodeId) || {}).can_delete ? handleDeleteRegistration : undefined}
-                  onSendZoomInvitation={handleSendZoomInvitation}
-                />
-              )}
-            </div>
+          <div className="grid gap-6 lg:grid-cols-3 items-start">
+            <section className="lg:col-span-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Calendar className="h-5 w-5 text-dos"/>Upcoming workshops</h2><Link to="/admin/past-events" className="text-sm font-semibold text-dos hover:underline">Past events →</Link></div>
+              <p className="px-5 pt-4 text-xs text-slate-500">Upcoming and live sessions, nearest first. Completed workshops move to Past events automatically.</p>
+              {upcoming.error&&<p role="alert" className="p-5 text-rose-700">{upcoming.error} <button className="underline" onClick={upcoming.refresh}>Retry</button></p>}
+              {upcoming.loading?<p className="p-10 text-center text-slate-500">Loading upcoming workshops…</p>:!upcoming.error&&upcoming.result.data.length?<UpcomingEvents rows={upcoming.result.data} onToggle={handleToggleRegistration} onChanged={m=>{showToast(m);refreshDashboard();}}/>:!upcoming.error&&<div className="p-10 text-center"><p className="font-semibold">No upcoming workshops</p><p className="mt-2 text-sm text-slate-500">Create your next episode to open registrations.</p><Link to="/admin/episodes/new" className="mt-4 inline-block rounded-lg bg-dos px-4 py-2 text-sm font-semibold text-white">Create episode</Link></div>}
+              <TablePager table={upcoming}/>
+            </section>
+            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Users className="h-5 w-5 text-dos"/>Recently registered</h2><p className="mt-1 text-xs text-slate-500">Latest 5 registrations across all workshops</p></div>
+              {loading?<p className="p-5 text-slate-500">Loading recent attendees…</p>:loadError?<p className="p-5 text-sm text-rose-700">Recent registrations could not be refreshed.</p>:recent.length?<ol className="divide-y divide-slate-100">{recent.map((r,i)=><li key={i} className="p-5"><span className="text-xs font-bold text-dos">Episode {r.episode_number}</span><p className="mt-1 font-semibold break-words">{r.full_name}</p><p className="mt-1 text-sm text-slate-500 break-words">{r.college||'College not provided'}</p></li>)}</ol>:<p className="p-5 text-sm text-slate-500">No registrations yet.</p>}
+            </section>
           </div>
         )}
       </main>

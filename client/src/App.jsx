@@ -1,11 +1,13 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import Home from './Home';
 import Dashboard from './Dashboard';
 import OutreachTool from './components/OutreachTool';
 import AttendanceTool from './components/AttendanceTool';
 import EventHistoryPage from './components/EventHistoryPage';
+import PastEventsPage from './components/PastEventsPage';
+import AttendeesPage from './components/AttendeesPage';
 import Login from './Login';
 import PwaInstallPrompt from './PwaInstallPrompt';
 import RegistrationForm from './components/RegistrationForm';
@@ -22,6 +24,11 @@ const ProtectedRoute = ({ children }) => {
   }
   return children;
 };
+
+function AttendeesRoute() {
+  const {id}=useParams();
+  return <AttendeesPage key={id}/>;
+}
 
 function App() {
   React.useEffect(() => {
@@ -44,7 +51,9 @@ function App() {
           
           {/* Admin Routes */}
           <Route path="/admin/trash" element={<ProtectedRoute><EventHistoryPage mode="trash" /></ProtectedRoute>} />
-          <Route path="/admin/archived-events" element={<ProtectedRoute><EventHistoryPage mode="archive" /></ProtectedRoute>} />
+          <Route path="/admin/past-events" element={<ProtectedRoute><PastEventsPage /></ProtectedRoute>} />
+          <Route path="/admin/archived-events" element={<ProtectedRoute><PastEventsPage archivedOnly /></ProtectedRoute>} />
+          <Route path="/admin/episodes/:id/attendees" element={<ProtectedRoute><AttendeesRoute /></ProtectedRoute>} />
           <Route path="/admin/invitations" element={<ProtectedRoute><OutreachTool /></ProtectedRoute>} />
           <Route path="/admin/episodes/:id/attendance" element={<ProtectedRoute><AttendanceTool /></ProtectedRoute>} />
           <Route 
