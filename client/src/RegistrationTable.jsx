@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Mail, GraduationCap, BookOpen, Phone, Search, UserX, Trash2 } from 'lucide-react';
 
 export default function RegistrationTable({ data, onDeleteRegistration, onSendZoomInvitation }) {
-  const [searchTerm, setSearchTerm] = useState('');
   const [sendingStudentId, setSendingStudentId] = useState(null);
   const sendInvitation = async (studentId) => {
     setSendingStudentId(studentId);
@@ -16,46 +15,21 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
         <div className="bg-slate-100 p-6 rounded-full mb-4">
           <UserX className="h-12 w-12 text-slate-400" />
         </div>
-        <h3 className="text-xl font-semibold text-slate-900">No registrations found</h3>
+        <h3 className="text-xl font-semibold text-slate-900">No matching attendees</h3>
         <p className="mt-2 text-slate-500 max-w-sm text-center">
-          There are no participants registered for this specific episode yet. Check back later once the forms are submitted!
+          Try different filters or check back after registrations open.
         </p>
       </div>
     );
   }
 
-  const filteredData = data.filter((row) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (row.full_name && row.full_name.toLowerCase().includes(searchLower)) ||
-      (row.email && row.email.toLowerCase().includes(searchLower)) ||
-      (row.college && row.college.toLowerCase().includes(searchLower)) ||
-      (row.whatsapp_number && row.whatsapp_number.includes(searchLower))
-    );
-  });
-
   return (
     <div className="flex flex-col">
-      <div className="p-4 border-b border-slate-100 bg-white/50">
-        <div className="relative max-w-md">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-400" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:border-dos transition-colors text-sm bg-white"
-            placeholder="Search by name, email, college, or phone..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
+        <table aria-label="Attendees matching the selected filters" className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Registrant</th>
+              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Attendee</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Academic Info</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Interests & Club</th>
@@ -64,9 +38,9 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-slate-100">
-            {filteredData.length > 0 ? (
-              filteredData.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
+            {data.length > 0 ? (
+              data.map((row, idx) => (
+                <tr key={row.registration_id || idx} className="hover:bg-slate-50/80 transition-colors group">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br from-dos-light to-dos flex items-center justify-center shadow-sm">
@@ -79,6 +53,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                         <div className="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
                           <Mail className="h-3 w-3" /> {row.email}
                         </div>
+                        <div className="mt-1 text-xs text-slate-500">Registered: {new Date(row.registered_at).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})} IST</div>
                       </div>
                     </div>
                   </td>
@@ -90,7 +65,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     </div>
                     <div className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
                       <BookOpen className="h-4 w-4 text-slate-400" />
-                      {row.college} • <span className="font-medium">Year {row.year_of_study}</span>
+                      {row.college} • <span className="font-medium">{row.year_of_study}</span>
                     </div>
                   </td>
 

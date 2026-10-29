@@ -36,7 +36,7 @@ Assign a named person to each role before publishing. One person may hold multip
 4. In Step 2, enter the event date, start time, end time and the numeric Zoom Meeting ID. The end must be later than the start on the same date. The application does not create or edit a Zoom meeting.
 5. In Step 4, choose Silent mode only for samples or intentional quiet updates. Silent means no automatic push announcement or reminder. It does not hide the event, stop Zoom confirmations or prevent an admin from starting a Sender campaign.
 6. Save, return to the dashboard, refresh and reopen Edit. Check the persisted date and time. Open the public registration page in a fresh tab and compare it with Zoom.
-7. For a real event, have an approved test attendee register through the application. Check the roster for Registered with Zoom and ask the attendee to confirm the native Zoom email. Never distribute a student's private join link to everyone.
+7. For a real event, have an approved test attendee register through the application. Check the attendees list for Registered with Zoom and ask the attendee to confirm the native Zoom email. Never distribute a student's private join link to everyone.
 
 **Registration closes one hour before the start.** For a 7 PM IST event, the cutoff is 6 PM IST. The dashboard Enabled toggle cannot bypass this cutoff. A closed toggle or inactive episode also blocks registration.
 
@@ -46,9 +46,9 @@ Assign a named person to each role before publishing. One person may hold multip
 
 ## Monitor registrations and missing invitations
 
-Use Dashboard, View Roster, then Refresh Data for the correct episode. Confirm the episode number and saved student email before taking action. If the roster fails to load, refresh it; do not work from a previous episode's list or an old export.
+Use Dashboard, Attendees, then Refresh Data for the correct episode. Confirm the episode number and saved student email before taking action. If the attendees list fails to load, refresh it; do not work from a previous episode's list or an old export.
 
-| Roster status | Meaning | Team action |
+| Zoom status | Meaning | Team action |
 | --- | --- | --- |
 | Registered with Zoom | Zoom enrollment exists | Check mailbox then resend in Zoom if needed |
 | Zoom registration pending | Saved work is waiting | Refresh and check backend availability |
@@ -85,7 +85,7 @@ Keep the episode number permanent after registrations or invitation campaigns ex
 
 For cancellation, disable application registration and pause invitations. Coordinate the Zoom cancellation and attendee communication separately. Deleting an application registration does not cancel its Zoom enrollment or revoke a join link.
 
-**Event retention and cleanup:** On Dashboard, each upcoming event has a visible **Delete** action that moves it to recoverable Trash after a typed confirmation. Once a real event starts it cannot be deleted; after it ends, use **Archive**. Archived registrations and attendance remain available from **Menu → Archived events**, including roster export; dashboard registration totals retain these records. Returning an archived event to the dashboard keeps registration closed. Past real events cannot be rescheduled into the future or have their registration records deleted.
+**Event retention and cleanup:** On Dashboard, each upcoming event has a visible **Delete** action that moves it to recoverable Trash after a typed confirmation. Once a real event starts it cannot be deleted; after it ends, use **Archive**. Archived registrations and attendance remain available from **Menu → Past events**, filtered to Archived, including attendees list export; dashboard registration totals retain these records. Removing the archive label keeps the event in Past events and registration closed. Past real events cannot be rescheduled into the future or have their registration records deleted.
 
 **Disposable tests:** Select **Test event** when creating a sample. This classification is fixed at creation and allows **Trash test** even after the event ends. Silent mode is a separate notification setting and does not make a real event disposable. Episodes 16 and 17 were owner-designated samples and have already been moved to Trash. Open **Menu → Trash** to restore a deleted event before its number is reused. Restore keeps it inactive, registration closed and campaigns paused. Trash preserves application history in a restricted snapshot; student profiles and external Zoom/Sender records remain. Trashing does not cancel external meetings/campaigns or recall emails. Keep Sender support case drafts while support investigates.
 
@@ -149,3 +149,12 @@ Use a restricted incident log with time in IST, episode and meeting identity, sy
 Reference: Zoom managing registration https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0068036
 
 Reference: Render Free compute limits https://render.com/docs/free
+
+
+## Dashboard and event tables
+
+The dashboard loads a paginated list of upcoming/live workshops and the latest five registrations (episode number, name and college only). Completed events appear automatically in **Menu → Past events**; no manual archive step is required to remove them from the dashboard. Archive is a retained-history label. Totals include completed and archived records. Use Refresh Data for the latest figures; the dashboard does not poll continuously.
+
+Past events supports search by episode/title/presenter, IST event date range, mode, real/test status, archive status, sorting and 10/25/50 rows per page. Select **Apply filters** to query the server. Select **Reset filters** to start over. Event titles open their public page in a new tab; the pencil edits an event and the bin moves eligible events to Trash after confirmation.
+
+Choose **Attendees** on an event to see its saved registrations. Search by name/email/phone and filter by college, department, year, membership, registration dates (IST) or Zoom status. Filters and pagination run on the server. **Export matching attendees CSV** fetches all matching records only when requested; it is not limited to the current page. Meeting attendance remains a separate view and does not imply that every registered attendee joined.
