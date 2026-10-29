@@ -241,7 +241,7 @@ test('authenticated capability check lets the frontend fail safely against older
   const path = `${base}/api/admin/episode-capabilities`;
   assert.equal((await nativeFetch(path)).status, 401);
   const response = await nativeFetch(path, { headers: adminHeaders() });
-  assert.deepEqual(await response.json(), { success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60, test_events: true });
+  assert.deepEqual(await response.json(), { success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes_after_start: 30, test_events: true });
 });
 
 test('startup clears legacy SMTP failures for successful Zoom registrations without sending anything', async () => {
@@ -272,7 +272,7 @@ test('registration API rejects a past schedule even when the admin Open flag is 
   try {
     const response = await register();
     assert.equal(response.status, 400);
-    assert.match((await response.json()).error, /one hour before/);
+    assert.match((await response.json()).error, /30 minutes after/);
     assert.ok(!queries.some(q => q.sql.includes('INSERT INTO episode_registrations')));
     assert.ok(!queries.some(q => q.sql.includes('INSERT INTO zoom_registration_jobs')));
   } finally { registrationDate = '2026-12-01'; }
@@ -312,4 +312,21 @@ test('past real events cannot be rescheduled or have registration history delete
     assert.equal(removed.status,409);
     assert.ok(!queries.some(q=>q.sql.includes('DELETE FROM episode_registrations')));
   } finally {registrationDate='2026-12-01';}
+});
+
+test('registration API accepts until 30 minutes after start and rejects the first millisecond past the cutoff',async()=>{
+  const originalNow=Date.now;
+  const start=require('../episode-time').episodeStart({event_date:registrationDate,event_time:registrationTime});
+  try {
+    for(const offset of [-60*60000,0,15*60000,30*60000]) {
+      Date.now=()=>start+offset;
+      const response=await register();assert.equal(response.status,201,`offset ${offset}`);
+      assert.ok(queries.some(q=>q.sql.includes('INSERT INTO zoom_registration_jobs')));
+    }
+    Date.now=()=>start+30*60000+1;
+    const response=await register();assert.equal(response.status,400);
+    assert.match((await response.json()).error,/30 minutes after/);
+    assert.ok(!queries.some(q=>q.sql.includes('INSERT INTO episode_registrations')));
+    assert.ok(!queries.some(q=>q.sql.includes('INSERT INTO zoom_registration_jobs')));
+  } finally {Date.now=originalNow;}
 });

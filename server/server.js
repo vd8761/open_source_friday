@@ -379,7 +379,7 @@ app.post('/api/students/lookup', async (req, res) => {
 
 // Prevent a newer frontend from silently creating a noisy episode on an older backend.
 app.get('/api/admin/episode-capabilities', authenticateToken, (req, res) => {
-  res.json({ success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes: 60, test_events: true });
+  res.json({ success: true, silent_mode: true, schedule_validation: true, event_timezone: 'Asia/Kolkata', registration_close_minutes_after_start: 30, test_events: true });
 });
 
 // Admin: Create Episode — sends "New Episode" push notification
@@ -625,7 +625,7 @@ app.post('/api/register', async (req, res) => {
 
     if (!registrationIsOpen(epCheck.rows[0])) {
       await db.query('ROLLBACK');
-      return res.status(400).json({ success: false, error: 'Registration closes one hour before the scheduled start time (IST).' });
+      return res.status(400).json({ success: false, error: 'Registration closes 30 minutes after the scheduled start time (IST).' });
     }
 
     let currentStudentId = student_id;

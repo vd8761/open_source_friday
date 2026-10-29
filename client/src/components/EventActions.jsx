@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Trash2 } from 'lucide-react';
 import { adminApi } from '../utils/adminApi';
 import { eventPolicy } from '../utils/episodeTime';
-export default function EventActions({ episode, onChanged }) {
+export default function EventActions({ episode, onChanged, buttonClass = "rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold" }) {
   const policy=eventPolicy(episode);
   const [dialog,setDialog]=useState(null),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   async function work(fn) {setBusy(true);setError('');try{await fn();}catch(e){setError(e.message);}finally{setBusy(false);}}
@@ -10,8 +9,8 @@ export default function EventActions({ episode, onChanged }) {
   const deleting=dialog?.type==='delete';
   const phrase=`${deleting?'DELETE':'ARCHIVE'} EPISODE ${episode.episode_number}`;
   return <>
-    {policy.can_delete && <button aria-label={`${policy.is_test?'Trash test':'Delete'} Episode ${episode.episode_number}`} title={policy.is_test?'Trash test event':'Delete event'} className="rounded-lg bg-rose-50 p-2 text-rose-700" disabled={busy} onClick={reviewDelete}><Trash2 aria-hidden="true" className="h-4 w-4"/></button>}
-    {policy.can_archive && <button className="rounded-lg bg-amber-50 px-3 py-1.5 font-semibold text-amber-800" disabled={busy} onClick={()=>{setDialog({type:'archive'});setConfirmation('');setError('');}}>Archive</button>}
+    {policy.can_delete && <button aria-label={`${policy.is_test?'Trash test':'Delete'} Episode ${episode.episode_number}`} title={policy.is_test?'Trash test event':'Delete event'} className={`${buttonClass} text-rose-700 hover:bg-rose-50`} disabled={busy} onClick={reviewDelete}>{policy.is_test?'Trash test':'Delete'}</button>}
+    {policy.can_archive && <button className={`${buttonClass} text-amber-800 hover:bg-amber-50`} disabled={busy} onClick={()=>{setDialog({type:'archive'});setConfirmation('');setError('');}}>Archive</button>}
     {dialog && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 text-left whitespace-normal">
       <div role="dialog" aria-modal="true" aria-label={`${deleting?'Delete':'Archive'} Episode ${episode.episode_number}`} className="w-full max-w-lg rounded-2xl bg-white p-6 space-y-4 shadow-xl">
         <h3 className="text-lg font-bold">{deleting?'Delete':'Archive'} Episode {episode.episode_number}</h3><p>{episode.title}</p>
