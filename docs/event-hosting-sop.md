@@ -38,7 +38,7 @@ Assign a named person to each role before publishing. One person may hold multip
 6. Save, return to the dashboard, refresh and reopen Edit. Check the persisted date and time. Open the public registration page in a fresh tab and compare it with Zoom.
 7. For a real event, have an approved test attendee register through the application. Check the attendees list for Registered with Zoom and ask the attendee to confirm the native Zoom email. Never distribute a student's private join link to everyone.
 
-**Registration closes one hour before the start.** For a 7 PM IST event, the cutoff is 6 PM IST. The dashboard Enabled toggle cannot bypass this cutoff. A closed toggle or inactive episode also blocks registration.
+**Registration closes 30 minutes after the start.** For a 7 PM IST event, the cutoff is 7:30 PM IST. The dashboard Enabled toggle cannot bypass this cutoff. A closed toggle or inactive episode also blocks registration.
 
 **Save rejected:** if Zoom's schedule differs, update Zoom first and save again. If the application says the scheduling update is unavailable, ask the technical owner to deploy the backend before continuing.
 
@@ -95,7 +95,7 @@ For cancellation, disable application registration and pause invitations. Coordi
 
 Use this procedure only after the Sender API restriction is resolved and the technical owner has cleared the live pilot. From address: info@descienceosclub.com. Keep API keys in Render, never in CSV files or chat.
 
-1. Choose an upcoming active episode with registration enabled and enough time before its one-hour cutoff. Prepare an opted-in audience. Required CSV column: Email. Optional: Full Name, College, Department, Year of Study and Status.
+1. Choose an upcoming active episode with registration enabled and enough time before its 30-minutes-after-start cutoff. Prepare an opted-in audience. Required CSV column: Email. Optional: Full Name, College, Department, Year of Study and Status.
 2. Use Email Invitations, choose the episode, upload or paste CSV, apply filters and Preview audience. Review duplicates, invalid addresses, suppressions and prior registrations or invitations. The count can shrink again when Sender subscriber status is checked.
 3. First test a small approved audience. Save a draft and review its subject, message, registration link, sender identity and batch settings. Start is a separate action.
 4. Keep Pause after the first batch enabled. For a large run, the default is 50 recipients per batch and 15 minutes between submissions. A 600-contact eligible audience requires 12 batches and at least 2 hours 45 minutes between first and last submission, plus review and provider delays. Prefer sending the day before the event.
@@ -155,6 +155,6 @@ Reference: Render Free compute limits https://render.com/docs/free
 
 The dashboard loads a paginated list of upcoming/live workshops and the latest five registrations (episode number, name and college only). Completed events appear automatically in **Menu → Past events**; no manual archive step is required to remove them from the dashboard. Archive is a retained-history label. Totals include completed and archived records. Use Refresh Data for the latest figures; the dashboard does not poll continuously.
 
-Past events supports search by episode/title/presenter, IST event date range, mode, real/test status, archive status, sorting and 10/25/50 rows per page. Select **Apply filters** to query the server. Select **Reset filters** to start over. Event titles open their public page in a new tab; the pencil edits an event and the bin moves eligible events to Trash after confirmation.
+Past events supports search by episode/title/presenter, IST event date range, mode, real/test status, archive status, sorting and 10/25/50 rows per page. Select **Apply filters** to query the server. Select **Reset filters** to start over. Event titles open their public page in a new tab; the grouped Edit button edits an event and Delete moves eligible events to Trash after confirmation.
 
 Choose **Attendees** on an event to see its saved registrations. Search by name/email/phone and filter by college, department, year, membership, registration dates (IST) or Zoom status. Filters and pagination run on the server. **Export matching attendees CSV** fetches all matching records only when requested; it is not limited to the current page. Meeting attendance remains a separate view and does not imply that every registered attendee joined.

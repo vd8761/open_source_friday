@@ -35,7 +35,7 @@ Deploy the backend first and the frontend second from `qa-zoom-integration`. Sta
 
 Dashboard → **Email Invitations**:
 
-1. Choose an upcoming active episode with registration open. Campaigns cannot start or continue after the one-hour registration cutoff.
+1. Choose an upcoming active episode with registration open. Campaigns cannot start or continue after the 30-minutes-after-start registration cutoff.
 2. Upload CSV (up to 5 MB / 10,000 rows), or paste CSV. Required `Email`; optional `Full Name`, `College`, `Department`, `Year of Study`, `Status`.
 3. Optionally filter college, department or year. Preview shows valid count, duplicates, exclusions and up to 100 eligible contacts.
 4. Enter subject/message and batch settings. Default: 50 contacts every 15 minutes, with a pause after the first non-empty batch for delivery review. This controls pacing, not inbox placement. Existing Sender subscriber suppression is checked again while processing each batch. This check can further reduce the preview count.

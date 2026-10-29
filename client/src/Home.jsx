@@ -96,7 +96,7 @@ const Home = () => {
                   : 'bg-dos hover:bg-dos-dark focus:ring-2 focus:ring-offset-2 focus:ring-dos'
             }`}
           >
-            {isCompleted ? 'View Episode Details' : !registrationOpen ? 'Registration Closed' : 'Register Now'}
+            {registrationOpen ? 'Register Now' : isCompleted ? 'View Episode Details' : 'Registration Closed'}
             {isCompleted ? <PlayCircle className="ml-2 h-4 w-4" /> : <ArrowRight className="ml-2 h-4 w-4" />}
           </button>
         </div>

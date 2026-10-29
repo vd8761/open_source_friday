@@ -34,7 +34,7 @@ function validSchedule(episode) {
 }
 function registrationClosesAt(episode) {
   const start = episodeStart(episode);
-  return start === null ? null : start - 60 * 60 * 1000;
+  return start === null ? null : start + 30 * 60 * 1000;
 }
 function registrationIsOpen(episode, now = Date.now()) {
   const close = registrationClosesAt(episode);

@@ -276,7 +276,7 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <p className="text-sm text-slate-500">Event times are IST. Registration closes one hour before the start time, even when the registration toggle is enabled.</p>
+        <p className="text-sm text-slate-500">Event times are IST. Registration stays open until 30 minutes after the event starts, unless disabled by an admin.</p>
         {loadError && <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{loadError}</div>}
 
         {/* Header & Actions */}
@@ -406,16 +406,15 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-3 items-start">
+          <div className="grid gap-6 lg:grid-cols-3 items-stretch">
             <section className="lg:col-span-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Calendar className="h-5 w-5 text-dos"/>Upcoming workshops</h2><Link to="/admin/past-events" className="text-sm font-semibold text-dos hover:underline">Past events →</Link></div>
-              <p className="px-5 pt-4 text-xs text-slate-500">Upcoming and live sessions, nearest first. Completed workshops move to Past events automatically.</p>
+              <div className="flex min-h-[88px] flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5"><div><h2 className="flex items-center gap-2 text-lg font-bold"><Calendar className="h-5 w-5 text-dos"/>Upcoming workshops</h2><p className="mt-1 text-xs text-slate-500">Upcoming and live sessions, nearest first</p></div><Link to="/admin/past-events" className="text-sm font-semibold text-dos hover:underline">Past events →</Link></div>
               {upcoming.error&&<p role="alert" className="p-5 text-rose-700">{upcoming.error} <button className="underline" onClick={upcoming.refresh}>Retry</button></p>}
               {upcoming.loading?<p className="p-10 text-center text-slate-500">Loading upcoming workshops…</p>:!upcoming.error&&upcoming.result.data.length?<UpcomingEvents rows={upcoming.result.data} onToggle={handleToggleRegistration} onChanged={m=>{showToast(m);refreshDashboard();}}/>:!upcoming.error&&<div className="p-10 text-center"><p className="font-semibold">No upcoming workshops</p><p className="mt-2 text-sm text-slate-500">Create your next episode to open registrations.</p><Link to="/admin/episodes/new" className="mt-4 inline-block rounded-lg bg-dos px-4 py-2 text-sm font-semibold text-white">Create episode</Link></div>}
-              <TablePager table={upcoming}/>
+              <TablePager table={upcoming} compact/>
             </section>
-            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Users className="h-5 w-5 text-dos"/>Recently registered</h2><p className="mt-1 text-xs text-slate-500">Latest 5 registrations across all workshops</p></div>
-              {loading?<p className="p-5 text-slate-500">Loading recent attendees…</p>:loadError?<p className="p-5 text-sm text-rose-700">Recent registrations could not be refreshed.</p>:recent.length?<ol className="divide-y divide-slate-100">{recent.map((r,i)=><li key={i} className="p-5"><span className="text-xs font-bold text-dos">Episode {r.episode_number}</span><p className="mt-1 font-semibold break-words">{r.full_name}</p><p className="mt-1 text-sm text-slate-500 break-words">{r.college||'College not provided'}</p></li>)}</ol>:<p className="p-5 text-sm text-slate-500">No registrations yet.</p>}
+            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="min-h-[88px] border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Users className="h-5 w-5 text-dos"/>Recently registered</h2><p className="mt-1 text-xs text-slate-500">Latest 5 registrations · all workshops</p></div>
+              {loading?<p className="p-5 text-slate-500">Loading recent attendees…</p>:loadError?<p className="p-5 text-sm text-rose-700">Recent registrations could not be refreshed.</p>:recent.length?<ol className="divide-y divide-slate-100">{recent.map((r,i)=><li key={i} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3"><span aria-label={`Episode ${r.episode_number}`} className="rounded-md bg-dos-light/10 px-1 py-1.5 text-center text-xs font-bold text-dos">#{r.episode_number}</span><div className="min-w-0"><p className="truncate text-sm font-semibold" title={r.full_name}>{r.full_name}</p><p className="mt-0.5 truncate text-xs text-slate-500" title={r.college||'College not provided'}>{r.college||'College not provided'}</p></div></li>)}</ol>:<p className="p-5 text-sm text-slate-500">No registrations yet.</p>}
             </section>
           </div>
         )}

@@ -27,7 +27,7 @@ export function isEpisodeConcluded(episode, now = Date.now()) {
 }
 export function isRegistrationOpen(episode, now = Date.now()) {
   const start = episode ? instant(episode) : null;
-  return Boolean(episode && episode.is_active !== false && episode.is_registration_open !== false && start !== null && now <= start - 60 * 60 * 1000);
+  return Boolean(episode && episode.is_active !== false && episode.is_registration_open !== false && start !== null && now <= start + 30 * 60 * 1000);
 }
 export function eventPolicy(episode, now = Date.now()) {
   const start = instant(episode), end = String(episode.event_time || '').split(/\s*[-–]\s*/).length === 2 ? instant(episode, true) : null;

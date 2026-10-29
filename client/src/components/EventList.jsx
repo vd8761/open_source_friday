@@ -1,15 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { formatEpisodeDate, eventPolicy } from '../utils/episodeTime';
 import EventActions from './EventActions';
 export function EventTitle({episode}) {
   return <a href={`/register/episode-${episode.episode_number}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-dos hover:underline inline-flex items-start gap-1" title="Open public event in a new tab">{episode.title}<ExternalLink aria-hidden="true" className="mt-1 h-3 w-3 shrink-0"/><span className="sr-only"> (opens in a new tab)</span></a>;
 }
 export function EventControls({episode,onChanged}) {
-  return <div className="flex flex-wrap items-center gap-3 text-sm"><Link className="rounded-lg bg-dos-light/10 px-3 py-2 font-semibold text-dos" to={`/admin/episodes/${episode.id}/attendees`}>Attendees</Link><Link className="text-dos hover:underline" to={`/admin/episodes/${episode.id}/attendance`}>Attendance</Link>
-    {!episode.archived_at&&<Link aria-label={`Edit Episode ${episode.episode_number}`} title="Edit event" className="rounded-lg bg-slate-100 p-2 text-slate-600" to={`/admin/episodes/edit/${episode.id}`}><Pencil aria-hidden="true" className="h-4 w-4"/></Link>}
-    <EventActions episode={episode} onChanged={onChanged}/>
+  const actionClass="inline-flex min-h-9 items-center justify-center whitespace-nowrap border-r border-slate-200 px-3 py-2 text-xs font-semibold transition-colors hover:bg-slate-100 focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-dos last:border-r-0";
+  return <div role="group" aria-label={`Episode ${episode.episode_number} actions`} className="inline-flex w-fit max-w-full flex-nowrap rounded-lg border border-slate-200 bg-white shadow-sm">
+    <Link className={`${actionClass} text-dos`} to={`/admin/episodes/${episode.id}/attendees`}>Attendees</Link>
+    <Link className={`${actionClass} text-slate-700`} to={`/admin/episodes/${episode.id}/attendance`}>Attendance</Link>
+    {!episode.archived_at&&<Link aria-label={`Edit Episode ${episode.episode_number}`} className={`${actionClass} text-slate-700`} to={`/admin/episodes/edit/${episode.id}`}>Edit</Link>}
+    <EventActions episode={episode} onChanged={onChanged} buttonClass={actionClass}/>
   </div>;
 }
 export function UpcomingEvents({rows,onChanged,onToggle}) {

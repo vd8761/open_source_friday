@@ -110,7 +110,7 @@ async function createInviteCampaign(db, input, adminId, env = process.env) {
     throw new InputError(
       "This episode has already ended. Choose an upcoming episode.",
     );
-  if (!registrationIsOpen(preview.episode)) throw new InputError("Registration closes one hour before the episode starts (IST). Choose an upcoming episode.");
+  if (!registrationIsOpen(preview.episode)) throw new InputError("Registration closes 30 minutes after the episode starts (IST). Choose an episode with registration open.");
   if (!preview.contacts.length)
     throw new InputError(
       "No eligible recipients remain after validation and exclusions.",

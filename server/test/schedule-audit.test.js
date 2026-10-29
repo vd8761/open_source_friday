@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { PGlite } = require('@electric-sql/pglite');
 const { processEpisodeReminders } = require('../episode-reminders');
-const { episodeStart, validSchedule, registrationIsOpen } = require('../episode-time');
+const { episodeStart, validSchedule, registrationIsOpen, registrationClosesAt } = require('../episode-time');
 const { databaseTypes } = require('../database-types');
 const episode = { event_date: '2026-10-27', event_time: '7:00 PM – 8:00 PM', is_active: true, is_registration_open: true };
 test('schedule preserves the PostgreSQL calendar date and agrees with the frontend cutoff', async () => {
@@ -12,8 +12,17 @@ test('schedule preserves the PostgreSQL calendar date and agrees with the fronte
   const ui = await import('../../client/src/utils/episodeTime.js');
   const start = episodeStart(episode);
   assert.equal(new Date(start).toISOString(), '2026-10-27T13:30:00.000Z');
-  for (const now of [start - 3600001, start - 3600000, start - 3599999, start + 1])
-    assert.equal(ui.isRegistrationOpen(episode, now), registrationIsOpen(episode, now));
+  const cutoff=start+30*60000;
+  assert.equal(registrationClosesAt(episode),cutoff);
+  for (const now of [start-3600001,start-3600000,start-1,start,start+1,cutoff-1,cutoff,cutoff+1]) {
+    const expected=now<=cutoff;
+    assert.equal(registrationIsOpen(episode,now),expected);
+    assert.equal(ui.isRegistrationOpen(episode,now),expected);
+  }
+  for(const flags of [{is_registration_open:false},{is_active:false}]) {
+    assert.equal(registrationIsOpen({...episode,...flags},start+15*60000),false);
+    assert.equal(ui.isRegistrationOpen({...episode,...flags},start+15*60000),false);
+  }
   assert.equal(registrationIsOpen({ ...episode, event_time: 'invalid' }, start), false);
   for (const date of ['2026-02-30', 'invalid']) assert.equal(validSchedule({ ...episode, event_date: date }), false);
 });
