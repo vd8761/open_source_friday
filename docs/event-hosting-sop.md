@@ -10,7 +10,7 @@ The required sequence is invitation to register, application registration, Zoom 
 
 **Release prerequisite:** the scheduling safeguards in this SOP are prepared on the QA branch. The technical owner must deploy and accept the release before the team relies on them.
 
-**Current restriction:** automatic Sender campaign sending remains paused while Sender investigates HTTP 403. Do not start a bulk campaign until the technical owner confirms a successful API test. Manual Sender delivery succeeded for two approved test recipients; this does not establish that automatic sending is ready.
+**Current restriction:** keep bulk Sender sending paused until the audience-readiness fix is deployed and the technical owner confirms a successful one-recipient API pilot. On 30 October 2026, Sender support confirmed that background group-count calculation caused the earlier “No subscribers selected” failure. The worker now waits for that count before creating a campaign. Local tests passing do not establish live API delivery.
 
 **Automation prerequisite:** the technical owner must confirm always-on backend compute. The Render service was observed on Free compute; a paid workspace alone does not keep its workers running.
 
@@ -87,7 +87,7 @@ For cancellation, disable application registration and pause invitations. Coordi
 
 **Event retention and cleanup:** On Dashboard, each upcoming event has a visible **Delete** action that moves it to recoverable Trash after a typed confirmation. Once a real event starts it cannot be deleted; after it ends, use **Archive**. Archived registrations and attendance remain available from **Menu → Past events**, filtered to Archived, including attendees list export; dashboard registration totals retain these records. Removing the archive label keeps the event in Past events and registration closed. Past real events cannot be rescheduled into the future or have their registration records deleted.
 
-**Disposable tests:** Select **Test event** when creating a sample. This classification is fixed at creation and allows **Trash test** even after the event ends. Silent mode is a separate notification setting and does not make a real event disposable. Episodes 16 and 17 were owner-designated samples and have already been moved to Trash. Open **Menu → Trash** to restore a deleted event before its number is reused. Restore keeps it inactive, registration closed and campaigns paused. Trash preserves application history in a restricted snapshot; student profiles and external Zoom/Sender records remain. Trashing does not cancel external meetings/campaigns or recall emails. Keep Sender support case drafts while support investigates.
+**Disposable tests:** Select **Test event** when creating a sample. This classification is fixed at creation and allows **Trash test** even after the event ends. Silent mode is a separate notification setting and does not make a real event disposable. Episodes 16 and 17 were owner-designated samples and have already been moved to Trash. Open **Menu → Trash** to restore a deleted event before its number is reused. Restore keeps it inactive, registration closed and campaigns paused. Trash preserves application history in a restricted snapshot; student profiles and external Zoom/Sender records remain. Trashing does not cancel external meetings/campaigns or recall emails. Keep Sender support case drafts until the incident is closed.
 
 <!-- page -->
 
@@ -101,6 +101,8 @@ Use this procedure only after the Sender API restriction is resolved and the tec
 4. Keep Pause after the first batch enabled. For a large run, the default is 50 recipients per batch and 15 minutes between submissions. A 600-contact eligible audience requires 12 batches and at least 2 hours 45 minutes between first and last submission, plus review and provider delays. Prefer sending the day before the event.
 5. Review actual inbox placement and Sender reports before confirming the pilot and resuming later batches. Batching does not guarantee that messages avoid Spam.
 6. Sync Sender reports and export the recipient report. Sent means accepted or reported sent, not delivered. Opens are approximate. Recipient Delivery stays Not reported unless explicit delivery evidence is imported. Use Sender's aggregate delivery report alongside actual recipient confirmation.
+
+**Audience preparation:** a newly created group can need up to two minutes to show its active subscribers. The application checks every five seconds and creates the campaign only when the active count matches the batch. Do not repeatedly press Resume while the worker is running. If the count never becomes ready, the campaign pauses without a send.
 
 **Failure or timeout:** leave the campaign paused. Use Check send outcome in Sender. A confirmed SENT or SENDING batch must be reconciled without resending. An explicitly unsent DRAFT may be rebuilt after review. Unknown or scheduled outcomes remain blocked.
 
@@ -132,7 +134,7 @@ Use the actual Zoom session UUID if a later API sync is expected. Check Complete
 | --- | --- | --- |
 | Date differs across pages | Refresh and reopen saved episode then compare Zoom | Technical owner |
 | Backend unavailable | Wait for a cold start then refresh once | Technical owner |
-| Sender HTTP 403 | Keep paused and retain request reference | Sender support |
+| Sender HTTP 403 / audience count delay | Keep paused; check the audience-readiness fix and reconcile the send outcome before resuming. Retain the request reference for unexplained errors. | Technical owner / Sender support |
 | Zoom HTTP 429 | Honor the retry time and avoid repeated registrations | Technical owner |
 | Zoom enrollment succeeds but no email | Check saved email and resend in Zoom | Attendee support |
 | Attendance session date differs | Stop and select the correct session UUID | Attendance owner |

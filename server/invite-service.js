@@ -162,7 +162,9 @@ async function skipIneligible(db, campaignId, episodeId) {
 }
 // Session advisory lock coordinates workers across backend instances. State is committed
 // before the send request, so an uncertain response or restart cannot auto-send twice.
-async function processInviteBatch(pool, sender, env = process.env) {
+async function processInviteBatch(pool, sender, env = process.env, {
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
+} = {}) {
   if (!sender.configured()) return;
   const db = await pool.connect();
   let locked = false,
@@ -280,6 +282,19 @@ async function processInviteBatch(pool, sender, env = process.env) {
         batch.group_id,
         eligible.map((c) => c.email),
       );
+      const ensureCurrentAudience = async () => {
+        const state = (await db.query(`SELECT c.status,e.is_active,e.is_registration_open,e.event_date,e.event_time
+          FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id WHERE c.id=$1`,[campaign.id])).rows[0];
+        if (state?.status !== 'running') throw new InputError('Campaign paused while Sender was preparing the audience. No further send was attempted.');
+        if (!registrationIsOpen(state)) throw new InputError('Episode registration is closed. Campaign paused.');
+        await skipIneligible(db, campaign.id, campaign.episode_id);
+        const current = (await db.query("SELECT id FROM invite_recipients WHERE batch_id=$1 AND send_status='queued' ORDER BY id",[batch.id])).rows;
+        const ids = new Set(eligible.map(contact => contact.id));
+        if (current.length !== ids.size || current.some(contact => !ids.has(contact.id)))
+          throw new InputError('Batch audience changed during preparation. Please resume to rebuild the group before sending.');
+      };
+      await db.query("UPDATE invite_batches SET last_error='Waiting for Sender to finish calculating the batch audience (up to two minutes).' WHERE id=$1",[batch.id]);
+      await sender.waitForGroup(batch.group_id, eligible.length, ensureCurrentAudience);
       {
         // Replacing an unsent draft is safe; sending/review batches never reach here.
         batch.provider_campaign_id = await sender.createCampaign(
@@ -293,23 +308,32 @@ async function processInviteBatch(pool, sender, env = process.env) {
           [batch.id, batch.provider_campaign_id],
         );
       }
-      // Recheck pause/closure immediately before submitting a batch.
-      const state = (
-        await db.query(
-          `SELECT c.status,e.is_active,e.is_registration_open,e.event_date,e.event_time FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id WHERE c.id=$1`,
-          [campaign.id],
-        )
-      ).rows[0];
-      if (state.status !== "running") return;
-      if (!registrationIsOpen(state))
-        throw new InputError(
-          "Episode registration is closed. Campaign paused.",
-        );
-      await db.query("UPDATE invite_batches SET status='sending' WHERE id=$1", [
-        batch.id,
-      ]);
-      batch.status = "sending";
-      await sender.send(batch.provider_campaign_id);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await ensureCurrentAudience();
+        if (attempt > 0) {
+          const current = await sender.campaign(batch.provider_campaign_id);
+          if (!current || String(current.status).toUpperCase() !== 'DRAFT' || current.sent_time)
+            throw new InputError('Sender campaign status changed while waiting. Reconcile with Sender before resuming.');
+        }
+        await db.query("UPDATE invite_batches SET status='sending',last_error=NULL WHERE id=$1", [batch.id]);
+        batch.status = "sending";
+        try {
+          await sender.send(batch.provider_campaign_id);
+          break;
+        } catch (error) {
+          if (!(error instanceof SenderError) || error.audienceNotReady !== true || attempt !== 0 || error.retryAfterSeconds > 60) throw error;
+          // The exact rejection plus an explicitly unsent draft permits one retry.
+          // Never retry an unknown, scheduled, already sent or network-failed request.
+          const provider = await sender.campaign(batch.provider_campaign_id);
+          if (!provider || String(provider.status).toUpperCase() !== 'DRAFT' || provider.sent_time) throw error;
+          await db.query("UPDATE invite_batches SET last_error='Sender audience is updating. Waiting one minute before one verified-draft retry.' WHERE id=$1",[batch.id]);
+          // Keep the durable 'sending' fence through the wait: a restart needs reconciliation.
+          await db.query("UPDATE invite_campaigns SET next_batch_at=NOW()+INTERVAL '1 minute' WHERE id=$1",[campaign.id]);
+          await sleep(60000);
+          await ensureCurrentAudience();
+          await sender.waitForGroup(batch.group_id, eligible.length, ensureCurrentAudience);
+        }
+      }
       await db.query(
         "UPDATE invite_batches SET status='submitted',submitted_at=NOW(),last_error=NULL WHERE id=$1",
         [batch.id],

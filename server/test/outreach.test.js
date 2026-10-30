@@ -57,6 +57,10 @@ function senderStub(options = {}) {
     }),
     addContact: async () => {},
     addToGroup: async (id, emails) => calls.push(["audience", emails]),
+    waitForGroup: async (id, count, beforePoll) => {
+      calls.push(['ready',id,count]);
+      await beforePoll?.();
+    },
     createCampaign: async (title, subject, html, id) => {
       calls.push(["create", html, id]);
       return "provider1";
@@ -877,4 +881,100 @@ test('failed send evidence persists on the authenticated batch and survives reco
   await request(`/outreach/campaigns/${c.id}/reconcile/${batch.id}`, 'POST', {});
   assert.deepEqual((await db.query('SELECT provider_diagnostic FROM invite_batches WHERE id=$1', [batch.id])).rows[0].provider_diagnostic, diagnostic);
   assert.equal(sends, 1);
+});
+
+test('batch waits for Sender audience readiness before creating or sending a campaign',async()=>{
+  await resetCampaigns();const c=await makeCampaign('Email\none@example.com\ntwo@example.com');
+  const sender=senderStub();
+  sender.waitForGroup=async(id,count,guard)=>{
+    sender.calls.push(['ready',id,count]);
+    assert.equal(count,2);assert.equal(sender.calls.filter(c=>['create','send'].includes(c[0])).length,0);
+    await guard();
+  };
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+  await processInviteBatch(pool,sender,env);
+  assert.deepEqual(sender.calls.map(c=>c[0]),['group','audience','ready','create','send']);
+});
+
+test('audience timeout pauses before creating a campaign and resumes with a freshly checked group',async()=>{
+  await resetCampaigns();const c=await makeCampaign('Email\none@example.com\ntwo@example.com');const sender=senderStub();
+  const wait=sender.waitForGroup;sender.waitForGroup=async()=>{throw new SenderError('Sender is still calculating the batch audience after two minutes. No campaign was sent. Please resume later.');};
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+  await processInviteBatch(pool,sender,env);
+  assert.equal(sender.calls.filter(c=>['create','send'].includes(c[0])).length,0);
+  const paused=(await db.query('SELECT * FROM invite_campaigns WHERE id=$1',[c.id])).rows[0];assert.equal(paused.status,'paused');assert.match(paused.last_error,/two minutes/);
+  sender.waitForGroup=wait;await db.query("UPDATE invite_campaigns SET status='running',next_batch_at=NOW() WHERE id=$1",[c.id]);
+  await processInviteBatch(pool,sender,env);assert.equal(sender.calls.filter(c=>c[0]==='send').length,1);
+});
+
+test('pauses, event closure and new suppressions during readiness prevent a stale audience send',async()=>{
+  for(const change of ['pause','close','suppress']) {
+    await resetCampaigns();const c=await makeCampaign('Email\none@example.com\ntwo@example.com');const sender=senderStub();
+    sender.waitForGroup=async(id,count,guard)=>{
+      if(change==='pause')await db.query("UPDATE invite_campaigns SET status='paused' WHERE id=$1",[c.id]);
+      if(change==='close')await db.query('UPDATE episodes SET is_registration_open=FALSE WHERE id=1');
+      if(change==='suppress')await db.query("INSERT INTO invite_suppressions(email,reason) VALUES('one@example.com','STOP during readiness')");
+      await guard();
+    };
+    try {
+      await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);await processInviteBatch(pool,sender,env);
+      assert.equal(sender.calls.filter(c=>['create','send'].includes(c[0])).length,0,change);
+      assert.equal((await db.query('SELECT status FROM invite_campaigns WHERE id=$1',[c.id])).rows[0].status,'paused');
+    }finally{await db.query('UPDATE episodes SET is_registration_open=TRUE WHERE id=1');}
+  }
+});
+
+function audienceRejection(){const error=new SenderError('Sender audience is not ready.');error.audienceNotReady=true;return error;}
+
+test('an explicit no-subscribers rejection retries the same verified unsent draft once after a minute',async()=>{
+  await resetCampaigns();const c=await makeCampaign('Email\none@example.com\ntwo@example.com');const sender=senderStub();let sends=0;const waits=[];
+  sender.campaign=async()=>({status:'DRAFT',sent_time:null});
+  sender.send=async id=>{sender.calls.push(['send',id]);if(++sends===1)throw audienceRejection();};
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+  await processInviteBatch(pool,sender,env,{sleep:async ms=>{
+    waits.push(ms);assert.equal((await db.query('SELECT status FROM invite_batches WHERE campaign_id=$1',[c.id])).rows[0].status,'sending');
+  }});
+  assert.deepEqual(waits,[60000]);assert.equal(sends,2);assert.equal(sender.calls.filter(c=>c[0]==='create').length,1);
+  assert.deepEqual(sender.calls.filter(c=>c[0]==='send').map(c=>c[1]),['provider1','provider1']);
+  assert.equal((await db.query('SELECT status FROM invite_campaigns WHERE id=$1',[c.id])).rows[0].status,'completed');
+  assert.equal((await db.query("SELECT COUNT(*)::int AS n FROM invite_recipients WHERE campaign_id=$1 AND send_status='submitted'",[c.id])).rows[0].n,2);
+});
+
+test('audience errors never retry sent, scheduled, unknown or already dispatched drafts',async()=>{
+  for(const provider of [{status:'SENT'},{status:'SCHEDULED'},{status:'UNKNOWN'},{status:'DRAFT',sent_time:'2026-10-30T12:00:00Z'},null]) {
+    await resetCampaigns();const c=await makeCampaign('Email\none@example.com');const sender=senderStub();let sends=0;
+    sender.campaign=async()=>provider;sender.send=async()=>{sends++;throw audienceRejection();};
+    await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+    await processInviteBatch(pool,sender,env,{sleep:async()=>assert.fail('No wait or retry allowed')});
+    assert.equal(sends,1);assert.equal((await db.query('SELECT status FROM invite_batches WHERE campaign_id=$1',[c.id])).rows[0].status,'review');
+  }
+});
+
+test('second audience rejection stops after one retry and remains fenced for reconciliation',async()=>{
+  await resetCampaigns();const c=await makeCampaign('Email\none@example.com');const sender=senderStub();let sends=0,waits=0;
+  sender.campaign=async()=>({status:'DRAFT'});sender.send=async()=>{sends++;throw audienceRejection();};
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+  await processInviteBatch(pool,sender,env,{sleep:async()=>{waits++;}});
+  assert.equal(sends,2);assert.equal(waits,1);assert.equal((await db.query('SELECT status FROM invite_batches WHERE campaign_id=$1',[c.id])).rows[0].status,'review');
+  await db.query("UPDATE invite_campaigns SET status='running',next_batch_at=NOW() WHERE id=$1",[c.id]);
+  await processInviteBatch(pool,sender,env);assert.equal(sends,2);
+});
+
+test('a manual pause or external Sender send during the one-minute wait prevents the retry',async()=>{
+  for(const change of ['pause','external_send']) {
+    await resetCampaigns();const c=await makeCampaign('Email\none@example.com');const sender=senderStub();let sends=0,changed=false;
+    sender.campaign=async()=>({status:changed&&change==='external_send'?'SENT':'DRAFT'});sender.send=async()=>{sends++;throw audienceRejection();};
+    await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+    await processInviteBatch(pool,sender,env,{sleep:async()=>{changed=true;if(change==='pause')await db.query("UPDATE invite_campaigns SET status='paused' WHERE id=$1",[c.id]);}});
+    assert.equal(sends,1);assert.equal((await db.query('SELECT status FROM invite_batches WHERE campaign_id=$1',[c.id])).rows[0].status,'review');
+  }
+});
+
+
+test('an audience rejection with a longer provider cooldown never takes the one-minute retry path',async()=>{
+  await resetCampaigns();const c=await makeCampaign('Email\none@example.com');const sender=senderStub();let sends=0;
+  sender.campaign=async()=>({status:'DRAFT'});sender.send=async()=>{sends++;const e=audienceRejection();e.retryAfterSeconds=600;throw e;};
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+  await processInviteBatch(pool,sender,env,{sleep:async()=>assert.fail('Long cooldown must stay paused')});
+  assert.equal(sends,1);const saved=(await db.query('SELECT * FROM invite_campaigns WHERE id=$1',[c.id])).rows[0];assert.equal(saved.status,'paused');assert.ok(new Date(saved.next_batch_at).getTime()>Date.now()+500000);
 });
