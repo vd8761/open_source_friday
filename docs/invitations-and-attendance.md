@@ -47,7 +47,7 @@ The worker excludes current episode registrations, known suppressions, and conta
 
 ### Uncertain sends
 
-Before the send API request, the batch records `sending` durably. A timeout, error or crash leaves it paused or requiring review, never automatically resubmitted. Use **Check send outcome in Sender**:
+Before the send API request, the batch records `sending` durably. A timeout, generic error or crash leaves it paused or requiring review, never automatically resubmitted. The sole bounded exception is an exact “No subscribers selected” send rejection: after Sender confirms an unsent DRAFT, the same worker waits one minute, rechecks readiness, local eligibility and draft status, then retries that same draft once. Longer provider cooldowns are preserved for manual resumption. A second rejection stops for review. The durable sending fence remains in place throughout the wait, so a restart requires reconciliation. Use **Check send outcome in Sender**:
 
 - If Sender confirms SENT/SENDING, the batch is reconciled without resending.
 - If Sender explicitly confirms an unsent DRAFT without a sent timestamp, it can be rebuilt and submitted after Resume.
@@ -144,3 +144,21 @@ Two approved test recipients confirmed Inbox placement after sending through Sen
 ## Sender support response evidence
 
 For a new HTTP 403 from campaign submission, the authenticated campaign detail now retains a redacted provider response. Open **Sender response evidence** and use **Download response evidence**. The JSON records UTC capture time, endpoint, method, status, allowlisted response headers, response text and truncation/read-error flags. The body is capped at 32 KiB before redaction. No request headers or payload are stored; redacted text is not a byte-for-byte original. Review the download before privately sharing it with Sender support. Old failures have no recoverable raw body. Downloading never retries sending; keep outcome reconciliation and a small approved test audience in place.
+
+
+## Sender group readiness fix — 30 October 2026
+
+Sender support traced the earlier send failure to eventual consistency: a group was created, recipients added and the send attempted within about two seconds, before the background audience count updated. Group assignment in campaign creation was already correct. This was not evidence of a missing audience field or a need to change API credentials.
+
+The worker now follows this order:
+
+1. Create a fresh private batch group, check subscriber status and add only eligible contacts, with automation disabled.
+2. Poll `GET /v2/groups/{id}` every five seconds, for up to two minutes. Require exactly the expected `active_subscribers` count and no reported recalculation still in progress. Missing, malformed, wrong-group or oversized counts stop preparation; a count mismatch never authorises a send.
+3. Create the campaign with that group only after readiness, then recheck registration closure, pause and local suppressions/registrations before submitting.
+4. Apply the single verified-draft retry described above only for the exact audience rejection. Other HTTP 403 responses, network failures, unknown statuses and scheduled/sent campaigns remain review-only.
+
+Existing paused drafts are not automatically resumed by deployment. For the support-named `KrQN6z`, inspect its actual audience, linked event, registration cutoff and provider status before choosing **Check send outcome in Sender** and **Resume**. A known-unsent old draft is rebuilt with fresh eligibility checks; do not bypass event closure or restore a sample just to send it. Do not start all paused campaigns together. Run one approved recipient pilot after deployment, check actual delivery, then consider the bulk queue.
+
+No new environment variables, permissions or database migration are required for this fix. Deploy the Render backend. Zoom confirmation remains independent of Sender campaigns.
+
+Primary API reference: https://api.sender.net/groups/get-group/ (`active_subscribers`, `is_recalculating_subscribers`). The provider support explanation above is owner-supplied incident evidence; live delivery still needs verification.

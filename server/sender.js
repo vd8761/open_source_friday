@@ -7,9 +7,12 @@ class SenderError extends Error {
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
-function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
+function createSenderClient({ env = process.env, fetchImpl = fetch,
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = () => Date.now(),
+} = {}) {
   function operation(path, method) {
     if (path === "/groups") return "creating the batch group";
+    if (path.startsWith("/groups/")) return "checking the batch audience";
     if (path.startsWith("/subscribers/groups/")) return "assigning the batch audience";
     if (path === "/subscribers") return "creating the invitation contact";
     if (path.startsWith("/subscribers/")) return "checking the subscriber status";
@@ -56,7 +59,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
       env.SENDER_POSTAL_ADDRESS &&
       env.PUBLIC_APP_URL,
     );
-  async function request(path, method = "GET", body) {
+  async function request(path, method = "GET", body, timeoutMs = 20000) {
     if (!configured())
       throw new SenderError(
         "Configure Sender API token, verified From address/name, postal address and public app URL on the backend.",
@@ -72,7 +75,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
           "Content-Type": "application/json",
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
       throw new SenderError(
@@ -98,6 +101,15 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
         response.status === 429 ? 429 : 502,
         Number.isFinite(seconds) ? Math.max(60, Math.ceil(seconds)) : 60,
       );
+      // Only this exact provider rejection is eligible for the worker's bounded retry.
+      // A generic 403, HTML page, timeout or quota error remains an uncertain send.
+      const noSubscribers = value => typeof value === 'string' && value.trim().toLowerCase() === 'no subscribers selected';
+      if (method === 'POST' && path.endsWith('/send') && [400,403,422].includes(response.status)
+        && (noSubscribers(data.message) || noSubscribers(data.error)
+          || (Array.isArray(data.errors) && data.errors.length === 1 && noSubscribers(data.errors[0]?.title)))) {
+        error.audienceNotReady = true;
+        error.message = 'Sender has not finished calculating the campaign audience (No subscribers selected).';
+      }
       if (diagnostic) error.providerDiagnostic = diagnostic;
       throw error;
     }
@@ -136,6 +148,28 @@ function createSenderClient({ env = process.env, fetchImpl = fetch } = {}) {
       if (!result?.data?.id)
         throw new SenderError("Sender did not return a group ID.");
       return String(result.data.id);
+    },
+    async waitForGroup(id, expected, beforePoll = async () => {}) {
+      if (!Number.isSafeInteger(expected) || expected < 1 || expected > 200)
+        throw new InputError('Use a non-empty batch of at most 200 recipients.');
+      const deadline = now() + 120000;
+      for (let poll = 0; poll < 25; poll++) {
+        await beforePoll();
+        const remaining = deadline - now();
+        if (remaining <= 0) break;
+        const group = (await request(`/groups/${encodeURIComponent(id)}`, 'GET', undefined, Math.min(20000, remaining)))?.data;
+        const raw = group?.active_subscribers;
+        const count = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN;
+        if (!group || String(group.id) !== String(id) || !Number.isSafeInteger(count) || count < 0)
+          throw new SenderError('Sender did not return a valid active subscriber count. No campaign was sent.');
+        if (count > expected)
+          throw new SenderError('Sender group has more active subscribers than the selected batch. No campaign was sent.');
+        if (count === expected && group.is_recalculating_subscribers !== true) return;
+        const delay = Math.min(5000, deadline - now());
+        if (delay <= 0) break;
+        await sleep(delay);
+      }
+      throw new SenderError('Sender is still calculating the batch audience after two minutes. No campaign was sent. Please resume later.');
     },
     async subscriber(email) {
       return (
