@@ -485,6 +485,7 @@ export default function OutreachTool() {
               {detail.campaign.last_error}
             </p>
           )}
+          {detail.campaign.status==='paused'&&detail.campaign.last_error?.includes('Sender rate limit')&&<p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Earliest next attempt: {date(detail.campaign.next_batch_at)}. This is a saved retry time, not a guarantee that Sender's limit has reset. The campaign stays paused until you click Resume; the event must still be open for registration.</p>}
           <p className="text-sm text-slate-500">
             {detail.campaign.pause_after_first_batch
               ? "First-batch review is enabled. Later batches are checked for reported bounces and complaints."

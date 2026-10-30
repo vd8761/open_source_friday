@@ -1,5 +1,6 @@
 const { InputError } = require("./outreach-csv");
 const { captureResponse } = require("./sender-diagnostic");
+const { createSenderPacer } = require("./sender-pacing");
 class SenderError extends Error {
   constructor(message, status = 502, retryAfterSeconds = 60) {
     super(message);
@@ -10,6 +11,7 @@ class SenderError extends Error {
 function createSenderClient({ env = process.env, fetchImpl = fetch,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = () => Date.now(),
 } = {}) {
+  const pacer=createSenderPacer({now,sleep});
   function operation(path, method) {
     if (path === "/groups") return "creating the batch group";
     if (path.startsWith("/groups/")) return "checking the batch audience";
@@ -59,7 +61,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch,
       env.SENDER_POSTAL_ADDRESS &&
       env.PUBLIC_APP_URL,
     );
-  async function request(path, method = "GET", body, timeoutMs = 20000) {
+  async function requestOnce(path, method, body, timeoutMs, observe) {
     if (!configured())
       throw new SenderError(
         "Configure Sender API token, verified From address/name, postal address and public app URL on the backend.",
@@ -82,6 +84,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch,
         "Sender request outcome is unknown. Check the campaign in Sender before retrying.",
       );
     }
+    observe(response);
     const diagnostic = response.status === 403 && /^\/campaigns\/[a-z\d_-]+\/send$/i.test(path)
       ? await captureResponse(response, path, method, env) : null;
     let data;
@@ -90,13 +93,10 @@ function createSenderClient({ env = process.env, fetchImpl = fetch,
     } else data = await response.json().catch(() => ({}));
     if (response.status === 404) return null;
     if (!response.ok || data.success === false) {
-      const retry = response.headers?.get("retry-after");
-      const seconds = /^\d+$/.test(retry || "")
-        ? Number(retry)
-        : (Date.parse(retry) - Date.now()) / 1000;
+      const seconds = pacer.retrySeconds(response.headers);
       const error = new SenderError(
         response.status === 429
-          ? "Sender rate limit reached. Wait before resuming."
+          ? `Sender rate limit reached while ${operation(path, method)}. Wait before manually resuming.`
           : `Sender request failed while ${operation(path, method)} (HTTP ${response.status}). ${reason(data, response.status, response.headers)}`,
         response.status === 429 ? 429 : 502,
         Number.isFinite(seconds) ? Math.max(60, Math.ceil(seconds)) : 60,
@@ -114,6 +114,13 @@ function createSenderClient({ env = process.env, fetchImpl = fetch,
       throw error;
     }
     return data;
+  }
+  function request(path, method = 'GET', body, timeoutMs = 20000, deadline) {
+    // No network or send retry is hidden here. Explicit 429s retain the normal
+    // campaign pause, and all callers share the same paced request queue.
+    return pacer.run((observe,remaining)=>requestOnce(path,method,body,remaining===undefined?timeoutMs:Math.min(timeoutMs,remaining),observe),{
+      deadline,onCooldown:seconds=>new SenderError('Sender rate limit cooldown remains active. Wait before manually resuming.',429,Math.min(seconds,2147483647)),onDeadline:()=>new SenderError('Sender audience could not be confirmed within two minutes because API requests are waiting for a cooldown. No campaign was sent.'),
+    });
   }
   async function list(path) {
     const result = [];
@@ -157,7 +164,7 @@ function createSenderClient({ env = process.env, fetchImpl = fetch,
         await beforePoll();
         const remaining = deadline - now();
         if (remaining <= 0) break;
-        const group = (await request(`/groups/${encodeURIComponent(id)}`, 'GET', undefined, Math.min(20000, remaining)))?.data;
+        const group = (await request(`/groups/${encodeURIComponent(id)}`, 'GET', undefined, Math.min(20000, remaining), deadline))?.data;
         const raw = group?.active_subscribers;
         const count = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN;
         if (!group || String(group.id) !== String(id) || !Number.isSafeInteger(count) || count < 0)

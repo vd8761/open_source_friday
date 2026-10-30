@@ -162,3 +162,12 @@ Existing paused drafts are not automatically resumed by deployment. For the supp
 No new environment variables, permissions or database migration are required for this fix. Deploy the Render backend. Zoom confirmation remains independent of Sender campaigns.
 
 Primary API reference: https://api.sender.net/groups/get-group/ (`active_subscribers`, `is_recalculating_subscribers`). The provider support explanation above is owner-supplied incident evidence; live delivery still needs verification.
+
+
+## Sender API request pacing — 30 October 2026
+
+Email batch pacing and API request pacing are separate. A batch of 50 entirely new contacts can require 155 API requests (contact checks/creation/rechecks, a private group, readiness check, draft and send). The Sender client now serialises preparation, submission and report calls through one queue per backend process. Starts are at least two seconds apart by default; a lower reported `X-RateLimit-Limit` slows them further. Zero `X-RateLimit-Remaining` waits for a valid `X-RateLimit-Reset`, or a conservative minute when missing/invalid. HTTP 429 honours `Retry-After`; a long cooldown pauses rather than holding a backend request indefinitely.
+
+No transport or send retry is hidden in the pacing queue. A 429 still pauses the application campaign, and restarting the backend does not automatically resume it. The paused rate-limit message now shows the saved **earliest next attempt** time in IST and explicitly requires manual Resume. This is not a guarantee that the provider has reset. Other applications using the same Sender account or other backend instances can consume API allowance, so reported limits remain authoritative.
+
+Contact preparation can take several minutes. The worker checks pauses and event registration cutoff between contacts, as well as before sending. Do not increase batch size to get around throttling. Registration for Episode 16 on 30 October 2026 closes at 7:30 PM IST under the existing rule; a paused invitation campaign cannot resume after that cutoff even when the Sender cooldown expires. No cutoff is extended by this fix.

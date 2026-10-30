@@ -10,7 +10,7 @@ The required sequence is invitation to register, application registration, Zoom 
 
 **Release prerequisite:** the scheduling safeguards in this SOP are prepared on the QA branch. The technical owner must deploy and accept the release before the team relies on them.
 
-**Current restriction:** keep bulk Sender sending paused until the audience-readiness fix is deployed and the technical owner confirms a successful one-recipient API pilot. On 30 October 2026, Sender support confirmed that background group-count calculation caused the earlier “No subscribers selected” failure. The worker now waits for that count before creating a campaign. Local tests passing do not establish live API delivery.
+**Sender status:** the 30 October 2026 one-recipient API pilot reached the approved recipient’s Inbox, confirming the audience-readiness fix. A later 55-recipient campaign paused on API throttling before sending. The request-pacing update spaces and serialises provider requests and honours rate-limit headers. Email batch intervals do not themselves limit API requests. A paused campaign still requires manual Resume after its saved earliest-attempt time, while event registration remains open.
 
 **Automation prerequisite:** the technical owner must confirm always-on backend compute. The Render service was observed on Free compute; a paid workspace alone does not keep its workers running.
 
