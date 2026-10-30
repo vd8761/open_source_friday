@@ -258,6 +258,12 @@ async function processInviteBatch(pool, sender, env = process.env, {
     ).rows;
     const eligible = [];
     for (const contact of recipients) {
+      // Preparation can now take minutes; honour pauses and the event cutoff
+      // between contacts instead of processing the entire list first.
+      const state=(await db.query(`SELECT c.status,e.is_active,e.is_registration_open,e.event_date,e.event_time
+        FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id WHERE c.id=$1`,[campaign.id])).rows[0];
+      if(state?.status!=='running')throw new InputError('Campaign paused during audience preparation. No campaign was sent.');
+      if(!registrationIsOpen(state))throw new InputError('Episode registration is closed. Campaign paused.');
       let subscriber = await sender.subscriber(contact.email);
       if (!subscriber) {
         await sender.addContact(contact);

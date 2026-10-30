@@ -978,3 +978,24 @@ test('an audience rejection with a longer provider cooldown never takes the one-
   await processInviteBatch(pool,sender,env,{sleep:async()=>assert.fail('Long cooldown must stay paused')});
   assert.equal(sends,1);const saved=(await db.query('SELECT * FROM invite_campaigns WHERE id=$1',[c.id])).rows[0];assert.equal(saved.status,'paused');assert.ok(new Date(saved.next_batch_at).getTime()>Date.now()+500000);
 });
+
+test('a full 50-new-contact batch paces all preparation requests and submits exactly one campaign',async()=>{
+ await resetCampaigns();
+ const c=await makeCampaign('Email,Full Name\n'+Array.from({length:50},(_,i)=>`paced${i}@example.com,Test ${i}`).join('\n'),{batch_size:50});
+ const contacts=new Map(),calls=[];let clock=Date.now(),audience=0;
+ const sender=require('../sender').createSenderClient({env:{...env,SENDER_API_TOKEN:'test-token',SENDER_FROM_EMAIL:'test@example.com'},now:()=>clock,sleep:async ms=>{clock+=ms;},fetchImpl:async(url,init)=>{
+  const path=new URL(url).pathname;calls.push({path,method:init.method,at:clock});let status=200,body={};
+  if(path==='/v2/groups')body={data:{id:'paced-group'}};
+  else if(path==='/v2/subscribers'&&init.method==='POST'){const c=JSON.parse(init.body);contacts.set(c.email,{status:{email:'active'}});body={data:{id:c.email}};}
+  else if(path.startsWith('/v2/subscribers/groups/')){audience=JSON.parse(init.body).subscribers.length;}
+  else if(path.startsWith('/v2/subscribers/')){const email=decodeURIComponent(path.slice('/v2/subscribers/'.length));status=contacts.has(email)?200:404;body={data:contacts.get(email)};}
+  else if(path==='/v2/groups/paced-group')body={data:{id:'paced-group',active_subscribers:audience}};
+  else if(path==='/v2/campaigns')body={data:{id:'paced-campaign'}};
+  else if(path!=='/v2/campaigns/paced-campaign/send')assert.fail('Unexpected provider operation');
+  return {status,ok:status<400,headers:{get:()=>null},json:async()=>body};
+ }});
+ await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);await processInviteBatch(pool,sender,env);
+ assert.equal(calls.length,155);for(let i=1;i<calls.length;i++)assert.ok(calls[i].at-calls[i-1].at>=2000);
+ assert.equal(calls.filter(c=>c.path.endsWith('/send')).length,1);assert.equal(audience,50);
+ assert.equal((await db.query('SELECT status FROM invite_campaigns WHERE id=$1',[c.id])).rows[0].status,'completed');
+});

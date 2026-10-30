@@ -10,10 +10,12 @@ const env = {
 };
 function setup(responses, override = env, timing = {}) {
   const calls = [];
+  let clock=0;
   return {
     calls,
     client: createSenderClient({
       env: override,
+      now:()=>clock,sleep:async ms=>{clock+=ms;},
       ...timing,
       fetchImpl: async (url, init) => {
         calls.push({ url, ...init });
