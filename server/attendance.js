@@ -98,6 +98,7 @@ function combinedSeconds(rows) {
     withoutTimes = new Set();
   let duration = 0;
   for (const row of rows) {
+    if(row.duplicate_of)continue;
     if (row.join_time && row.leave_time)
       intervals.push([Date.parse(row.join_time), Date.parse(row.leave_time)]);
     else {
@@ -174,25 +175,27 @@ async function saveAttendance(
   const oldMatches = new Map(
     (
       await db.query(
-        "SELECT id,registration_id FROM attendance_participants WHERE episode_id=$1 AND match_method='manual'",
+        "SELECT id,registration_id,match_method,duplicate_of,review_note,reviewed_by,reviewed_at FROM attendance_participants WHERE episode_id=$1 AND (match_method='manual' OR duplicate_of IS NOT NULL)",
         [episodeId],
       )
-    ).rows.map((row) => [row.id, row.registration_id]),
+    ).rows.map((row) => [row.id, row]),
   );
   const normalized = participants.map(normalizeParticipant);
+  const rowId=row=>createHash('sha256').update(JSON.stringify([String(episodeId),meetingUuid,row])).digest('hex');
+  const snapshotIds=new Set(normalized.map(rowId));
   await db.query("DELETE FROM attendance_participants WHERE episode_id=$1", [
     episodeId,
   ]);
   for (const row of normalized) {
-    const id = createHash("sha256")
-      .update(JSON.stringify([String(episodeId), meetingUuid, row]))
-      .digest("hex");
-    const match = oldMatches.has(id)
-      ? { registration_id: oldMatches.get(id), match_method: "manual" }
+    const id = rowId(row),decision=oldMatches.get(id);
+    const match = decision?.match_method==='manual'
+      ? { registration_id:decision.registration_id, match_method:'manual' }
       : matchParticipant(row, registrations);
+    // Never discard sole evidence if the original duplicate target vanished on resync.
+    const duplicate=decision?.duplicate_of&&snapshotIds.has(decision.duplicate_of)?decision:null;
     await db.query(
-      `INSERT INTO attendance_participants(id,episode_id,registration_id,registrant_id,email,name,join_time,leave_time,duration_seconds,match_method)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(id) DO NOTHING`,
+      `INSERT INTO attendance_participants(id,episode_id,registration_id,registrant_id,email,name,join_time,leave_time,duration_seconds,match_method,duplicate_of,review_note,reviewed_by,reviewed_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT(id) DO NOTHING`,
       [
         id,
         episodeId,
@@ -204,6 +207,7 @@ async function saveAttendance(
         row.leave_time,
         row.duration_seconds,
         match.match_method,
+        duplicate?.duplicate_of||null,duplicate?.review_note||null,duplicate?.reviewed_by||null,duplicate?.reviewed_at||null,
       ],
     );
   }
@@ -245,12 +249,13 @@ async function attendanceReport(db, episodeId, options, {all=false} = {}) {
         episodeId,
       ])
     ).rows[0] || null;
-  const participants = (
+  const allParticipants = (
     await db.query(
       "SELECT * FROM attendance_participants WHERE episode_id=$1 ORDER BY name,id",
       [episodeId],
     )
   ).rows;
+  const participants=allParticipants.filter(p=>!p.duplicate_of);
   const registrations = (
     await db.query(
       `SELECT er.id AS registration_id,s.id AS student_id,s.full_name,s.email,s.college,er.registered_at::timestamptz AS registered_at,o.status AS override_status,o.note AS override_note
@@ -291,6 +296,8 @@ async function attendanceReport(db, episodeId, options, {all=false} = {}) {
     data:paging&&!all?filtered.slice((paging.page-1)*paging.page_size,paging.page*paging.page_size):filtered,
     ...(paging?{total:filtered.length,...paging,counts,registration_options:participants.some(p=>!p.registration_id)?registrations.map(r=>({registration_id:r.registration_id,full_name:r.full_name,email:r.email})):[]}:{}),
     unmatched: participants.filter((p) => !p.registration_id),
+    excluded_duplicates:allParticipants.filter(p=>p.duplicate_of),
+    participant_options:participants.map(({id,name,email,duration_seconds,registration_id,join_time,leave_time})=>({id,name,email,duration_seconds,registration_id,join_time,leave_time})),
     audit: (
       await db.query(
         "SELECT * FROM attendance_audit WHERE episode_id=$1 ORDER BY created_at DESC,id DESC LIMIT 50",

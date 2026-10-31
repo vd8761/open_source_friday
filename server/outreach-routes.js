@@ -388,12 +388,14 @@ function createOutreachRouter({
     "/episodes/:episodeId/attendance/import",
     route(async (req, db) => {
       await episode(db, req.params.episodeId);
+      const provider=req.body.provider||'zoom';
+      if(!['zoom','google_meet','teams','other'].includes(provider))throw new InputError('Choose a supported attendance report source.');
       await saveAttendance(db, {
         episodeId: req.params.episodeId,
         meetingUuid: req.body.meeting_uuid,
         participants: attendanceCsv(req.body.csv),
         threshold: req.body.threshold_minutes ?? 30,
-        source: "zoom_csv",
+        source: `${provider}_csv`,
         adminId: admin(req),
         complete: req.body.report_complete === true,
       });
@@ -423,7 +425,7 @@ function createOutreachRouter({
       if (!registration)
         throw new InputError("Registration not found in this episode.", 404);
       const result = await db.query(
-        "UPDATE attendance_participants SET registration_id=$3,match_method='manual' WHERE episode_id=$1 AND id=$2 RETURNING id",
+        "UPDATE attendance_participants SET registration_id=$3,match_method='manual' WHERE episode_id=$1 AND id=$2 AND duplicate_of IS NULL RETURNING id",
         [req.params.episodeId, req.body.participant_id, registration.id],
       );
       if (!result.rows.length)
@@ -438,9 +440,31 @@ function createOutreachRouter({
           admin(req),
         ],
       );
-      return { message: "Participant matched to the selected registration." };
+      return { message: "Session linked. Attendance time is combined with this attendee’s other sessions; overlapping intervals count once." };
     }, true),
   );
+  router.post('/episodes/:episodeId/attendance/duplicate',route(async(req,db)=>{
+    await db.query('SELECT id FROM episodes WHERE id=$1 FOR UPDATE',[req.params.episodeId]);
+    const {participant_id,target_id,action}=req.body,note=String(req.body.note||'').trim();
+    if(!/^[a-f\d]{64}$/.test(participant_id||'')||!['exclude','restore'].includes(action)||note.length<3||note.length>1000)throw new InputError('Choose a participant, action and a reason (3–1000 characters).');
+    const source=(await db.query('SELECT * FROM attendance_participants WHERE episode_id=$1 AND id=$2',[req.params.episodeId,participant_id])).rows[0];
+    if(!source)throw new InputError('Participant not found in this event.',404);
+    let registrationId=null;
+    if(action==='exclude'){
+      if(source.duplicate_of||source.registration_id)throw new InputError('Only an unresolved participant can be marked duplicate. Linked rejoin sessions already combine time.',409);
+      if(!/^[a-f\d]{64}$/.test(target_id||'')||target_id===participant_id)throw new InputError('Choose a different original participant record.');
+      const target=(await db.query('SELECT * FROM attendance_participants WHERE episode_id=$1 AND id=$2 AND duplicate_of IS NULL',[req.params.episodeId,target_id])).rows[0];
+      if(!target)throw new InputError('Original participant not found in this event.',404);
+      if((await db.query('SELECT id FROM attendance_participants WHERE episode_id=$1 AND duplicate_of=$2',[req.params.episodeId,participant_id])).rows.length)throw new InputError('Restore the duplicate records linked to this original before excluding it.',409);
+      registrationId=target.registration_id;
+      await db.query('UPDATE attendance_participants SET duplicate_of=$3,review_note=$4,reviewed_by=$5,reviewed_at=NOW() WHERE episode_id=$1 AND id=$2',[req.params.episodeId,participant_id,target_id,note,admin(req)]);
+    }else{
+      if(!source.duplicate_of)throw new InputError('This record is not excluded as a duplicate.',409);
+      await db.query('UPDATE attendance_participants SET duplicate_of=NULL,review_note=$3,reviewed_by=$4,reviewed_at=NOW() WHERE episode_id=$1 AND id=$2',[req.params.episodeId,participant_id,note,admin(req)]);
+    }
+    await db.query('INSERT INTO attendance_audit(episode_id,registration_id,action,detail,admin_id) VALUES($1,$2,$3,$4,$5)',[req.params.episodeId,registrationId,action==='exclude'?'duplicate_excluded':'duplicate_restored',`${participant_id}${action==='exclude'?' → '+target_id:''}: ${note}`,admin(req)]);
+    return {message:action==='exclude'?'Duplicate record excluded from attendance totals. Original evidence is retained and this decision can be undone.':'Record restored for review.'};
+  },true));
   router.post(
     "/episodes/:episodeId/attendance/override",
     route(async (req, db) => {

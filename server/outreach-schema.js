@@ -50,6 +50,9 @@ async function initOutreachDB(db) {
     join_time TIMESTAMPTZ, leave_time TIMESTAMPTZ, duration_seconds INTEGER NOT NULL,
     match_method TEXT NOT NULL DEFAULT 'unmatched'
   )`);
+  await db.query(`ALTER TABLE attendance_participants ADD COLUMN IF NOT EXISTS duplicate_of TEXT,
+    ADD COLUMN IF NOT EXISTS review_note TEXT, ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES admins(id),
+    ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`);
   await db.query(`CREATE TABLE IF NOT EXISTS attendance_overrides (
     registration_id INTEGER PRIMARY KEY REFERENCES episode_registrations(id) ON DELETE CASCADE,
     status TEXT NOT NULL CHECK(status IN ('present','absent','partial')), note TEXT NOT NULL,

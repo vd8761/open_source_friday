@@ -1070,3 +1070,39 @@ test('permanent campaign deletion requires trash and confirmation and preserves 
  await db.query("INSERT INTO invite_sent_history(episode_id,email) VALUES(1,'three@example.com') ON CONFLICT DO NOTHING");
  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[other.id]);const sender=senderStub();await processInviteBatch(pool,sender,env);assert.equal(sender.calls.filter(c=>c[0]==='send').length,0);
 });
+
+test('review decisions distinguish rejoin sessions from duplicates and survive identical resync',async()=>{
+  await db.exec('DELETE FROM attendance_overrides; DELETE FROM attendance_participants; DELETE FROM attendance_syncs; DELETE FROM attendance_audit;');
+  const rows=[
+    {email:'registered@example.com',name:'Original',join_time:'2026-10-30T13:30:00Z',leave_time:'2026-10-30T13:50:00Z'},
+    {name:'Rejoin guest',join_time:'2026-10-30T13:50:00Z',leave_time:'2026-10-30T14:10:00Z'},
+    {name:'Duplicate guest',join_time:'2026-10-30T13:30:00Z',leave_time:'2026-10-30T13:50:00Z'}
+  ];
+  const sync=participants=>saveAttendance(db,{episodeId:1,meetingUuid:'review-session',participants,source:'zoom_api',adminId:1,complete:false});
+  await sync(rows);let report=await attendanceReport(db,1,{page:1});
+  const original=report.participant_options.find(p=>p.name==='Original'),duplicate=report.unmatched.find(p=>p.name==='Duplicate guest'),rejoin=report.unmatched.find(p=>p.name==='Rejoin guest');
+  const decision=body=>request('/episodes/1/attendance/duplicate','POST',body);
+  assert.equal((await decision({participant_id:duplicate.id,target_id:duplicate.id,action:'exclude',note:'Duplicate export'})).status,400);
+  assert.equal((await decision({participant_id:duplicate.id,target_id:'f'.repeat(64),action:'exclude',note:'Duplicate export'})).status,404);
+  const exclude={participant_id:duplicate.id,target_id:original.id,action:'exclude',note:'Same exported connection record'};
+  assert.equal((await decision(exclude)).status,200);
+  report=await attendanceReport(db,1,{page:1});assert.equal(report.unmatched.length,1);assert.equal(report.excluded_duplicates.length,1);assert.equal(report.participant_options.length,2);
+  assert.equal((await request('/episodes/1/attendance/match','POST',{participant_id:duplicate.id,registration_id:1})).status,404);
+  await sync(rows);report=await attendanceReport(db,1,{page:1});assert.equal(report.excluded_duplicates.length,1);
+  assert.equal((await request('/episodes/1/attendance/match','POST',{participant_id:rejoin.id,registration_id:1})).status,200);
+  report=await attendanceReport(db,1);assert.equal(report.data.find(r=>r.registration_id===1).minutes,40);assert.equal(report.data.find(r=>r.registration_id===1).sessions,2);
+  await sync(rows);report=await attendanceReport(db,1);assert.equal(report.data.find(r=>r.registration_id===1).minutes,40);assert.equal(report.excluded_duplicates.length,1);
+  assert.equal((await decision({participant_id:duplicate.id,action:'restore',note:'Review decision again'})).status,200);
+  report=await attendanceReport(db,1);assert.equal(report.excluded_duplicates.length,0);assert.equal(report.unmatched.length,1);assert.ok(report.audit.some(a=>a.action==='duplicate_restored'));
+  await decision(exclude);await sync(rows.slice(1));report=await attendanceReport(db,1);assert.equal(report.excluded_duplicates.length,0);assert.equal(report.unmatched.length,1,'A vanished original must not leave sole evidence silently excluded');
+});
+
+test('historical standardized CSV imports record Google Meet and Teams sources without registering students',async()=>{
+  const before=(await db.query('SELECT COUNT(*)::integer AS n FROM episode_registrations')).rows[0].n;
+  for(const provider of ['google_meet','teams']){
+    const result=await request('/episodes/1/attendance/import','POST',{provider,meeting_uuid:'review-session',csv:'Email,Name,Duration Minutes\nregistered@example.com,Registered Student,35',report_complete:false});
+    assert.equal(result.status,200);assert.equal(result.body.sync.source,provider+'_csv');assert.equal(result.body.data.find(r=>r.registration_id===1).minutes,35);assert.equal(result.body.data.find(r=>r.registration_id===2).status,'not_synced');
+  }
+  assert.equal((await request('/episodes/1/attendance/import','POST',{provider:'invalid'})).status,400);
+  assert.equal((await db.query('SELECT COUNT(*)::integer AS n FROM episode_registrations')).rows[0].n,before);
+});
