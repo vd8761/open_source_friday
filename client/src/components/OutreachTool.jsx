@@ -39,6 +39,8 @@ export default function OutreachTool() {
     [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [campaignConfirmation,setCampaignConfirmation]=useState(null);
+  const [showTrash,setShowTrash]=useState(false);
+  const [csvInputKey,setCsvInputKey]=useState(0);
   const [reviewedCampaign, setReviewedCampaign] = useState("");
   const needsPilotReview = Boolean(
     detail?.campaign.pause_after_first_batch &&
@@ -49,10 +51,10 @@ export default function OutreachTool() {
   );
   const campaignEpisode=detail?episodes.find(e=>Number(e.id)===Number(detail.campaign.episode_id)):null;
   const campaignClosed=Boolean(campaignEpisode&&!isRegistrationOpen(campaignEpisode));
-  async function refresh() {
+  async function refresh(trash = showTrash) {
     const [e, c, cfg] = await Promise.all([
       adminApi("/dashboard"),
-      adminApi("/outreach/campaigns"),
+      adminApi(`/outreach/campaigns${trash ? "?trash=true" : ""}`),
       adminApi("/outreach/config"),
     ]);
     setEpisodes(e.data);
@@ -132,7 +134,8 @@ export default function OutreachTool() {
       });
       setMessage(result.message);
       await refresh();
-      await load(selected);
+      if (['trash','restore'].includes(kind)) { setSelected(''); setDetail(null); }
+      else await load(selected);
     });
   }
   const recipients = (detail?.data || []).filter((row) =>
@@ -189,7 +192,7 @@ export default function OutreachTool() {
             >
               <option value="">Choose episode</option>
               {episodes
-                .filter((e) => e.is_active && e.is_registration_open !== false)
+                .filter((e) => isRegistrationOpen(e))
                 .map((e) => (
                   <option key={e.id} value={e.id}>
                     Episode {e.episode_number} · {e.title}
@@ -200,6 +203,7 @@ export default function OutreachTool() {
           <label className="text-sm font-semibold">
             Recipient CSV
             <input
+              key={csvInputKey}
               type="file"
               accept=".csv,text/csv"
               className={fieldClass}
@@ -227,6 +231,7 @@ export default function OutreachTool() {
             Download template
           </button>
         </p>
+        {csv && <button className="text-sm text-rose-700 underline" disabled={busy} onClick={()=>setCampaignConfirmation('clear-csv')}>Clear imported CSV</button>}
         <details>
           <summary className="cursor-pointer text-sm font-semibold">
             Paste CSV instead
@@ -415,7 +420,8 @@ export default function OutreachTool() {
       </section>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
         <div className="flex justify-between gap-3">
-          <h2 className="text-xl font-bold">Campaigns</h2>
+          <h2 className="text-xl font-bold">{showTrash ? 'Campaign trash' : 'Campaigns'}</h2>
+          <button disabled={busy} className="text-slate-600 text-sm underline" onClick={()=>action(async()=>{const next=!showTrash;setShowTrash(next);setDetail(null);setSelected('');await refresh(next);})}>{showTrash ? 'Back to campaigns' : 'Campaign trash'}</button>
           <button
             disabled={busy}
             className="text-dos font-semibold"
@@ -441,6 +447,7 @@ export default function OutreachTool() {
                   "Sent",
                   "Delivery confirmed",
                   "Open detected",
+                  "Actions",
                 ].map((h) => (
                   <th key={h} className="p-3 bg-slate-50">
                     {h}
@@ -460,18 +467,19 @@ export default function OutreachTool() {
                     </button>
                   </td>
                   <td className="p-3">{c.episode_number}</td>
-                  <td className="p-3 capitalize">{c.status}</td>
+                  <td className="p-3 capitalize">{showTrash ? "In trash" : c.status}</td>
                   <td className="p-3">{c.recipients}</td>
                   <td className="p-3">{c.sent}</td>
                   <td className="p-3">{c.delivered}</td>
                   <td className="p-3">{c.opened}</td>
+                  <td className="p-3"><button disabled={busy} className="text-rose-700 font-semibold whitespace-nowrap" aria-label={`${showTrash ? 'Restore' : 'Delete'} campaign: ${c.subject}`} onClick={()=>action(async()=>{await load(c.id);setCampaignConfirmation(showTrash ? 'restore' : 'trash');})}>{showTrash ? 'Restore' : 'Delete'}</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         {!campaigns.length && (
-          <p className="text-slate-500">No campaigns yet.</p>
+          <p className="text-slate-500">{showTrash ? "Campaign trash is empty." : "No campaigns yet."}</p>
         )}
       </section>
       {detail && (
@@ -479,7 +487,7 @@ export default function OutreachTool() {
           <h2 className="text-xl font-bold">{detail.campaign.subject}</h2>
           <p className="whitespace-pre-wrap text-sm">{detail.campaign.body}</p>
           <p className="text-sm">
-            Status: <strong>{detail.campaign.status}</strong> ·{" "}
+            Status: <strong>{detail.campaign.deleted_at ? "In trash" : detail.campaign.status}</strong> ·{" "}
             {detail.campaign.batch_size} per batch ·{" "}
             {detail.campaign.interval_minutes} minutes apart
           </p>
@@ -488,14 +496,14 @@ export default function OutreachTool() {
               {detail.campaign.last_error}
             </p>
           )}
-          {campaignClosed&&<p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">This event’s registration window has closed. Its invitation campaign cannot be started or resumed.</p>}
-          {detail.campaign.status==='paused'&&detail.campaign.last_error?.includes('Sender rate limit')&&<p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Earliest next attempt: {date(detail.campaign.next_batch_at)}. This is a saved retry time, not a guarantee that Sender's limit has reset. The campaign stays paused until you click Resume; the event must still be open for registration.</p>}
+          {!detail.campaign.deleted_at&&campaignClosed&&<p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">This event’s registration window has closed. Its invitation campaign cannot be started or resumed.</p>}
+          {!detail.campaign.deleted_at&&detail.campaign.status==='paused'&&detail.campaign.last_error?.includes('Sender rate limit')&&<p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Earliest next attempt: {date(detail.campaign.next_batch_at)}. This is a saved retry time, not a guarantee that Sender's limit has reset. The campaign stays paused until you click Resume; the event must still be open for registration.</p>}
           <p className="text-sm text-slate-500">
             {detail.campaign.pause_after_first_batch
               ? "First-batch review is enabled. Later batches are checked for reported bounces and complaints."
               : "Automatic pacing enabled. Bounces and complaints are checked before later batches."}
           </p>
-          {needsPilotReview && (
+          {!detail.campaign.deleted_at && needsPilotReview && (
             <label className="flex gap-3 text-sm">
               <input
                 type="checkbox"
@@ -509,7 +517,7 @@ export default function OutreachTool() {
             </label>
           )}
           <div className="flex gap-3 flex-wrap">
-            {["draft", "paused"].includes(detail.campaign.status) && (
+            {!detail.campaign.deleted_at && ["draft", "paused"].includes(detail.campaign.status) && (
               <button
                 disabled={
                   busy ||
@@ -525,7 +533,7 @@ export default function OutreachTool() {
                   : "Resume"}
               </button>
             )}
-            {detail.campaign.status === "running" && (
+            {!detail.campaign.deleted_at && detail.campaign.status === "running" && (
               <button
                 disabled={busy}
                 className={buttonClass}
@@ -535,12 +543,13 @@ export default function OutreachTool() {
               </button>
             )}
             <button
-              disabled={busy || !config?.sender.configured}
+              disabled={busy || Boolean(detail.campaign.deleted_at) || !config?.sender.configured}
               className={buttonClass}
               onClick={() => campaignAction("sync")}
             >
               Sync Sender reports
             </button>
+            <button disabled={busy} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-rose-700" onClick={()=>setCampaignConfirmation(detail.campaign.deleted_at ? 'restore' : 'trash')}>{detail.campaign.deleted_at ? 'Restore campaign' : 'Delete campaign'}</button>
             <button
               disabled={busy}
               className={buttonClass}
@@ -587,7 +596,8 @@ export default function OutreachTool() {
               <button className="mt-2 text-dos underline" onClick={() => downloadFile(new Blob([JSON.stringify(b.provider_diagnostic, null, 2)], { type: 'application/json' }), `sender-response-${b.id}.json`)}>Download response evidence</button>
             </details>
           ))}
-          <details>
+          {detail.campaign.deleted_at && <p className="rounded-lg bg-slate-50 p-3 text-sm">Deleted {date(detail.campaign.deleted_at)}. The imported recipient list and reports are kept here for recovery. Restoring will keep sending paused. Sender records and previously submitted emails are unchanged.</p>}
+          {!detail.campaign.deleted_at && <details>
             <summary className="cursor-pointer text-sm font-semibold">
               Import explicit delivery evidence
             </summary>
@@ -604,7 +614,7 @@ export default function OutreachTool() {
               className={fieldClass}
               onChange={(e) => readFile(e.target.files?.[0], true)}
             />
-          </details>
+          </details>}
           <label className="block text-sm font-semibold">
             Search recipients
             <input
@@ -681,7 +691,13 @@ export default function OutreachTool() {
           Working…
         </p>
       )}
-      {campaignConfirmation&&<ConfirmDialog title={campaignConfirmation==='start'?'Send invitation campaign?':'Pause invitation campaign?'} confirmLabel={campaignConfirmation==='start'?'Start sending':'Pause sending'} busy={busy} onCancel={()=>setCampaignConfirmation(null)} onConfirm={()=>{const kind=campaignConfirmation;setCampaignConfirmation(null);campaignAction(kind);}}><p>{campaignConfirmation==='start'?`Please confirm that you would like to send this invitation campaign to ${detail?.data.length||0} contacts. Sender will deliver it in paced batches.`:'Would you like to pause future batches? Invitations already sent cannot be recalled.'}</p></ConfirmDialog>}
+      {campaignConfirmation&&<ConfirmDialog
+        title={{start:'Send invitation campaign?',pause:'Pause invitation campaign?',trash:'Delete campaign and imported records?',restore:'Restore campaign?', 'clear-csv':'Clear imported CSV?'}[campaignConfirmation]}
+        confirmLabel={{start:'Start sending',pause:'Pause sending',trash:'Move to trash',restore:'Restore campaign','clear-csv':'Clear CSV'}[campaignConfirmation]}
+        danger={['trash','clear-csv'].includes(campaignConfirmation)} busy={busy} onCancel={()=>setCampaignConfirmation(null)}
+        onConfirm={()=>{const kind=campaignConfirmation;setCampaignConfirmation(null);if(kind==='clear-csv'){setCsv('');setFileName('');setPreview(null);setConsent(false);setCsvInputKey(k=>k+1);}else campaignAction(kind);}}>
+        <p>{({start:`Please confirm that you would like to send this invitation campaign to ${detail?.data.length||0} contacts. Sender will deliver it in paced batches.`,pause:'Would you like to pause future batches? Invitations already sent cannot be recalled.',trash:'Would you like to move this campaign, its imported recipient list and reports to Campaign trash? You can restore them later. Student registrations and attendance will remain unchanged. This does not delete records from Sender or recall emails already submitted.',restore:'Would you like to restore this campaign and its imported records? Sending will stay paused until you choose Resume, and the event must still accept registrations.','clear-csv':'Would you like to clear this uploaded CSV and its preview? Saved campaigns, student registrations and attendance will remain unchanged.'})[campaignConfirmation]}</p>
+      </ConfirmDialog>}
     </main>
   );
 }

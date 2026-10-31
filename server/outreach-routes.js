@@ -72,11 +72,11 @@ function createOutreachRouter({
       ? next()
       : res.status(400).json({ success: false, error: "Invalid episode ID." }),
   );
-  const campaign = async (db, id) => {
+  const campaign = async (db, id, includeDeleted = false) => {
     const result = (
-      await db.query("SELECT * FROM invite_campaigns WHERE id=$1", [id])
+      await db.query("SELECT * FROM invite_campaigns WHERE id=$1 FOR UPDATE", [id])
     ).rows[0];
-    if (!result) throw new InputError("Campaign not found.", 404);
+    if (!result || (result.deleted_at && !includeDeleted)) throw new InputError("Campaign not found. Please check Campaign trash.", 404);
     return result;
   };
   const episode = async (db, id) => {
@@ -134,7 +134,7 @@ function createOutreachRouter({
     (SELECT COUNT(*)::integer FROM invite_recipients r WHERE r.campaign_id=c.id AND r.sent_at IS NOT NULL) AS sent,
     (SELECT COUNT(*)::integer FROM invite_recipients r WHERE r.campaign_id=c.id AND r.opened_at IS NOT NULL) AS opened,
     (SELECT COUNT(*)::integer FROM invite_recipients r WHERE r.campaign_id=c.id AND r.delivered_at IS NOT NULL) AS delivered
-    FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id ORDER BY c.created_at DESC LIMIT 100`)
+    FROM invite_campaigns c JOIN episodes e ON e.id=c.episode_id WHERE (c.deleted_at IS NOT NULL)=$1 ORDER BY c.created_at DESC LIMIT 100`, [req.query.trash === "true"])
       ).rows,
     })),
   );
@@ -151,7 +151,7 @@ function createOutreachRouter({
   router.get(
     "/outreach/campaigns/:campaignId",
     route(async (req, db) => ({
-      campaign: await campaign(db, req.params.campaignId),
+      campaign: await campaign(db, req.params.campaignId, true),
       data: await campaignRecipients(db, req.params.campaignId),
       batches: (
         await db.query(
@@ -188,6 +188,28 @@ function createOutreachRouter({
       ),
       filename: `invitation_${req.params.campaignId}.csv`,
     })),
+  );
+  router.post(
+    "/outreach/campaigns/:campaignId/trash",
+    route(async (req, db) => {
+      // Coordinate with the send worker so deletion cannot race an API submission.
+      const lock = (await db.query("SELECT pg_try_advisory_xact_lock(7410626) AS locked")).rows[0];
+      if (!lock.locked) throw new InputError("An invitation batch is being processed. Please pause it and try again once processing finishes.", 409);
+      const c = await campaign(db, req.params.campaignId);
+      const uncertain = await db.query("SELECT id FROM invite_batches WHERE campaign_id=$1 AND status IN ('sending','review')", [c.id]);
+      if (uncertain.rows.length) throw new InputError("Please check the uncertain batch outcome with Sender before deleting this campaign.", 409);
+      await db.query("UPDATE invite_campaigns SET deleted_at=NOW(),deleted_by=$2,status='paused' WHERE id=$1", [c.id, admin(req)]);
+      return { message: "Campaign, imported recipient list and reports moved to Campaign trash. Student registrations and attendance are unchanged. Sender records and emails already submitted are not removed." };
+    }, true),
+  );
+  router.post(
+    "/outreach/campaigns/:campaignId/restore",
+    route(async (req, db) => {
+      const c = await campaign(db, req.params.campaignId, true);
+      if (!c.deleted_at) throw new InputError("This campaign is not in trash.", 409);
+      await db.query("UPDATE invite_campaigns SET deleted_at=NULL,deleted_by=NULL,status='paused' WHERE id=$1", [c.id]);
+      return { message: "Campaign and imported records restored in paused status. Restoring does not send invitations; the event must still accept registrations before you can resume." };
+    }, true),
   );
   router.post(
     "/outreach/campaigns/:campaignId/start",
@@ -274,6 +296,7 @@ function createOutreachRouter({
     route(async (req, db) => {
       if (!uuid(req.params.batchId)) throw new InputError("Invalid batch ID.");
       await db.query("SELECT pg_advisory_xact_lock(7410626)");
+      await campaign(db, req.params.campaignId);
       const batch = (
         await db.query(
           "SELECT id FROM invite_batches WHERE id=$1 AND campaign_id=$2 AND status IN ('sending','review')",

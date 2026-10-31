@@ -176,7 +176,7 @@ async function processInviteBatch(pool, sender, env = process.env, {
     if (!locked) return;
     campaign = (
       await db.query(`SELECT c.*, e.episode_number,e.event_date,e.event_time,e.is_active,e.is_registration_open FROM invite_campaigns c
-      JOIN episodes e ON e.id=c.episode_id WHERE c.status='running' AND c.next_batch_at<=NOW() ORDER BY c.next_batch_at,c.created_at LIMIT 1`)
+      JOIN episodes e ON e.id=c.episode_id WHERE c.deleted_at IS NULL AND c.status='running' AND c.next_batch_at<=NOW() ORDER BY c.next_batch_at,c.created_at LIMIT 1`)
     ).rows[0];
     if (!campaign) return;
     if (episodeEnd(campaign) && episodeEnd(campaign) < Date.now())
