@@ -47,8 +47,8 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
             {data.length > 0 ? (
               data.map((row, idx) => (
                 <tr key={row.registration_id || idx} className="hover:bg-slate-50/80 transition-colors group">
-                  <td className="px-4 py-4 text-sm text-slate-500">{startIndex+idx+1}</td>
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 text-sm text-slate-500">{startIndex+idx+1}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gradient-to-br from-dos-light to-dos flex items-center justify-center shadow-sm">
                         <span className="text-white font-bold text-sm">
@@ -64,8 +64,8 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     </div>
                   </td>
 
-                  <td className="px-4 py-4 whitespace-nowrap text-xs text-slate-500">{formatIST(row.registered_at)}</td>
-                  <td className="px-4 py-4 min-w-[200px] max-w-[260px]">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-500">{formatIST(row.registered_at)}</td>
+                  <td className="px-4 py-3 min-w-[200px] max-w-[260px]">
                     <div className="text-sm text-slate-900 font-medium flex items-center gap-1.5">
                       <GraduationCap className="h-4 w-4 text-slate-400" />
                       {row.degree} in {row.department}
@@ -76,27 +76,23 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     </div>
                   </td>
 
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-slate-700 flex items-center gap-1.5">
-                      <Phone className="h-4 w-4 text-slate-400" />
-                      {row.country_code ? `${row.country_code} ` : ''}{row.whatsapp_number}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1 uppercase tracking-wide">
-                      {row.gender}
-                    </div>
-                    <div className="mt-2 text-xs normal-case whitespace-normal">
-                      <span className={row.whatsapp_status==='opted_in'?'font-semibold text-emerald-700':'text-slate-500'}>WhatsApp: {({opted_in:'Event updates opted in',declined:'Declined',withdrawn:'Withdrawn'}[row.whatsapp_status]||'Not recorded')}</span>
-                      <InfoTooltip label={`WhatsApp preference for ${row.full_name}`}>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                      <Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span>{row.whatsapp_number ? `${row.country_code ? `${row.country_code} ` : ''}${row.whatsapp_number}` : '—'}</span>
+                      <InfoTooltip label={`Contact details for ${row.full_name}`}>
+                        {row.gender&&<p>Gender: {row.gender}</p>}
+                        <p>WhatsApp: {({opted_in:'Event updates opted in',declined:'Declined',withdrawn:'Withdrawn'}[row.whatsapp_status]||'Not recorded')}</p>
                         <p>This permission covers this event only. A saved phone number alone is not consent. The public form does not verify phone ownership.</p>
                         {row.whatsapp_consent_at&&<p className="mt-2">Choice recorded: {formatIST(row.whatsapp_consent_at)} · {row.whatsapp_notice_version}</p>}
                         {row.whatsapp_consent_number&&<p className="mt-2">Applies to: {row.whatsapp_consent_number}</p>}
                         {row.whatsapp_withdrawn_at&&<p className="mt-2">Withdrawn: {formatIST(row.whatsapp_withdrawn_at)}</p>}
                       </InfoTooltip>
-                      {onWithdrawWhatsApp&&row.whatsapp_status!=='withdrawn'&&<button type="button" onClick={()=>onWithdrawWhatsApp(row)} className="mt-2 block text-xs text-slate-600 underline underline-offset-2">Record WhatsApp withdrawal</button>}
                     </div>
+                    {onWithdrawWhatsApp&&row.whatsapp_status==='opted_in'&&<button type="button" onClick={()=>onWithdrawWhatsApp(row)} className="admin-action mt-1">Record WhatsApp withdrawal</button>}
                   </td>
 
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex flex-col gap-2 items-start">
                       {row.is_dos_club_member === 'Yes' ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-dos-light/10 text-dos border border-dos/20">
@@ -114,7 +110,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     </div>
                   </td>
 
-                  <td className="px-4 py-4 text-sm min-w-[220px]">
+                  <td className="px-4 py-3 text-sm min-w-[220px]">
                     <div className="flex items-center gap-1">
                       <span className={row.invitation_status==='zoom_managed'?'font-bold text-emerald-700':row.invitation_status==='failed'?'font-bold text-rose-700':'font-bold text-slate-600'}>{!row.zoom_enabled?'Zoom not configured':({zoom_managed:'Registered with Zoom',pending:'Zoom registration pending',rate_limited:'Waiting for Zoom limit',failed:'Zoom registration failed',not_sent:'Not registered with Zoom'}[row.invitation_status]||'Not registered with Zoom')}</span>
                       <InfoTooltip label={`Zoom invitation ${row.invitation_status==='failed'||row.invitation_error?'error':'information'} for ${row.full_name}`} error={row.invitation_status==='failed'||Boolean(row.invitation_error)}>
@@ -137,7 +133,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     </button>}
 
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
                     {onDeleteRegistration && <button
                       onClick={() => onDeleteRegistration(row.id)}
                       className="inline-flex items-center justify-center h-8 w-8 rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
