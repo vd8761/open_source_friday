@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { formatIST } from './utils/dateTime';
 import { SortHeader } from './components/AdminDataTable';
+import StudentLink from './components/StudentLink';
 import InfoTooltip from './components/InfoTooltip';
 import { Mail, GraduationCap, BookOpen, Phone, Search, UserX, Trash2 } from 'lucide-react';
 
@@ -55,7 +56,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                         </span>
                       </div>
                       <div className="ml-3 min-w-0">
-                        <div className="max-w-[200px] truncate text-sm font-bold text-slate-900 group-hover:text-dos transition-colors" title={row.full_name}>{row.full_name}</div>
+                        <div className="max-w-[200px] truncate text-sm font-bold text-slate-900 group-hover:text-dos transition-colors" title={row.full_name}><StudentLink id={row.id}>{row.full_name}</StudentLink></div>
                         <div className="max-w-[200px] text-sm text-slate-500 flex items-center gap-1 mt-0.5" title={row.email}>
                           <Mail className="h-3 w-3 shrink-0" /> <span className="truncate">{row.email}</span>
                         </div>

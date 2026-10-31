@@ -66,6 +66,7 @@ async function initOutreachDB(db) {
   await db.query(
     "CREATE INDEX IF NOT EXISTS invite_recipients_campaign_idx ON invite_recipients(campaign_id,send_status)",
   );
+  await db.query("CREATE INDEX IF NOT EXISTS attendance_participants_registration_idx ON attendance_participants(registration_id)");
   await db.query(
     "CREATE INDEX IF NOT EXISTS attendance_participants_episode_idx ON attendance_participants(episode_id)",
   );

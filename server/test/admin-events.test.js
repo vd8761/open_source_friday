@@ -29,7 +29,7 @@ test('admin event tables page and filter on the server and keep dashboard recent
   server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base=`http://127.0.0.1:${server.address().port}/api/admin`;
   async function get(path,auth=true){const r=await fetch(base+path,{headers:auth?{Authorization:'Bearer test'}:{}});return {status:r.status,body:await r.json()};}
   assert.equal((await get('/dashboard-overview',false)).status,401);
-  const overview=(await get('/dashboard-overview')).body;assert.deepEqual(overview.totals,{episodes:5,registrations:65});assert.equal(overview.recent.length,5);assert.equal(overview.recent[0].full_name,'Attendee 65');assert.deepEqual(Object.keys(overview.recent[0]).sort(),['college','episode_number','full_name']);
+  const overview=(await get('/dashboard-overview')).body;assert.deepEqual(overview.totals,{episodes:5,registrations:65});assert.equal(overview.recent.length,5);assert.equal(overview.recent[0].full_name,'Attendee 65');assert.deepEqual(Object.keys(overview.recent[0]).sort(),['college','episode_number','full_name','student_id']);
   const upcoming=await get('/events?period=upcoming');assert.equal(upcoming.status,200);assert.equal(upcoming.body.data[0].event_date,'2099-01-01');assert.deepEqual(upcoming.body.data.map(e=>e.id),[3,2]);assert.ok(!JSON.stringify(upcoming.body).includes('example.com'));
   const past=await get('/events?period=past&page_size=1&page=2&sort=number_asc');assert.equal(past.body.total,3);assert.equal(past.body.data.length,1);assert.equal(past.body.data[0].id,4);
   const filtered=(await get('/events?period=past&archive=archived&type=test&mode=Offline&from=2020-02-01&to=2020-02-01&search=Host%20B')).body;assert.equal(filtered.total,1);assert.equal(filtered.data[0].id,5);
@@ -84,7 +84,7 @@ test('admin event tables page and filter on the server and keep dashboard recent
   await db.exec("INSERT INTO episode_registrations VALUES(66,2,1,'2099-01-01T10:00:00Z'); INSERT INTO students(id,full_name,email) VALUES(66,'No registration','unregistered@example.com')");
   const contacts=(await get('/contacts')).body;assert.equal(contacts.total,65);assert.equal(contacts.data.length,10);assert.equal(contacts.data[0].id,1);assert.deepEqual(contacts.data[0].episode_numbers,[1,2]);assert.equal(contacts.data[0].registration_count,2);assert.equal(contacts.events.length,2);
   const page2=(await get('/contacts?page=2&page_size=50')).body;assert.equal(page2.data.length,15);assert.equal(new Set([...((await get('/contacts?page_size=50')).body.data),...page2.data].map(r=>r.id)).size,65);
-  const eventContacts=(await get('/contacts?episode_id=2')).body;assert.equal(eventContacts.total,1);assert.equal(eventContacts.data[0].id,1);assert.equal(eventContacts.data[0].registration_count,1);
+  const eventContacts=(await get('/contacts?episode_id=2')).body;assert.equal(eventContacts.total,1);assert.equal(eventContacts.data[0].id,1);assert.equal(eventContacts.data[0].registration_count,2);
   assert.equal((await get('/contacts?college=Alpha')).body.total,32);
   assert.equal((await get('/contacts?search=1%40example.com&episode_id=2')).body.total,1);
   assert.equal((await get('/contacts?search=%25')).body.total,0);
@@ -92,5 +92,16 @@ test('admin event tables page and filter on the server and keep dashboard recent
   assert.ok(!JSON.stringify(contacts.data).includes('excited_topic'));
   for(const path of ['/contacts?sort=name','/contacts?sort=email_desc','/contacts?sort=college','/contacts?sort=oldest'])assert.equal((await get(path)).status,200,path);
   for(const path of ['/contacts?sort=constructor','/contacts?episode_id=bad','/contacts?page_size=51'])assert.equal((await get(path)).status,400,path);
+  assert.equal((await get('/contacts/1',false)).status,401);
+  assert.equal((await get('/contacts/bad')).status,400);assert.equal((await get('/contacts/66')).status,404);
+  let activity=(await get('/contacts/1')).body;assert.equal(activity.summary.registrations,2);assert.equal(activity.summary.attended,0);assert.equal(activity.latest_attended,null);assert.equal(activity.latest_registration.episode_number,2);assert.ok(activity.events.every(e=>e.student_id===1));
+  await db.exec(`INSERT INTO attendance_participants(id,episode_id,registration_id,name,duration_seconds,join_time,leave_time) VALUES
+    ('student-one-a',1,1,'Attendee 1',1800,'2020-01-01T13:30:00Z','2020-01-01T14:00:00Z'),
+    ('student-one-b',1,1,'Attendee 1',1800,'2020-01-01T13:40:00Z','2020-01-01T14:10:00Z'),
+    ('student-one-c',2,66,'Attendee 1',600,NULL,NULL)`);
+  activity=(await get('/contacts/1')).body;assert.equal(activity.summary.attended,2);assert.equal(activity.summary.present,1);assert.equal(activity.summary.partial,1);assert.equal(activity.summary.zoom_minutes,50);assert.equal(activity.latest_attended.episode_number,2);
+  await db.exec("INSERT INTO attendance_overrides(registration_id,status,note) VALUES(66,'absent','Identity reviewed')");
+  activity=(await get('/contacts/1')).body;assert.equal(activity.summary.attended,1);assert.equal(activity.latest_attended.episode_number,1);assert.equal(activity.events.find(e=>e.registration_id===66).manually_adjusted,true);assert.equal(activity.events.find(e=>e.registration_id===66).minutes,10);
+  const tracked=(await get('/contacts?episode_id=2')).body.data[0];assert.equal(tracked.activity_summary.registrations,2);assert.equal(tracked.activity_summary.attended,1);assert.equal(tracked.latest_attended.episode_number,1);assert.equal(tracked.year_of_study,'2nd Year');
  }finally{if(server)await new Promise(r=>server.close(r));await db.close();}
 });

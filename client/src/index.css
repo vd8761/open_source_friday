@@ -126,3 +126,5 @@ a.admin-action, a.admin-action:hover, a.admin-action:focus-visible,
 a.admin-danger, a.admin-danger:hover, a.admin-danger:focus-visible {
   text-decoration: none !important;
 }
+
+.admin-area .student-link { color: var(--color-dos); text-decoration: underline !important; text-underline-offset: 3px; }

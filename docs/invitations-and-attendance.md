@@ -202,3 +202,12 @@ Use **Attendee contacts** in the shared admin navigation, or open `/admin/contac
 ### Action labels
 
 Restore uses the neutral secondary style; deletion uses the destructive style. Button controls and button-styled links never show an underline. Direct text links retain link styling. **Adjust attendance** replaces the ambiguous **Correct** label and opens the existing manual adjustment flow, requiring a reason and keeping an audit entry and the original Zoom evidence.
+
+
+### Student activity preview
+
+Student names in Contacts, event attendees, meeting attendance, recent dashboard registrations and identified invitation recipients open `/admin/students/{studentId}`. Unmatched Zoom guests and invitation-only contacts are not linked to an unverified identity.
+
+The preview shows current name/college/year/department/contact details and an event timeline. It separates registration count from recorded attendance, shows the latest attended event separately from the latest registration, and labels repeated registration separately from returning attendance. Event attendance and the profile share the same status calculation. Overlapping Zoom sessions are combined, incomplete reports remain unknown, and manual status adjustments are honored. Event-specific WhatsApp choices are shown in the timeline; no global contact permission is inferred. Academic fields represent the current student profile, not historical snapshots.
+
+The directory is one row per saved student profile, with event filters selecting students registered for that event while retaining their full activity summary. Filtered downloads include year, department, registration/attendance counts and latest attended event. Trashed test events and invitation-only CSV records do not appear as student activity.

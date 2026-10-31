@@ -1,4 +1,5 @@
 import { AdminBreadcrumb } from './AdminPageChrome';
+import StudentLink from './StudentLink';
 import ConfirmDialog from './ConfirmDialog';
 import { formatIST } from '../utils/dateTime';
 import { isRegistrationOpen } from '../utils/episodeTime';
@@ -648,7 +649,7 @@ export default function OutreachTool() {
                 {sortedRecipients.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100">
                     <td className="p-3">
-                      {r.full_name}
+                      <StudentLink id={r.student_id}>{r.full_name||r.email}</StudentLink>
                       <br />
                       {r.email}
                     </td>

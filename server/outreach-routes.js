@@ -141,7 +141,7 @@ function createOutreachRouter({
   async function campaignRecipients(db, id) {
     return (
       await db.query(
-        `SELECT r.*,EXISTS(SELECT 1 FROM episode_registrations er JOIN students s ON s.id=er.student_id
+        `SELECT r.*,(SELECT s.id FROM students s WHERE LOWER(TRIM(s.email))=r.email AND EXISTS(SELECT 1 FROM episode_registrations er WHERE er.student_id=s.id) ORDER BY s.id LIMIT 1) AS student_id,EXISTS(SELECT 1 FROM episode_registrations er JOIN students s ON s.id=er.student_id
       JOIN invite_campaigns c ON c.episode_id=er.episode_id WHERE c.id=r.campaign_id AND LOWER(TRIM(s.email))=r.email) AS registered
       FROM invite_recipients r WHERE r.campaign_id=$1 ORDER BY r.id`,
         [id],
