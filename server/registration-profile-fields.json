@@ -1,0 +1,13 @@
+[
+  {"key":"full_name","label":"Full Name"},
+  {"key":"email","label":"Email"},
+  {"key":"whatsapp_number","label":"WhatsApp Number"},
+  {"key":"country_code","label":"Country Code"},
+  {"key":"gender","label":"Gender"},
+  {"key":"college","label":"College Name"},
+  {"key":"degree","label":"Degree"},
+  {"key":"department","label":"Department / Branch"},
+  {"key":"year_of_study","label":"Year of Study"},
+  {"key":"is_dos_club_member","label":"DOS Club Membership"},
+  {"key":"excited_topic","label":"Topic of Interest"}
+]

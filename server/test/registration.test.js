@@ -13,6 +13,8 @@ process.env.JWT_SECRET = 'test-only-secret';
 let closed = false;
 let queueFailure = false;
 let firstTimeStudent = false;
+const completeStudent = { id: 7, email: 'stored@example.com', full_name: 'Stored Student', country_code: '+91', whatsapp_number: '9000000000', gender: 'Female', college: 'Example College', degree: 'B.E.', department: 'Computer Science', year_of_study: '2nd Year', is_dos_club_member: 'No', excited_topic: 'Open source' };
+let storedStudent = { ...completeStudent };
 let releases = 0;
 let storedSilent = false;
 let reminderRows = [];
@@ -22,6 +24,8 @@ const validatedMeetings = [];
 const pushNotifications = [];
 async function poolQuery(sql, values) {
   queries.push({ sql, values });
+  if (sql.includes('FROM students WHERE LOWER(BTRIM(email))')) return { rows: [storedStudent].filter(s => s.email?.trim().toLowerCase() === values[0] || (s.whatsapp_number === values[0] && s.country_code === values[1])) };
+  if (sql.includes('SELECT id FROM episode_registrations')) return { rows: duplicate ? [{ id: 10 }] : [] };
   if (sql.includes('SELECT status, meeting_id')) return { rows: [{ status: zoomJobStatus, meeting_id: '12345678901', invitation_status: zoomJobStatus === 'registered' ? 'zoom_managed' : invitationStatus }] };
   if (sql.includes('INSERT INTO episodes')) return { rows: [{ id: 16, episode_number: values[0], title: values[1], is_silent: values[14], is_test: values[15] }] };
   if (sql.includes('SELECT * FROM episodes WHERE is_active')) return { rows: reminderRows };
@@ -49,9 +53,15 @@ const db = {
     if (sql.includes('SELECT * FROM episodes')) return { rows: [{ id: 1, is_active: !closed, is_silent: storedSilent, is_registration_open: true, zoom_meeting_id: '12345678901', event_mode: 'Online', event_date: registrationDate, event_time: registrationTime, episode_number: 5 }] };
     if (sql.includes('SET episode_number =')) { storedSilent = values[15]; return { rows: [{ id: 1, is_silent: storedSilent }] }; }
     if (sql.includes('SELECT id FROM episode_registrations')) return { rows: duplicate ? [{ id: 10 }] : [] };
-    if (sql.includes('SELECT id FROM students')) return { rows: firstTimeStudent ? [] : [{ id: 7 }] };
+    if (sql.includes('FROM students WHERE id=$1 FOR UPDATE')) return { rows: [{ ...storedStudent }] };
+    if (sql.includes('FROM students WHERE LOWER(BTRIM(email))')) return { rows: firstTimeStudent ? [] : [{ ...storedStudent }] };
+    if (sql.includes('SELECT id FROM students')) return { rows: [] };
+    if (sql.startsWith('UPDATE students SET')) {
+      const keys = sql.slice('UPDATE students SET '.length).split(' WHERE ')[0].split(', ').map(value => value.split('=')[0]);
+      keys.forEach((key, i) => { storedStudent[key] = values[i]; }); return { rows: [] };
+    }
     if (sql.includes('INSERT INTO students')) return { rows: [{ id: 7 }] };
-    if (sql.includes('SELECT email, full_name')) return { rows: [{ email: 'stored@example.com', full_name: 'Stored Student', country_code: '+91', whatsapp_number: '9000000000' }] };
+    if (sql.includes('SELECT email, full_name')) return { rows: [{ ...storedStudent }] };
     if (queueFailure && sql.includes('INSERT INTO zoom_registration_jobs')) throw new Error('outbox unavailable');
     return { rows: [] };
   },
@@ -95,7 +105,7 @@ test('existing student registration confirms and commits its outbox without send
   assert.equal(releases, 1);
 });
 test('new student lookup enters the same enrollment outbox', async () => {
-  const response = await register({ is_existing: false });
+  const response = await register({ ...completeStudent, is_existing: false });
   assert.equal(response.status, 201);
   assert.equal(zoomRequests.length, 0);
   assert.ok(queries.some(q => q.sql.includes('INSERT INTO zoom_registration_jobs')));
@@ -163,7 +173,7 @@ test('admin enrollment uses the saved student identity and lets Zoom handle conf
 
 test('first-time student is saved before their registration and invitation job', async () => {
   firstTimeStudent = true;
-  const response = await register({ is_existing: false, email: 'stored@example.com', full_name: 'Stored Student' });
+  const response = await register({ ...completeStudent, is_existing: false });
   firstTimeStudent = false;
   assert.equal(response.status, 201);
   const sql = queries.map(q => q.sql);
@@ -358,4 +368,42 @@ test('an outbox failure rolls back an affirmative WhatsApp choice too',async()=>
   queueFailure=true;
   try {const response=await register({whatsapp_opt_in:true,whatsapp_notice_version:require('../whatsapp-consent').NOTICE_VERSION});assert.equal(response.status,500);assert.ok(queries.some(q=>q.sql.includes('INSERT INTO episode_registrations')&&q.values[2]===true));assert.ok(queries.some(q=>q.sql==='ROLLBACK'));assert.ok(!queries.some(q=>q.sql==='COMMIT'));}
   finally {queueFailure=false;}
+});
+
+test('lookup distinguishes imported incomplete profiles without publishing academic details', async () => {
+  try {
+    for (const incomplete of [true, false]) {
+      storedStudent = incomplete ? { id: 7, full_name: 'Imported Student', email: 'stored@example.com' } : { ...completeStudent };
+      queries.length = 0;
+      const response = await nativeFetch(`${base}/api/students/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: ' STORED@EXAMPLE.COM ', countryCode: '+91', episode_id: 1 }) });
+      const result = await response.json();
+      assert.equal(response.status, 200); assert.equal(result.profile_complete, !incomplete);
+      assert.equal(result.missing_fields.includes('whatsapp_number'), incomplete);
+      assert.equal(result.missing_fields.includes('college'), incomplete);
+      assert.ok(!Object.hasOwn(result.student, 'college'));
+      assert.ok(!queries.some(q => q.sql.includes('INSERT INTO episode_registrations') || q.sql.includes('INSERT INTO zoom_registration_jobs')));
+    }
+  } finally { storedStudent = { ...completeStudent }; }
+});
+test('API cannot confirm an incomplete returning profile or enqueue a Zoom invitation', async () => {
+  storedStudent = { id: 7, full_name: 'Imported Student', email: 'stored@example.com' };
+  try {
+    const response = await register({ email: 'stored@example.com' }); const result = await response.json();
+    assert.equal(response.status, 422); assert.ok(result.missing_fields.includes('whatsapp_number'));
+    assert.ok(queries.some(q => q.sql === 'ROLLBACK'));
+    assert.ok(!queries.some(q => q.sql.includes('UPDATE students') || q.sql.includes('INSERT INTO episode_registrations') || q.sql.includes('INSERT INTO zoom_registration_jobs')));
+  } finally { storedStudent = { ...completeStudent }; }
+});
+test('completion saves the selected mobile and consent before committing registration and Zoom work', async () => {
+  storedStudent = { id: 7, full_name: 'Imported Student', email: 'stored@example.com' };
+  try {
+    const response = await register({ ...completeStudent, country_code: '+65', whatsapp_number: '91234567', whatsapp_opt_in: true, whatsapp_notice_version: require('../whatsapp-consent').NOTICE_VERSION });
+    assert.equal(response.status, 201); assert.equal(storedStudent.full_name, 'Imported Student');
+    const update = queries.findIndex(q => q.sql.startsWith('UPDATE students SET'));
+    const registration = queries.findIndex(q => q.sql.includes('INSERT INTO episode_registrations'));
+    const zoom = queries.findIndex(q => q.sql.includes('INSERT INTO zoom_registration_jobs'));
+    assert.ok(update >= 0 && update < registration && registration < zoom && zoom < queries.findIndex(q => q.sql === 'COMMIT'));
+    assert.equal(queries[registration].values[5], '+65 91234567');
+    assert.ok(!queries.some(q => q.sql.includes('INSERT INTO students')));
+  } finally { storedStudent = { ...completeStudent }; }
 });

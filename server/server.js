@@ -18,6 +18,7 @@ const { eventPolicy } = require('./event-policy');
 const { initAdminEvents, createAdminEventsRouter } = require('./admin-events');
 const { InputError } = require('./outreach-csv');
 const { registrationConsent, NOTICE_VERSION, NOTICE_TEXT } = require('./whatsapp-consent');
+const { columns: profileColumns, missingProfileFields, resolveRegistrationStudent } = require('./registration-profile');
 const { initEpisodeTrash, createEpisodeTrashRouter } = require('./episode-trash');
 const { processInviteBatch } = require('./invite-service');
 const { createOutreachRouter } = require('./outreach-routes');
@@ -350,13 +351,18 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
 
 app.post('/api/students/lookup', async (req, res) => {
   const { identifier, countryCode, episode_id } = req.body;
+  if (typeof identifier !== 'string' || !identifier.trim() || identifier.length > 255) return res.status(400).json({ success: false, error: 'Please enter your email or WhatsApp number.' });
   try {
     const result = await pool.query(
-      'SELECT id, full_name, email, whatsapp_number, country_code FROM students WHERE email = $1 OR (whatsapp_number = $1 AND country_code = $2)',
-      [identifier, countryCode]
+      `SELECT ${profileColumns} FROM students WHERE LOWER(BTRIM(email)) = $1 OR (whatsapp_number = $1 AND country_code = $2)`,
+      [identifier.trim().toLowerCase(), countryCode]
     );
+    if (result.rows.length > 1) return res.status(409).json({ success: false, error: 'More than one profile matches these details. Please contact the event team.' });
     if (result.rows.length > 0) {
-      const student = result.rows[0];
+      const saved = result.rows[0];
+      const missing_fields = missingProfileFields(saved);
+      // Keep the public lookup response limited to the contact fields already shown here.
+      const student = Object.fromEntries(['id', 'full_name', 'email', 'whatsapp_number', 'country_code'].map(key => [key, saved[key]]));
       let already_registered = false;
       if (episode_id) {
         const regCheck = await pool.query(
@@ -365,7 +371,7 @@ app.post('/api/students/lookup', async (req, res) => {
         );
         already_registered = regCheck.rows.length > 0;
       }
-      res.json({ success: true, student, already_registered });
+      res.json({ success: true, student, already_registered, missing_fields, profile_complete: missing_fields.length === 0 });
     } else {
       res.json({ success: false, message: 'Student not found' });
     }
@@ -598,11 +604,7 @@ app.get('/api/episodes/:episode_number/cover', async (req, res) => {
 
 app.post('/api/register', async (req, res) => {
   const {
-    episode_id, is_existing, student_id,
-    email, full_name, gender, college,
-    degree, department, year_of_study,
-    whatsapp_number, country_code, is_dos_club_member, excited_topic,
-    recaptcha_token
+    episode_id, recaptcha_token
   } = req.body;
 
   let db;
@@ -631,22 +633,8 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Registration closes 30 minutes after the scheduled start time (IST).' });
     }
 
-    let currentStudentId = student_id;
-
-    if (!is_existing) {
-      const existingCheck = await db.query('SELECT id FROM students WHERE email = $1 OR (whatsapp_number = $2 AND country_code = $3)', [email, whatsapp_number, country_code]);
-      if (existingCheck.rows.length > 0) {
-        currentStudentId = existingCheck.rows[0].id;
-      } else {
-        const studentQuery = `
-          INSERT INTO students (email, whatsapp_number, country_code, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          RETURNING id
-        `;
-        const studentResult = await db.query(studentQuery, [email, whatsapp_number, country_code, full_name, gender, college, degree, department, year_of_study, is_dos_club_member, excited_topic]);
-        currentStudentId = studentResult.rows[0].id;
-      }
-    }
+    const profile = await resolveRegistrationStudent(db, req.body);
+    const currentStudentId = profile.id;
 
     const duplicateCheck = await db.query(
       'SELECT id FROM episode_registrations WHERE student_id = $1 AND episode_id = $2',
@@ -679,9 +667,9 @@ app.post('/api/register', async (req, res) => {
     if (db && !committed) await db.query('ROLLBACK');
     console.error('Registration error:', error);
     if (error.code === '23505') {
-      return res.status(400).json({ success: false, error: 'You are already registered for this episode' });
+      return res.status(409).json({ success: false, error: 'This email or WhatsApp number is already linked to a profile. Please use your existing contact details or contact the event team.' });
     }
-    res.status(error instanceof InputError ? error.status : 500).json({ success: false, error: error instanceof InputError ? error.message : 'Internal server error' });
+    res.status(error instanceof InputError ? error.status : 500).json({ success: false, error: error instanceof InputError ? error.message : 'Internal server error', ...(error.fieldErrors ? { missing_fields: Object.keys(error.fieldErrors), field_errors: error.fieldErrors } : {}) });
   } finally { if (db) db.release(); }
 });
 
