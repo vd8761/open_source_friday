@@ -999,3 +999,39 @@ test('a full 50-new-contact batch paces all preparation requests and submits exa
  assert.equal(calls.filter(c=>c.path.endsWith('/send')).length,1);assert.equal(audience,50);
  assert.equal((await db.query('SELECT status FROM invite_campaigns WHERE id=$1',[c.id])).rows[0].status,'completed');
 });
+
+
+test("campaign trash preserves imported evidence and registrations, blocks sends and restores paused", async () => {
+  await resetCampaigns();
+  const c = await makeCampaign();
+  await db.query("INSERT INTO invite_delivery_imports(campaign_id,imported_by,row_count) VALUES($1,1,2)",[c.id]);
+  const before = (await db.query("SELECT COUNT(*)::integer AS n FROM episode_registrations")).rows[0].n;
+  let result=await request(`/outreach/campaigns/${c.id}/trash`,'POST');
+  assert.equal(result.status,200);
+  assert.equal((await request('/outreach/campaigns')).body.data.length,0);
+  assert.equal((await request('/outreach/campaigns?trash=true')).body.data.length,1);
+  const saved=(await request(`/outreach/campaigns/${c.id}`)).body;
+  assert.ok(saved.campaign.deleted_at);
+  assert.equal(saved.data.length,3);
+  assert.equal((await db.query("SELECT COUNT(*)::integer AS n FROM invite_delivery_imports WHERE campaign_id=$1",[c.id])).rows[0].n,1);
+  assert.equal((await db.query("SELECT COUNT(*)::integer AS n FROM episode_registrations")).rows[0].n,before);
+  for(const action of ['start','sync','delivery-import']) assert.equal((await request(`/outreach/campaigns/${c.id}/${action}`,'POST',{csv:'Email,Status,Timestamp\none@example.com,delivered,2026-01-01T12:00:00Z'})).status,404);
+  // Even an accidental status update cannot make a trashed campaign send.
+  await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);
+  const sender=senderStub();await processInviteBatch(pool,sender,env);assert.equal(sender.calls.length,0);
+  result=await request(`/outreach/campaigns/${c.id}/restore`,'POST');assert.equal(result.status,200);
+  const restored=(await request(`/outreach/campaigns/${c.id}`)).body;
+  assert.equal(restored.campaign.deleted_at,null);assert.equal(restored.campaign.status,'paused');assert.equal(restored.data.length,3);
+  assert.equal((await request('/outreach/campaigns')).body.data.length,1);
+  assert.equal((await request('/outreach/campaigns?trash=true')).body.data.length,0);
+});
+
+test("campaign trash refuses uncertain sends and keeps historical invitation exclusions",async()=>{
+  await resetCampaigns();const c=await makeCampaign();
+  const sender=senderStub({fail:true});await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);await processInviteBatch(pool,sender,env);
+  assert.equal((await request(`/outreach/campaigns/${c.id}/trash`,'POST')).status,409);
+  assert.equal((await request('/outreach/campaigns')).body.data.length,1);
+  await db.query("UPDATE invite_batches SET status='submitted' WHERE campaign_id=$1",[c.id]);
+  assert.equal((await request(`/outreach/campaigns/${c.id}/trash`,'POST')).status,200);
+  const preview=await previewImport(db,1,'Email\none@example.com');assert.equal(preview.contacts.length,0);assert.match(preview.excluded[0].reason,/Already invited/);
+});

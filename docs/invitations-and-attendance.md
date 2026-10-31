@@ -171,3 +171,13 @@ Email batch pacing and API request pacing are separate. A batch of 50 entirely n
 No transport or send retry is hidden in the pacing queue. A 429 still pauses the application campaign, and restarting the backend does not automatically resume it. The paused rate-limit message now shows the saved **earliest next attempt** time in IST and explicitly requires manual Resume. This is not a guarantee that the provider has reset. Other applications using the same Sender account or other backend instances can consume API allowance, so reported limits remain authoritative.
 
 Contact preparation can take several minutes. The worker checks pauses and event registration cutoff between contacts, as well as before sending. Do not increase batch size to get around throttling. Registration for Episode 16 on 30 October 2026 closes at 7:30 PM IST under the existing rule; a paused invitation campaign cannot resume after that cutoff even when the Sender cooldown expires. No cutoff is extended by this fix.
+
+### Removing imported invitation records
+
+Use **Email invitations → Campaigns → Delete** to move a campaign, its imported recipient list, batch evidence and delivery reports to **Campaign trash**. A confirmation dialog explains the change. Open Campaign trash to review/export or restore the records. Restoring always leaves the campaign paused and never sends invitations automatically. Student registrations, Zoom enrollment and meeting attendance are separate and remain unchanged.
+
+This is recoverable deletion within OSF; it does not delete subscribers/groups/campaigns from Sender or recall submitted emails. Suppressions and historical invitation exclusions remain in force, including for trashed campaigns. An uncertain sending/review batch must be reconciled before deletion; an active worker must finish processing first.
+
+Before saving a draft, **Clear imported CSV** clears only the uploaded/pasted audience and preview. The original CSV file on the administrator's computer is unaffected.
+
+A paused campaign does not resume automatically after a rate limit. Resume requires administrator action and an event whose registration window is still open. Once the event has ended or its registration cutoff has passed, discard the old campaign rather than sending an expired invitation.

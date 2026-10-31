@@ -13,7 +13,7 @@ async function syncRecentInviteReports(pool, sender) {
       .rows[0].locked;
     if (!locked) return;
     const rows = (
-      await db.query(`SELECT c.id FROM invite_campaigns c WHERE c.created_at>NOW()-INTERVAL '30 days'
+      await db.query(`SELECT c.id FROM invite_campaigns c WHERE c.deleted_at IS NULL AND c.created_at>NOW()-INTERVAL '30 days'
       AND EXISTS(SELECT 1 FROM invite_batches b WHERE b.campaign_id=c.id AND b.status='submitted' AND b.provider_campaign_id IS NOT NULL)
       ORDER BY c.reports_synced_at NULLS FIRST LIMIT 5`)
     ).rows;
