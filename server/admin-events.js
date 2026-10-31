@@ -52,7 +52,7 @@ function createAdminEventsRouter({pool,authenticateToken}) {
   }));
   router.get('/events',route(async req=>{
     const {page,page_size}=pageOptions(req.query),{where,values}=filters(req.query,'events');
-    const orders={date_desc:'e.event_date DESC,e.id DESC',date_asc:`${eventStartSql} ASC NULLS LAST,e.id ASC`,number_desc:'e.episode_number DESC',number_asc:'e.episode_number ASC',title:'e.title ASC,e.id ASC'};
+    const orders={date_desc:'e.event_date DESC,e.id DESC',date_asc:`${eventStartSql} ASC NULLS LAST,e.id ASC`,number_desc:'e.episode_number DESC',number_asc:'e.episode_number ASC',title:'LOWER(e.title) ASC,e.id ASC',title_desc:'LOWER(e.title) DESC,e.id DESC',registrations_asc:'registration_count ASC,e.id ASC',registrations_desc:'registration_count DESC,e.id DESC'};
     const sort=req.query.sort || (req.query.period==='upcoming'?'date_asc':'date_desc');if(!Object.hasOwn(orders,sort))throw new InputError('Invalid sort order.',400);
     const count=await pool.query(`SELECT COUNT(*)::integer AS total FROM episodes e WHERE ${where}`,values);
     const rows=await pool.query(`SELECT ${eventFields},(${eventEndSql}) AS ends_at,(SELECT COUNT(*)::integer FROM episode_registrations er WHERE er.episode_id=e.id) AS registration_count FROM episodes e WHERE ${where} ORDER BY ${orders[sort]} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,page_size,(page-1)*page_size]);
@@ -61,7 +61,7 @@ function createAdminEventsRouter({pool,authenticateToken}) {
   router.get('/episodes/:episodeId/attendees',route(async req=>{
     if(!/^[1-9]\d{0,9}$/.test(req.params.episodeId)||Number(req.params.episodeId)>2147483647)throw new InputError('Invalid episode.',400);
     const {page,page_size}=pageOptions(req.query),{where,values}=filters(req.query,'attendees',req.params.episodeId);
-    const orders={newest:'er.registered_at DESC,er.id DESC',oldest:'er.registered_at ASC,er.id ASC',name:'s.full_name ASC,er.id ASC',college:'s.college ASC,s.full_name ASC,er.id ASC'};
+    const orders={newest:'er.registered_at DESC,er.id DESC',oldest:'er.registered_at ASC,er.id ASC',name:'LOWER(s.full_name) ASC,er.id ASC',name_desc:'LOWER(s.full_name) DESC,er.id DESC',college:'LOWER(s.college) ASC,s.full_name ASC,er.id ASC',college_desc:'LOWER(s.college) DESC,s.full_name DESC,er.id DESC',email:'LOWER(s.email) ASC,er.id ASC',email_desc:'LOWER(s.email) DESC,er.id DESC',zoom:'j.zoom_registered_at ASC NULLS LAST,er.id ASC',zoom_desc:'j.zoom_registered_at DESC NULLS LAST,er.id DESC'};
     const sort=req.query.sort||'newest';if(!Object.hasOwn(orders,sort))throw new InputError('Invalid sort order.',400);
     const ep=await pool.query(`SELECT ${eventFields} FROM episodes e WHERE e.id=$1`,[req.params.episodeId]);if(!ep.rows.length)throw new InputError('Episode not found.',404);
     const count=await pool.query(`SELECT COUNT(*)::integer AS total ${attendeeFrom} WHERE ${where}`,values);

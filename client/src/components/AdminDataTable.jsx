@@ -22,3 +22,8 @@ export function TableFilters({fields,defaults,onApply}) {
     <div className="mt-3 flex gap-4 text-sm"><button className="rounded-lg bg-dos px-4 py-2 font-semibold text-white">Apply filters</button><button type="button" className="underline" onClick={()=>{setDraft(defaults);onApply(defaults);}}>Reset filters</button></div>
   </form>;
 }
+
+export function SortHeader({label,values,sort,onSort,className='p-4'}) {
+  const active=values?.includes(sort),descending=active&&sort===values[1];
+  return <th scope="col" className={className} aria-sort={active?(descending?'descending':'ascending'):undefined}>{values&&onSort?<button type="button" className="inline-flex items-center gap-2 text-left font-inherit hover:text-dos" onClick={()=>onSort(active&&!descending?values[1]:values[0])} title={`Sort by ${label}`}><span>{label}</span><span aria-hidden="true" className={active?'text-dos':'text-slate-400'}>{active?(descending?'↓':'↑'):'↕'}</span></button>:label}</th>;
+}

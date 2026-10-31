@@ -2,7 +2,9 @@ import ConfirmDialog from './ConfirmDialog';
 import { formatIST } from '../utils/dateTime';
 import { isRegistrationOpen } from '../utils/episodeTime';
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { SortHeader } from "./AdminDataTable";
+import { exportRows } from "../utils/tableExport";
 import {
   adminApi,
   downloadAdminCsv,
@@ -12,6 +14,11 @@ import {
 } from "../utils/adminApi";
 const date = formatIST;
 export default function OutreachTool() {
+  const navigate=useNavigate(),{pathname}=useLocation(),{campaignId}=useParams();
+  const creating=pathname.endsWith('/new'),editing=pathname.endsWith('/edit'),listView=!campaignId&&!creating;
+  const trashView=pathname.endsWith('/trash');
+  const [deletePhrase,setDeletePhrase]=useState('');
+  const [listSort,setListSort]=useState('created_desc'),[recipientSort,setRecipientSort]=useState('full_name');
   const [episodes, setEpisodes] = useState([]),
     [config, setConfig] = useState(null),
     [campaigns, setCampaigns] = useState([]);
@@ -39,7 +46,7 @@ export default function OutreachTool() {
     [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [campaignConfirmation,setCampaignConfirmation]=useState(null);
-  const [showTrash,setShowTrash]=useState(false);
+  const showTrash=trashView;
   const [csvInputKey,setCsvInputKey]=useState(0);
   const [reviewedCampaign, setReviewedCampaign] = useState("");
   const needsPilotReview = Boolean(
@@ -81,7 +88,7 @@ export default function OutreachTool() {
     let live = true;
     Promise.all([
       adminApi("/dashboard"),
-      adminApi("/outreach/campaigns"),
+      adminApi(`/outreach/campaigns${trashView ? "?trash=true" : ""}`),
       adminApi("/outreach/config"),
     ])
       .then(([e, c, cfg]) => {
@@ -97,7 +104,8 @@ export default function OutreachTool() {
     return () => {
       live = false;
     };
-  }, []);
+  }, [trashView]);
+  useEffect(()=>{if(!campaignId){setDetail(null);setSelected('');return;}let active=true;setError('');adminApi(`/outreach/campaigns/${campaignId}`).then(r=>{if(!active)return;setSelected(campaignId);setDetail(r);if(editing){if(r.campaign.status!=='draft'||r.campaign.started_at||r.batches.length){setError('Only drafts that have never started can be edited.');return;}setForm(r.campaign);}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[campaignId,editing]);
   function update(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (key === "episode_id") setPreview(null);
@@ -126,15 +134,16 @@ export default function OutreachTool() {
   }
   async function campaignAction(kind) {
     await action(async () => {
-      const result = await adminApi(`/outreach/campaigns/${selected}/${kind}`, {
-        method: "POST",
+      const result = await adminApi(`/outreach/campaigns/${selected}${kind==='purge'?'':`/${kind}`}`, {
+        method: kind==='purge' ? 'DELETE' : "POST",
+        ...(kind==='purge'?{body:{confirmation:deletePhrase}}:{}),
         ...(kind === "start" && needsPilotReview
           ? { body: { reviewed_first_batch: reviewedCampaign === selected } }
           : {}),
       });
       setMessage(result.message);
       await refresh();
-      if (['trash','restore'].includes(kind)) { setSelected(''); setDetail(null); }
+      if (['trash','restore','purge'].includes(kind)) { setSelected(''); setDetail(null);navigate(kind==='restore'?'/admin/invitations':'/admin/invitations/trash'); }
       else await load(selected);
     });
   }
@@ -143,13 +152,16 @@ export default function OutreachTool() {
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+  const sortedRecipients=[...recipients].sort((a,b)=>{const key=recipientSort.replace(/_desc$/,'');const result=String(a[key]||'').localeCompare(String(b[key]||''),undefined,{numeric:true,sensitivity:'base'});return recipientSort.endsWith('_desc')?-result:result;});
+  const sortedCampaigns=[...campaigns].sort((a,b)=>{const key=listSort.replace(/_desc$/,'').replace('created','created_at');const result=typeof a[key]==='number'?a[key]-b[key]:String(a[key]||'').localeCompare(String(b[key]||''),undefined,{numeric:true,sensitivity:'base'});return listSort.endsWith('_desc')?-result:result;});
   return (
     <main className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6 text-slate-800">
       <Link to="/dashboard" className="text-dos font-semibold">
         ← Dashboard
       </Link>
       <div>
-        <h1 className="text-3xl font-extrabold">Email invitations</h1>
+        <h1 className="text-3xl font-extrabold">{creating?"Create campaign":editing?"Edit draft campaign":campaignId?"View campaign":"Email invitations"}</h1>
+        {(creating||campaignId)&&<Link to="/admin/invitations" className="mt-2 inline-block text-sm text-dos underline">← Campaign list</Link>}
         <p className="mt-2 text-slate-500">
           Invite students to register in the application. Zoom emails the
           meeting link after registration.
@@ -180,8 +192,10 @@ export default function OutreachTool() {
           controls pace; it does not guarantee inbox placement.
         </p>
       </div>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5">
-        <h2 className="text-xl font-bold">Prepare an invitation</h2>
+      {(creating||editing)&&<section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5">
+        <h2 className="text-xl font-bold">{editing?'Edit invitation details':'Prepare an invitation'}</h2>
+        {editing&&<p className="text-sm text-slate-500">The episode and imported audience are fixed for this draft. You can edit its subject, message and sending pace. To change the audience, create a new campaign.</p>}
+        {!editing&&<>
         <div className="grid sm:grid-cols-2 gap-4">
           <label className="text-sm font-semibold">
             Episode
@@ -325,6 +339,7 @@ export default function OutreachTool() {
             </p>
           </div>
         )}
+        </>}
         <label className="block text-sm font-semibold">
           Subject
           <input
@@ -384,25 +399,25 @@ export default function OutreachTool() {
           Pause after the first batch so I can review inbox placement and Sender
           reports.
         </label>
-        <label className="flex gap-3 text-sm">
+        {!editing&&<label className="flex gap-3 text-sm">
           <input
             type="checkbox"
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
           />
           I confirm these contacts opted in to receive episode invitations.
-        </label>
+        </label>}
         <button
           className={buttonClass}
           disabled={
             busy ||
-            !consent ||
-            !preview?.eligible ||
+            (editing?(!detail||detail.campaign.status!=='draft'||Boolean(detail.campaign.started_at)||detail.batches.length>0):(!consent||!preview?.eligible)) ||
             !form.subject.trim() ||
             !form.body.trim()
           }
           onClick={() =>
             action(async () => {
+              if(editing){const result=await adminApi(`/outreach/campaigns/${campaignId}`,{method:'PATCH',body:form});setMessage(result.message);navigate(`/admin/invitations/${campaignId}`);return;}
               const result = await adminApi("/outreach/campaigns", {
                 method: "POST",
                 body: { ...form, csv, filters, consent_confirmed: consent },
@@ -411,17 +426,19 @@ export default function OutreachTool() {
                 `Draft saved with ${result.recipients} recipients. Review it below before starting.`,
               );
               await refresh();
-              await load(result.id);
+              navigate(`/admin/invitations/${result.id}`);
             })
           }
         >
-          Save draft
+          {editing?'Save changes':'Save draft'}
         </button>
-      </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
-        <div className="flex justify-between gap-3">
+      </section>}
+      {listView&&<section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold">{showTrash ? 'Campaign trash' : 'Campaigns'}</h2>
-          <button disabled={busy} className="text-slate-600 text-sm underline" onClick={()=>action(async()=>{const next=!showTrash;setShowTrash(next);setDetail(null);setSelected('');await refresh(next);})}>{showTrash ? 'Back to campaigns' : 'Campaign trash'}</button>
+          {!showTrash&&<Link to="/admin/invitations/new" className={buttonClass}>Create campaign</Link>}
+          <div className="ml-auto flex flex-wrap items-center gap-4">
+          <button disabled={busy||!campaigns.length} className="text-sm text-dos underline" onClick={()=>exportRows(sortedCampaigns,[['Subject','subject'],['Episode','episode_number'],['Status','status'],['Recipients','recipients'],['Sent','sent'],['Created','created_at']],'campaigns.csv')}>Download list CSV</button>
           <button
             disabled={busy}
             className="text-dos font-semibold"
@@ -434,6 +451,8 @@ export default function OutreachTool() {
           >
             Refresh
           </button>
+          <Link to={showTrash?'/admin/invitations':'/admin/invitations/trash'} className="text-sm text-slate-500 hover:text-slate-700 underline">{showTrash?'Back to campaigns':'Campaign trash'}</Link>
+          </div>
         </div>
         <div className="overflow-auto">
           <table className="w-full text-sm text-left">
@@ -447,32 +466,24 @@ export default function OutreachTool() {
                   "Sent",
                   "Delivery confirmed",
                   "Open detected",
+                  "Created (IST)",
                   "Actions",
-                ].map((h) => (
-                  <th key={h} className="p-3 bg-slate-50">
-                    {h}
-                  </th>
-                ))}
+                ].map((h,i) => <SortHeader key={h} className="p-3 bg-slate-50" label={h} values={i<8?[["subject","subject_desc"],["episode_number","episode_number_desc"],["status","status_desc"],["recipients","recipients_desc"],["sent","sent_desc"],["delivered","delivered_desc"],["opened","opened_desc"],["created","created_desc"]][i]:undefined} sort={listSort} onSort={setListSort}/>)}
               </tr>
             </thead>
             <tbody>
-              {campaigns.map((c) => (
+              {sortedCampaigns.map((c) => (
                 <tr key={c.id} className="border-t border-slate-100">
                   <td className="p-3">
-                    <button
-                      className="text-dos font-semibold text-left"
-                      onClick={() => action(() => load(c.id))}
-                    >
-                      {c.subject}
-                    </button>
+                    <Link className="text-dos font-semibold underline text-left" to={`/admin/invitations/${c.id}`}>{c.subject}</Link>
                   </td>
                   <td className="p-3">{c.episode_number}</td>
                   <td className="p-3 capitalize">{showTrash ? "In trash" : c.status}</td>
                   <td className="p-3">{c.recipients}</td>
                   <td className="p-3">{c.sent}</td>
                   <td className="p-3">{c.delivered}</td>
-                  <td className="p-3">{c.opened}</td>
-                  <td className="p-3"><button disabled={busy} className="text-rose-700 font-semibold whitespace-nowrap" aria-label={`${showTrash ? 'Restore' : 'Delete'} campaign: ${c.subject}`} onClick={()=>action(async()=>{await load(c.id);setCampaignConfirmation(showTrash ? 'restore' : 'trash');})}>{showTrash ? 'Restore' : 'Delete'}</button></td>
+                  <td className="p-3">{c.opened}</td><td className="p-3 whitespace-nowrap">{date(c.created_at)}</td>
+                  <td className="p-3"><button disabled={busy} className="text-rose-700 font-semibold whitespace-nowrap" aria-label={`${showTrash ? 'Restore' : 'Delete'} campaign: ${c.subject}`} onClick={()=>action(async()=>{await load(c.id);setCampaignConfirmation(showTrash ? 'restore' : 'trash');})}>{showTrash ? 'Restore' : 'Delete'}</button>{showTrash&&<button disabled={busy} className="ml-4 text-xs font-semibold text-rose-700 underline" onClick={()=>action(async()=>{await load(c.id);setDeletePhrase('');setCampaignConfirmation('purge');})}>Delete permanently</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -481,11 +492,12 @@ export default function OutreachTool() {
         {!campaigns.length && (
           <p className="text-slate-500">{showTrash ? "Campaign trash is empty." : "No campaigns yet."}</p>
         )}
-      </section>
-      {detail && (
+      </section>}
+      {!listView&&!editing&&detail && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-bold">{detail.campaign.subject}</h2>
           <p className="whitespace-pre-wrap text-sm">{detail.campaign.body}</p>
+          {campaignEpisode&&<p className="text-sm text-slate-600">Episode {campaignEpisode.episode_number} · <a className="text-dos underline" href={`/register/episode-${campaignEpisode.episode_number}`} target="_blank" rel="noopener noreferrer">{campaignEpisode.title}</a> · {String(campaignEpisode.event_date).slice(0,10)} · {campaignEpisode.event_time} IST</p>}
           <p className="text-sm">
             Status: <strong>{detail.campaign.deleted_at ? "In trash" : detail.campaign.status}</strong> ·{" "}
             {detail.campaign.batch_size} per batch ·{" "}
@@ -517,6 +529,8 @@ export default function OutreachTool() {
             </label>
           )}
           <div className="flex gap-3 flex-wrap">
+            {!detail.campaign.deleted_at&&detail.campaign.status==='draft'&&!detail.campaign.started_at&&!detail.batches.length&&<Link className={buttonClass} to={`/admin/invitations/${selected}/edit`}>Edit draft</Link>}
+            {detail.campaign.deleted_at&&<button disabled={busy} className="text-rose-700 underline" onClick={()=>{setDeletePhrase('');setCampaignConfirmation('purge');}}>Delete permanently</button>}
             {!detail.campaign.deleted_at && ["draft", "paused"].includes(detail.campaign.status) && (
               <button
                 disabled={
@@ -623,6 +637,7 @@ export default function OutreachTool() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
+          <button disabled={busy||!recipients.length} className="text-dos underline text-sm" onClick={()=>exportRows(sortedRecipients,[['Name','full_name'],['Email','email'],['Queue','send_status'],['Sent','sent_at'],['Delivered','delivered_at'],['Opened','opened_at'],['Registered','registered']],'filtered-invitation-recipients.csv')}>Download filtered recipients CSV</button>
           <div className="max-h-[560px] overflow-auto">
             <table className="w-full text-sm text-left">
               <thead>
@@ -635,15 +650,11 @@ export default function OutreachTool() {
                     "Open detected",
                     "Click detected",
                     "Registered",
-                  ].map((h) => (
-                    <th className="p-3 bg-slate-50" key={h}>
-                      {h}
-                    </th>
-                  ))}
+                  ].map((h,i) => <SortHeader key={h} className="p-3 bg-slate-50" label={h} values={[["full_name","full_name_desc"],["send_status","send_status_desc"],["sent_at","sent_at_desc"],["delivered_at","delivered_at_desc"],["opened_at","opened_at_desc"],["clicked_at","clicked_at_desc"],["registered","registered_desc"]][i]} sort={recipientSort} onSort={setRecipientSort}/>)}
                 </tr>
               </thead>
               <tbody>
-                {recipients.map((r) => (
+                {sortedRecipients.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100">
                     <td className="p-3">
                       {r.full_name}
@@ -692,11 +703,12 @@ export default function OutreachTool() {
         </p>
       )}
       {campaignConfirmation&&<ConfirmDialog
-        title={{start:'Send invitation campaign?',pause:'Pause invitation campaign?',trash:'Delete campaign and imported records?',restore:'Restore campaign?', 'clear-csv':'Clear imported CSV?'}[campaignConfirmation]}
-        confirmLabel={{start:'Start sending',pause:'Pause sending',trash:'Move to trash',restore:'Restore campaign','clear-csv':'Clear CSV'}[campaignConfirmation]}
-        danger={['trash','clear-csv'].includes(campaignConfirmation)} busy={busy} onCancel={()=>setCampaignConfirmation(null)}
+        title={{start:'Send invitation campaign?',pause:'Pause invitation campaign?',trash:'Delete campaign and imported records?',restore:'Restore campaign?',purge:'Permanently delete campaign?', 'clear-csv':'Clear imported CSV?'}[campaignConfirmation]}
+        confirmLabel={{start:'Start sending',pause:'Pause sending',trash:'Move to trash',restore:'Restore campaign',purge:'Delete permanently','clear-csv':'Clear CSV'}[campaignConfirmation]}
+        disabled={campaignConfirmation==='purge'&&deletePhrase!=='DELETE PERMANENTLY'} danger={['trash','clear-csv','purge'].includes(campaignConfirmation)} busy={busy} onCancel={()=>setCampaignConfirmation(null)}
         onConfirm={()=>{const kind=campaignConfirmation;setCampaignConfirmation(null);if(kind==='clear-csv'){setCsv('');setFileName('');setPreview(null);setConsent(false);setCsvInputKey(k=>k+1);}else campaignAction(kind);}}>
-        <p>{({start:`Please confirm that you would like to send this invitation campaign to ${detail?.data.length||0} contacts. Sender will deliver it in paced batches.`,pause:'Would you like to pause future batches? Invitations already sent cannot be recalled.',trash:'Would you like to move this campaign, its imported recipient list and reports to Campaign trash? You can restore them later. Student registrations and attendance will remain unchanged. This does not delete records from Sender or recall emails already submitted.',restore:'Would you like to restore this campaign and its imported records? Sending will stay paused until you choose Resume, and the event must still accept registrations.','clear-csv':'Would you like to clear this uploaded CSV and its preview? Saved campaigns, student registrations and attendance will remain unchanged.'})[campaignConfirmation]}</p>
+        <p>{({start:`Please confirm that you would like to send this invitation campaign to ${detail?.data.length||0} contacts. Sender will deliver it in paced batches.`,pause:'Would you like to pause future batches? Invitations already sent cannot be recalled.',trash:'Would you like to move this campaign, its imported recipient list and reports to Campaign trash? You can restore them later. Student registrations and attendance will remain unchanged. This does not delete records from Sender or recall emails already submitted.',restore:'Would you like to restore this campaign and its imported records? Sending will stay paused until you choose Resume, and the event must still accept registrations.',purge:'Please confirm that you want to permanently delete this campaign, imported audience and reports from OSF. This cannot be undone. Registrations, attendance, suppression preferences and minimal duplicate-send exclusions remain. Records in Sender are unchanged.','clear-csv':'Would you like to clear this uploaded CSV and its preview? Saved campaigns, student registrations and attendance will remain unchanged.'})[campaignConfirmation]}</p>
+        {campaignConfirmation==='purge'&&<label className="block font-semibold">Type DELETE PERMANENTLY<input className={fieldClass} value={deletePhrase} onChange={e=>setDeletePhrase(e.target.value)} autoComplete="off"/></label>}
       </ConfirmDialog>}
     </main>
   );

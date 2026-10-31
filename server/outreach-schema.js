@@ -12,7 +12,9 @@ async function initOutreachDB(db) {
     ADD COLUMN IF NOT EXISTS pilot_reviewed_at TIMESTAMPTZ`);
   await db.query(`ALTER TABLE invite_campaigns
     ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
-    ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES admins(id)`);
+    ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES admins(id),
+    ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`);
+  await db.query(`CREATE TABLE IF NOT EXISTS invite_sent_history (episode_id INTEGER NOT NULL, email TEXT NOT NULL, PRIMARY KEY(episode_id,email))`);
   await db.query(`CREATE TABLE IF NOT EXISTS invite_batches (
     id UUID PRIMARY KEY, campaign_id UUID NOT NULL REFERENCES invite_campaigns(id) ON DELETE CASCADE,
     group_id TEXT, provider_campaign_id TEXT, status TEXT NOT NULL DEFAULT 'preparing',

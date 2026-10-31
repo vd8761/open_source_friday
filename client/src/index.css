@@ -92,3 +92,11 @@ code {
   content: "";
   margin-bottom: 0.5rem;
 }
+
+/* Make interactive controls distinguishable throughout the application. */
+a[href], button:not(:disabled), summary, select:not(:disabled), input[type="checkbox"]:not(:disabled) { cursor: pointer; }
+button:disabled, select:disabled { cursor: not-allowed; }
+a[href]:hover { text-decoration: underline; text-underline-offset: 3px; }
+a[href]:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--color-dos); outline-offset: 3px; }
+
+.admin-area main a[href]:not([class*="bg-"]) { text-decoration: underline; text-underline-offset: 3px; }

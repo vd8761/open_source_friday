@@ -204,7 +204,7 @@ export default function Dashboard() {
       </div>
 
       {/* Top Navigation Bar */}
-      <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+      <nav className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 cursor-pointer" onClick={() => setViewMode('summary')}>
@@ -220,16 +220,14 @@ export default function Dashboard() {
                 <button
                   onClick={() => setProfileOpen(!profileOpen)}
                   className="h-9 px-3 bg-dos-light/20 text-dos hover:bg-dos hover:text-white rounded-full flex items-center justify-center transition-all focus:ring-2 focus:ring-dos focus:outline-none font-bold text-sm shadow-sm"
-                  title="Admin menu" aria-expanded={profileOpen}
+                  title="Account options" aria-expanded={profileOpen}
                 >
-                  Menu
+                  Account
                 </button>
 
                 {profileOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50">
                     <div className="p-2 flex flex-col gap-1">
-                      <button onClick={()=>{setProfileOpen(false);navigate('/admin/past-events');}} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Past events</button>
-                      <button onClick={()=>{setProfileOpen(false);navigate('/admin/trash');}} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Trash</button>
                       <button
                         onClick={() => {
                           setProfileOpen(false);

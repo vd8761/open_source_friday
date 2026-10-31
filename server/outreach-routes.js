@@ -211,6 +211,34 @@ function createOutreachRouter({
       return { message: "Campaign and imported records restored in paused status. Restoring does not send invitations; the event must still accept registrations before you can resume." };
     }, true),
   );
+  router.patch('/outreach/campaigns/:campaignId',route(async(req,db)=>{
+    const c=await campaign(db,req.params.campaignId);
+    const batches=await db.query('SELECT id FROM invite_batches WHERE campaign_id=$1 LIMIT 1',[c.id]);
+    if(c.status!=='draft'||c.started_at||batches.rows.length)throw new InputError('Only a draft that has never started can be edited. Please create a new campaign.',409);
+    const subject=String(req.body.subject||'').trim(),body=String(req.body.body||'').trim();
+    const size=Number(req.body.batch_size),interval=Number(req.body.interval_minutes);
+    if(!subject||subject.length>200||!body||body.length>10000)throw new InputError('Enter a subject (up to 200 characters) and message (up to 10,000 characters).');
+    if(!Number.isInteger(size)||size<1||size>200||!Number.isInteger(interval)||interval<1||interval>1440||typeof req.body.pause_after_first_batch!=='boolean')throw new InputError('Use 1–200 recipients per batch, a 1–1440 minute interval and a valid first-batch review choice.');
+    await db.query('UPDATE invite_campaigns SET subject=$2,body=$3,batch_size=$4,interval_minutes=$5,pause_after_first_batch=$6 WHERE id=$1',[c.id,subject,body,size,interval,req.body.pause_after_first_batch]);
+    return {message:'Draft updated. Its episode and imported audience are unchanged; eligibility is checked again before sending.'};
+  },true));
+  router.delete('/outreach/campaigns/:campaignId',route(async(req,db)=>{
+    const lock=(await db.query('SELECT pg_try_advisory_xact_lock(7410626) AS locked')).rows[0];
+    if(!lock.locked)throw new InputError('An invitation batch is processing. Please try again once it finishes.',409);
+    const c=await campaign(db,req.params.campaignId,true);
+    if(!c.deleted_at)throw new InputError('Move this campaign to trash before permanently deleting it.',409);
+    if(req.body?.confirmation!=='DELETE PERMANENTLY')throw new InputError('Please type DELETE PERMANENTLY to confirm.');
+    if((await db.query("SELECT id FROM invite_batches WHERE campaign_id=$1 AND status IN ('sending','review')",[c.id])).rows.length)throw new InputError('Please resolve the uncertain send outcome before permanently deleting.',409);
+    // Keep only the minimum send exclusion; purging must not enable duplicate invitations.
+    await db.query(`INSERT INTO invite_sent_history(episode_id,email)
+      SELECT $2,r.email FROM invite_recipients r LEFT JOIN invite_batches b ON b.id=r.batch_id
+      WHERE r.campaign_id=$1 AND (r.sent_at IS NOT NULL OR b.status='submitted') ON CONFLICT DO NOTHING`,[c.id,c.episode_id]);
+    await db.query('DELETE FROM invite_delivery_imports WHERE campaign_id=$1',[c.id]);
+    await db.query('DELETE FROM invite_recipients WHERE campaign_id=$1',[c.id]);
+    await db.query('DELETE FROM invite_batches WHERE campaign_id=$1',[c.id]);
+    await db.query('DELETE FROM invite_campaigns WHERE id=$1',[c.id]);
+    return {message:'Campaign and imported reports permanently deleted from OSF. Student registrations, attendance, suppression preferences and minimal duplicate-send exclusions remain. Sender records are unchanged.'};
+  },true));
   router.post(
     "/outreach/campaigns/:campaignId/start",
     route(async (req, db) => {
@@ -257,7 +285,7 @@ function createOutreachRouter({
       }
       // Preserve any rate-limit cooldown recorded by the worker.
       await db.query(
-        "UPDATE invite_campaigns SET status='running',last_error=NULL WHERE id=$1",
+        "UPDATE invite_campaigns SET status='running',started_at=COALESCE(started_at,NOW()),last_error=NULL WHERE id=$1",
         [c.id],
       );
       return {
@@ -467,7 +495,7 @@ function createOutreachRouter({
     "/episodes/:episodeId/attendance/export",
     route(async (req, db) => ({
       csv: csvExport(
-        (await attendanceReport(db, req.params.episodeId)).data,
+        (await attendanceReport(db, req.params.episodeId, req.query, {all:true})).data,
         [
           ["full_name", "Full Name"],
           ["email", "Email"],
