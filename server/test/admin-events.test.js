@@ -102,6 +102,7 @@ test('admin event tables page and filter on the server and keep dashboard recent
   activity=(await get('/contacts/1')).body;assert.equal(activity.summary.attended,2);assert.equal(activity.summary.present,1);assert.equal(activity.summary.partial,1);assert.equal(activity.summary.zoom_minutes,50);assert.equal(activity.latest_attended.episode_number,2);
   await db.exec("INSERT INTO attendance_overrides(registration_id,status,note) VALUES(66,'absent','Identity reviewed')");
   activity=(await get('/contacts/1')).body;assert.equal(activity.summary.attended,1);assert.equal(activity.latest_attended.episode_number,1);assert.equal(activity.events.find(e=>e.registration_id===66).manually_adjusted,true);assert.equal(activity.events.find(e=>e.registration_id===66).minutes,10);
+  assert.equal((await get('/contacts?sort=registrations_desc')).body.data[0].id,1);
   const tracked=(await get('/contacts?episode_id=2')).body.data[0];assert.equal(tracked.activity_summary.registrations,2);assert.equal(tracked.activity_summary.attended,1);assert.equal(tracked.latest_attended.episode_number,1);assert.equal(tracked.year_of_study,'2nd Year');
  }finally{if(server)await new Promise(r=>server.close(r));await db.close();}
 });
