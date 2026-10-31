@@ -128,7 +128,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     {row.invitation_status==='rate_limited'&&row.zoom_next_attempt_at&&<div className="mt-1 text-xs text-slate-500">Next retry: {formatIST(row.zoom_next_attempt_at)}</div>}
                     {row.invitation_status === 'zoom_managed' && /^\d{9,11}$/.test(row.zoom_meeting_id || '') ? (
                       <a href={`https://zoom.us/meeting/${row.zoom_meeting_id}#registration`} target="_blank" rel="noopener noreferrer"
-                        className="mt-2 inline-block px-3 py-1.5 rounded-lg bg-dos text-white font-bold text-xs">Resend in Zoom</a>
+                        className="admin-primary mt-2">Resend in Zoom</a>
                     ) : onSendZoomInvitation && <button type="button" disabled={!row.zoom_enabled || sendingStudentId !== null || (row.invitation_status === 'rate_limited' && new Date(row.zoom_next_attempt_at) > new Date())}
                       onClick={() => sendInvitation(row.id)}
                       className="mt-2 px-3 py-1.5 rounded-lg bg-dos text-white font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed">

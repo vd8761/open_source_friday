@@ -116,4 +116,13 @@ a[href]:focus-visible, button:focus-visible, summary:focus-visible { outline: 2p
 .admin-action:disabled, .admin-primary:disabled, .admin-danger:disabled { opacity: .45; cursor: not-allowed; }
 .admin-area main { padding-top: 1.5rem; }
 .admin-area main a[href]:not([class*="bg-"]):not(.admin-primary):not(.admin-action) { text-decoration: none; }
-.admin-area main table a[href] { text-decoration: underline !important; text-underline-offset: 3px; }
+.admin-area main table a[href]:not(.admin-primary):not(.admin-action):not(.admin-danger):not([role="button"]) { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Action controls never inherit the decoration used for direct text links. */
+button, button:hover, button:focus-visible,
+[role="button"], [role="button"]:hover,
+a.admin-primary, a.admin-primary:hover, a.admin-primary:focus-visible,
+a.admin-action, a.admin-action:hover, a.admin-action:focus-visible,
+a.admin-danger, a.admin-danger:hover, a.admin-danger:focus-visible {
+  text-decoration: none !important;
+}
