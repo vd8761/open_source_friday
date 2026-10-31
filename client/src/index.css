@@ -100,3 +100,20 @@ a[href]:hover { text-decoration: underline; text-underline-offset: 3px; }
 a[href]:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--color-dos); outline-offset: 3px; }
 
 .admin-area main a[href]:not([class*="bg-"]) { text-decoration: underline; text-underline-offset: 3px; }
+
+/* One shared action hierarchy: primary, secondary and destructive. */
+.admin-action, .admin-primary, .admin-danger {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: 2.25rem; border: 1px solid #e2e8f0; border-radius: .5rem;
+  padding: .45rem .85rem; font-size: .8125rem; font-weight: 600; line-height: 1.25rem;
+  background: white; color: #475569; text-decoration: none !important; white-space: nowrap;
+}
+.admin-action:hover { background: #f8fafc; border-color: #cbd5e1; }
+.admin-primary { color: white; background: var(--color-dos); border-color: var(--color-dos); }
+.admin-primary:hover { filter: brightness(.95); }
+.admin-danger { color: #be123c; border-color: #fecdd3; }
+.admin-danger:hover { background: #fff1f2; }
+.admin-action:disabled, .admin-primary:disabled, .admin-danger:disabled { opacity: .45; cursor: not-allowed; }
+.admin-area main { padding-top: 1.5rem; }
+.admin-area main a[href]:not([class*="bg-"]):not(.admin-primary):not(.admin-action) { text-decoration: none; }
+.admin-area main table a[href] { text-decoration: underline !important; text-underline-offset: 3px; }

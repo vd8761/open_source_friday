@@ -1,3 +1,4 @@
+import { AdminBreadcrumb } from './AdminPageChrome';
 import ConfirmDialog from './ConfirmDialog';
 import { calendarInputDate } from '../utils/episodeTime';
 import React, { useState, useCallback, useEffect } from 'react';
@@ -257,28 +258,8 @@ const AdminEpisodeForm = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
       {closeConfirmation&&<ConfirmDialog title="Save changes and close registrations?" confirmLabel="Save and close registrations" cancelLabel="Keep editing" busy={isSubmitting} danger error={message} onCancel={()=>setCloseConfirmation(false)} onConfirm={()=>handleSubmit({preventDefault(){}},true)}><p>Would you like to save these changes and pause new registrations for this episode? Existing attendee records will be kept.</p></ConfirmDialog>}
-      {/* Top Navigation Bar */}
-      <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 cursor-pointer" onClick={() => navigate('/dashboard')}>
-              <img src="/dos_logo.png" alt="DOS Logo" className="h-8 sm:h-10 w-auto object-contain drop-shadow-sm" />
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="flex items-center justify-center px-4 py-2 border border-slate-200 shadow-sm text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6"><AdminBreadcrumb items={[["Dashboard","/dashboard"],[id?"Edit event":"Create event"]]}/>
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 relative">
           
           {/* Crop Modal Overlay */}
@@ -336,7 +317,7 @@ const AdminEpisodeForm = () => {
 
           <div className="mb-8">
             <div className="flex justify-between items-start mb-4 gap-4">
-              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-tight">{id ? 'Edit Episode' : 'Create New Episode'}</h2>
+              <h1 className="text-2xl font-bold text-slate-900">{id ? 'Edit event' : 'Create event'}</h1>
               <span className="text-sm font-bold text-dos bg-dos-light/20 px-3 py-1 rounded-full whitespace-nowrap shrink-0">Step {currentStep} of 4</span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-2">

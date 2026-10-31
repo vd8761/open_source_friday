@@ -41,4 +41,4 @@ export function downloadFile(blob, filename) {
 export const fieldClass =
   "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white";
 export const buttonClass =
-  "rounded-lg bg-dos px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed";
+  "admin-primary";
