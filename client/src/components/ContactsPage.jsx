@@ -1,0 +1,24 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAdminPage } from '../utils/useAdminPage';
+import { formatIST } from '../utils/dateTime';
+import { matchingRows, exportRows } from '../utils/tableExport';
+import { TableFilters, TablePager, SortHeader } from './AdminDataTable';
+const defaults={sort:'newest'};
+export default function ContactsPage(){
+  const [filters,setFilters]=useState(defaults),[exporting,setExporting]=useState(false),[error,setError]=useState('');
+  const exportingRequest=useRef(null);useEffect(()=>()=>exportingRequest.current?.abort(),[]);
+  const table=useAdminPage('/contacts',filters),events=table.result.events||[];
+  const fields=[{key:'search',label:'Search contacts',placeholder:'Name, email or phone'},{key:'episode_id',label:'Registered event',options:[['','All events'],...events.map(e=>[String(e.id),`Episode ${e.episode_number} · ${e.title}`])]},{key:'college',label:'College',placeholder:'College contains…'}];
+  async function download(){const controller=new AbortController();exportingRequest.current=controller;setExporting(true);setError('');try{const rows=await matchingRows('/contacts',filters,controller.signal);exportRows(rows.map(r=>({...r,phone:[r.country_code,r.whatsapp_number].filter(Boolean).join(' '),episodes:r.episode_numbers.join(', ')})),[['Name','full_name'],['Email','email'],['Phone','phone'],['College','college'],['Registered episodes','episodes'],['Registrations','registration_count'],['Latest registration (ISO)','last_registered_at']],'filtered-attendee-contacts.csv');}catch(e){if(!controller.signal.aborted)setError(e.message);}finally{if(!controller.signal.aborted)setExporting(false);exportingRequest.current=null;}}
+  return <main className="mx-auto max-w-7xl space-y-5 p-4 sm:p-8">
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">Attendee contacts</h1><p className="mt-2 text-sm text-slate-500">One entry per student registered through the application. Filter by event or search their contact details.</p></div><div className="flex flex-wrap gap-2"><button className="admin-action" disabled={table.loading} onClick={table.refresh}>Refresh</button><button className="admin-action" disabled={table.loading||Boolean(table.error)||exporting||!table.result.total} onClick={download}>{exporting?'Downloading…':'Download filtered CSV'}</button></div></div>
+    <p className="text-xs text-slate-500">WhatsApp permission is event-specific. Open the event’s attendee list to check or export its opt-ins before messaging.</p>
+    <TableFilters fields={fields} defaults={defaults} onApply={f=>{table.setPage(1);setFilters({...f,sort:filters.sort});}}/>
+    {(error||table.error)&&<p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-800">{error||table.error}</p>}
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-busy={table.loading}><div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Attendee contact directory</caption><thead className="bg-slate-50 text-xs text-slate-500"><tr>{[['S.No.'],['Name',['name','name_desc']],['Email',['email','email_desc']],['Phone'],['College',['college','college_desc']],['Registered events'],['Latest registration (IST)',['oldest','newest']]].map(([label,values])=><SortHeader key={label} label={label} values={values} sort={filters.sort} onSort={sort=>{table.setPage(1);setFilters(f=>({...f,sort}));}}/>)}</tr></thead><tbody>
+    {!table.loading&&!table.error&&table.result.data.map((r,index)=><tr key={r.id} className="border-t border-slate-100"><td className="p-4 text-slate-500">{(table.page-1)*table.pageSize+index+1}</td><td className="p-4 font-semibold">{r.full_name}</td><td className="p-4"><a className="text-dos" href={`mailto:${r.email}`}>{r.email}</a></td><td className="p-4 whitespace-nowrap">{[r.country_code,r.whatsapp_number].filter(Boolean).join(' ')||'—'}</td><td className="p-4">{r.college||'—'}</td><td className="p-4"><div className="flex flex-wrap gap-2">{r.episode_numbers.map(number=>{const event=events.find(e=>e.episode_number===number);return event?<Link className="text-dos" key={number} to={`/admin/episodes/${event.id}/attendees`} title={`View Episode ${number} attendees`}>#{number}</Link>:<span key={number}>#{number}</span>;})}</div></td><td className="p-4 whitespace-nowrap text-xs text-slate-500">{formatIST(r.last_registered_at)}</td></tr>)}
+    {(table.loading||table.error||!table.result.data.length)&&<tr><td colSpan="7" className="p-10 text-center text-slate-500">{table.loading?'Loading contacts…':table.error?'Contacts could not be loaded.':'No contacts match these filters.'}</td></tr>}
+    </tbody></table></div><TablePager table={table}/></div>
+  </main>;
+}

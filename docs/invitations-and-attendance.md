@@ -194,3 +194,11 @@ Campaign trash is a gray link to the right of Refresh. Inside trash, Delete perm
 Select a table heading with arrows to toggle ascending/descending order. Attendance, attendee and past-event ordering is applied before pagination. For longest attendance, select Minutes until the down arrow appears. Download filtered attendance CSV includes every matching registration, regardless of the visible page. Attendee and past-event CSV exports also include all matching pages, with the selected order. Campaign recipient downloads respect the recipient search and sort.
 
 The Zoom import/settings section is collapsed by default. Expand it for sync, threshold and CSV import controls; the last-sync time stays visible below the collapsed panel. A single branded admin header links Dashboard, Past events and Email invitations, with Event trash and Account available globally. Create event is the primary dashboard action. Nested pages use one breadcrumb, and Attendees/Meeting attendance tabs appear only within the event page. Refresh/download actions use the shared secondary-button style. Advanced filters are available under More filters, and applying filters preserves the selected table sort.
+
+### Attendee contacts
+
+Use **Attendee contacts** in the shared admin navigation, or open `/admin/contacts`. It lists one student per row across application registrations, excluding unregistered profiles and invitation-only CSV contacts. Search by name, email or phone; More filters contains event and college filters. Sort name/email/college/latest registration using the headings. Download filtered CSV includes all matching pages. Registered-event links open that episode's attendee list. WhatsApp consent remains event-specific and is reviewed/exported in the event attendee page.
+
+### Action labels
+
+Restore uses the neutral secondary style; deletion uses the destructive style. Button controls and button-styled links never show an underline. Direct text links retain link styling. **Adjust attendance** replaces the ambiguous **Correct** label and opens the existing manual adjustment flow, requiring a reason and keeping an audit entry and the original Zoom evidence.

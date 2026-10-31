@@ -58,6 +58,23 @@ function createAdminEventsRouter({pool,authenticateToken}) {
     const rows=await pool.query(`SELECT ${eventFields},(${eventEndSql}) AS ends_at,(SELECT COUNT(*)::integer FROM episode_registrations er WHERE er.episode_id=e.id) AS registration_count FROM episodes e WHERE ${where} ORDER BY ${orders[sort]} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,page_size,(page-1)*page_size]);
     return {data:rows.rows,total:count.rows[0].total,page,page_size};
   }));
+  router.get('/contacts',route(async req=>{
+    const {page,page_size}=pageOptions(req.query),values=[],clauses=[];
+    const contains=(key,columns)=>{if(!req.query[key])return;if(typeof req.query[key]!=='string'||req.query[key].length>150)throw new InputError('Please use a search up to 150 characters.',400);values.push('%'+req.query[key].trim().replace(/[\\%_]/g,'\\$&')+'%');clauses.push('('+columns.map(c=>`${c} ILIKE $${values.length}`).join(' OR ')+')');};
+    contains('search',['s.full_name','s.email',"CONCAT(s.country_code,s.whatsapp_number)"]);contains('college',['s.college']);
+    if(req.query.episode_id){if(!/^[1-9]\d{0,9}$/.test(req.query.episode_id)||Number(req.query.episode_id)>2147483647)throw new InputError('Invalid event filter.',400);values.push(req.query.episode_id);clauses.push(`er.episode_id=$${values.length}`);}
+    const where=clauses.length?'WHERE '+clauses.join(' AND '):'';
+    const from='FROM students s JOIN episode_registrations er ON er.student_id=s.id JOIN episodes e ON e.id=er.episode_id';
+    const orders={newest:'last_registered_at DESC,s.id DESC',oldest:'last_registered_at ASC,s.id ASC',name:'LOWER(s.full_name) ASC,s.id ASC',name_desc:'LOWER(s.full_name) DESC,s.id DESC',email:'LOWER(s.email) ASC,s.id ASC',email_desc:'LOWER(s.email) DESC,s.id DESC',college:'LOWER(s.college) ASC NULLS LAST,s.id ASC',college_desc:'LOWER(s.college) DESC NULLS LAST,s.id DESC'};
+    const sort=req.query.sort||'newest';if(!Object.hasOwn(orders,sort))throw new InputError('Invalid contact sort.',400);
+    const count=await pool.query(`SELECT COUNT(DISTINCT s.id)::integer AS total ${from} ${where}`,values);
+    const rows=await pool.query(`SELECT s.id,s.full_name,s.email,s.country_code,s.whatsapp_number,s.college,
+      COUNT(DISTINCT er.id)::integer AS registration_count,MAX(er.registered_at::timestamptz) AS last_registered_at,
+      array_agg(DISTINCT e.episode_number ORDER BY e.episode_number) AS episode_numbers
+      ${from} ${where} GROUP BY s.id ORDER BY ${orders[sort]} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,page_size,(page-1)*page_size]);
+    const events=await pool.query('SELECT id,episode_number,title FROM episodes WHERE EXISTS(SELECT 1 FROM episode_registrations er WHERE er.episode_id=episodes.id) ORDER BY episode_number DESC');
+    return {data:rows.rows,total:count.rows[0].total,page,page_size,events:events.rows};
+  }));
   router.get('/episodes/:episodeId/attendees',route(async req=>{
     if(!/^[1-9]\d{0,9}$/.test(req.params.episodeId)||Number(req.params.episodeId)>2147483647)throw new InputError('Invalid episode.',400);
     const {page,page_size}=pageOptions(req.query),{where,values}=filters(req.query,'attendees',req.params.episodeId);

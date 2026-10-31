@@ -80,5 +80,17 @@ test('admin event tables page and filter on the server and keep dashboard recent
   const countsSorted=await get('/events?period=past&sort=registrations_desc');assert.equal(countsSorted.status,200);assert.equal(countsSorted.body.data[0].id,1);
   for(const path of ['/episodes/1/attendance?page=0','/episodes/1/attendance?page_size=51','/episodes/1/attendance?page=1&status=unknown','/episodes/1/attendance?page=1&joined=maybe'])assert.equal((await get(path)).status,400,path);
   assert.equal((await db.query('SELECT COUNT(*)::integer AS n FROM episode_registrations')).rows[0].n,65);
+  assert.equal((await get('/contacts',false)).status,401);
+  await db.exec("INSERT INTO episode_registrations VALUES(66,2,1,'2099-01-01T10:00:00Z'); INSERT INTO students(id,full_name,email) VALUES(66,'No registration','unregistered@example.com')");
+  const contacts=(await get('/contacts')).body;assert.equal(contacts.total,65);assert.equal(contacts.data.length,10);assert.equal(contacts.data[0].id,1);assert.deepEqual(contacts.data[0].episode_numbers,[1,2]);assert.equal(contacts.data[0].registration_count,2);assert.equal(contacts.events.length,2);
+  const page2=(await get('/contacts?page=2&page_size=50')).body;assert.equal(page2.data.length,15);assert.equal(new Set([...((await get('/contacts?page_size=50')).body.data),...page2.data].map(r=>r.id)).size,65);
+  const eventContacts=(await get('/contacts?episode_id=2')).body;assert.equal(eventContacts.total,1);assert.equal(eventContacts.data[0].id,1);assert.equal(eventContacts.data[0].registration_count,1);
+  assert.equal((await get('/contacts?college=Alpha')).body.total,32);
+  assert.equal((await get('/contacts?search=1%40example.com&episode_id=2')).body.total,1);
+  assert.equal((await get('/contacts?search=%25')).body.total,0);
+  assert.equal((await get('/contacts?search=unregistered')).body.total,0);
+  assert.ok(!JSON.stringify(contacts.data).includes('excited_topic'));
+  for(const path of ['/contacts?sort=name','/contacts?sort=email_desc','/contacts?sort=college','/contacts?sort=oldest'])assert.equal((await get(path)).status,200,path);
+  for(const path of ['/contacts?sort=constructor','/contacts?episode_id=bad','/contacts?page_size=51'])assert.equal((await get(path)).status,400,path);
  }finally{if(server)await new Promise(r=>server.close(r));await db.close();}
 });
