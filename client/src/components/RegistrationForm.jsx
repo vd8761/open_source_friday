@@ -7,6 +7,8 @@ import 'react-quill-new/dist/quill.snow.css';
 import SiteFooter from './SiteFooter';
 import WhatsAppConsent, { WHATSAPP_NOTICE_VERSION } from './WhatsAppConsent';
 import { countries } from '../utils/countries';
+const emptyStudent = { full_name: '', email: '', whatsapp_number: '', country_code: '', gender: '', college: '', degree: '', department: '', year_of_study: '', is_dos_club_member: '', excited_topic: '' };
+const profileFields = Object.keys(emptyStudent).map(key => ({ key }));
 
 const RegistrationForm = () => {
   const { episode_number: episodeParam } = useParams();
@@ -38,19 +40,15 @@ const RegistrationForm = () => {
   }, []);
 
   const [studentFound, setStudentFound] = useState(false);
-  const [studentData, setStudentData] = useState({
-    email: '',
-    whatsapp_number: '',
-    full_name: '',
-    gender: '',
-    college: '',
-    degree: '',
-    department: '',
-    year_of_study: '',
-    is_dos_club_member: '',
-    excited_topic: ''
-  });
+  const [profileMissingFields, setProfileMissingFields] = useState([]);
+  const [studentData, setStudentData] = useState({ ...emptyStudent });
+  const needsProfileDetails = !studentFound || profileMissingFields.length > 0;
+  const showField = key => !studentFound || profileMissingFields.includes(key);
+  const showGroup = (...keys) => keys.some(showField);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const lastEmailChecked = useRef('');
+  const lookupVersion = useRef(0);
   const { executeRecaptcha } = useGoogleReCaptcha();
 
   // Returns true if the episode event has already completed based on its date and end time
@@ -89,23 +87,70 @@ const RegistrationForm = () => {
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setStudentData(prev => ({ ...prev, [name]: value }));
+    if (name === 'whatsapp_number') setWhatsappOptIn(false);
     setRegisterError('');
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: null }));
     }
   };
 
-  const handleIdentifierChange = (e) => {
-    setIdentifier(e.target.value);
+  const applySavedProfile = (data, preserveDraft = false) => {
+    const missing = Array.isArray(data.missing_fields) ? data.missing_fields : profileFields.map(({ key }) => key);
+    const saved = Object.fromEntries(Object.entries(data.student).map(([key, value]) => [key, value ?? '']));
+    setStudentData(current => {
+      const draft = { ...emptyStudent, ...saved };
+      if (preserveDraft) for (const key of missing) draft[key] = current[key] || draft[key];
+      return draft;
+    });
+    setStudentFound(true);
+    setProfileMissingFields(missing);
+    setCountryCode(current => saved.whatsapp_number && saved.country_code ? saved.country_code : current);
+    setWhatsappOptIn(false);
+    setValidationErrors({});
+  };
+  const returnToLookup = () => {
+    lookupVersion.current++;
+    setCheckingEmail(false);
     setLookupError('');
+    setRegisterError('');
+    setStep(1);
+  };
+
+  const checkEnteredEmail = async () => {
+    const email = studentData.email.trim().toLowerCase();
+    if (studentFound || checkingEmail || email === identifier.trim().toLowerCase() || email === lastEmailChecked.current || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    lastEmailChecked.current = email;
+    const version = ++lookupVersion.current;
+    setCheckingEmail(true);
+    setRegisterError('');
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const res = await fetch(`${API_URL}/api/students/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: email, countryCode, episode_id: episodeDetails?.id }) });
+      const data = await res.json();
+      if (version !== lookupVersion.current) return;
+      if (!res.ok) throw new Error(data.error || 'Please check your email and try again.');
+      if (data.success) {
+        if (data.already_registered) {
+          setIdentifier(email); setLookupError('You are already registered for this episode!'); setStep(1);
+        } else applySavedProfile(data, true);
+      }
+    } catch (err) {
+      if (version !== lookupVersion.current) return;
+      lastEmailChecked.current = '';
+      setRegisterError(err.message || 'Could not check your saved profile. Please try again.');
+    } finally { if (version === lookupVersion.current) setCheckingEmail(false); }
   };
 
   const handleLookup = async (e) => {
     e.preventDefault();
     if (!identifier) return;
+    const version = ++lookupVersion.current;
     setIsSubmitting(true);
     setLookupError('');
     setWhatsappOptIn(false);
+    setValidationErrors({});
+    setRegisterError('');
+    lastEmailChecked.current = '';
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -119,6 +164,8 @@ const RegistrationForm = () => {
         })
       });
       const data = await res.json();
+      if (version !== lookupVersion.current) return;
+      if (!res.ok) throw new Error(data.error || 'Please try looking up your profile again.');
 
       if (data.success) {
         if (data.already_registered) {
@@ -127,38 +174,21 @@ const RegistrationForm = () => {
           return;
         }
 
-        setStudentFound(true);
-        setStudentData(data.student);
-        if (identifier.includes('@')) {
-          setStudentData(prev => ({ ...prev, email: identifier }));
-        } else {
-          setStudentData(prev => ({ ...prev, whatsapp_number: identifier }));
-        }
+        applySavedProfile(data);
       } else {
         setStudentFound(false);
-        const emptyState = {
-          email: '',
-          whatsapp_number: '',
-          full_name: '',
-          gender: '',
-          college: '',
-          degree: '',
-          department: '',
-          year_of_study: '',
-          is_dos_club_member: '',
-          excited_topic: ''
-        };
+        setProfileMissingFields([]);
         if (identifier.includes('@')) {
-          setStudentData({ ...emptyState, email: identifier });
+          setStudentData({ ...emptyStudent, email: identifier.trim().toLowerCase() });
         } else {
-          setStudentData({ ...emptyState, whatsapp_number: identifier });
+          setStudentData({ ...emptyStudent, whatsapp_number: identifier.trim() });
         }
       }
       setStep(2);
     } catch (err) {
-      setLookupError('Error looking up student');
+      if (version === lookupVersion.current) setLookupError(err.message || 'Error looking up student');
     } finally {
-      setIsSubmitting(false);
+      if (version === lookupVersion.current) setIsSubmitting(false);
     }
   };
 
@@ -166,27 +196,20 @@ const RegistrationForm = () => {
 
   const validateForm = () => {
     const errors = {};
-    const requiredFields = [
-      { key: 'full_name', label: 'Full Name' },
-      { key: 'email', label: 'Email' },
-      { key: 'whatsapp_number', label: 'WhatsApp Number' },
-      { key: 'gender', label: 'Gender' },
-      { key: 'college', label: 'College Name' },
-      { key: 'degree', label: 'Degree' },
-      { key: 'department', label: 'Department / Branch' },
-      { key: 'year_of_study', label: 'Year of Study' },
-      { key: 'is_dos_club_member', label: 'DOS CLUB member' },
-      { key: 'excited_topic', label: 'Excited topic' }
-    ];
+    const requiredFields = profileFields.filter(({ key }) => showField(key));
     
     requiredFields.forEach(field => {
-      if (!studentData[field.key] || studentData[field.key].trim() === '') {
+      const value = field.key === 'country_code' ? countryCode : studentData[field.key];
+      if (!value || value.trim() === '') {
         errors[field.key] = 'This field is required';
       }
     });
 
-    if (studentData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentData.email)) {
+    if (studentData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentData.email.trim())) {
       errors.email = 'Please enter a valid email address';
+    }
+    if (studentData.whatsapp_number && !/^\d{4,15}$/.test(studentData.whatsapp_number.replace(/[\s()-]/g, ''))) {
+      errors.whatsapp_number = 'Please enter a valid WhatsApp number';
     }
 
     setValidationErrors(errors);
@@ -195,8 +218,9 @@ const RegistrationForm = () => {
 
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
+    if (checkingEmail || isSubmitting) return;
     
-    if (step === 2 && !studentFound) {
+    if (step === 2 && needsProfileDetails) {
       if (!validateForm()) {
         return;
       }
@@ -222,12 +246,12 @@ const RegistrationForm = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...studentData,
           episode_id: episodeDetails.id,
           is_existing: studentFound,
           student_id: studentData.id,
           recaptcha_token: recaptchaToken,
           country_code: countryCode,
-          ...studentData,
           whatsapp_opt_in: whatsappOptIn,
           whatsapp_notice_version: WHATSAPP_NOTICE_VERSION
         })
@@ -240,6 +264,11 @@ const RegistrationForm = () => {
         setStep(3);
       } else {
         setRegisterError(data.error || 'Registration failed');
+        if (Array.isArray(data.missing_fields)) {
+          setProfileMissingFields(data.missing_fields);
+          setValidationErrors(data.field_errors || {});
+          setStep(2);
+        }
       }
     } catch (err) {
       setRegisterError('Error submitting registration');
@@ -572,6 +601,7 @@ const RegistrationForm = () => {
                             <input
                               type="text"
                               placeholder="e.g. john@example.com or 9876543210"
+                              disabled={isSubmitting}
                               value={identifier}
                               onChange={(e) => {
                                 const val = e.target.value;
@@ -622,17 +652,18 @@ const RegistrationForm = () => {
             )}
 
             {/* Step 2: Confirm Existing */}
-            {step === 2 && studentFound && (
+            {step === 2 && studentFound && !needsProfileDetails && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-500 text-center">
                 <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <User className="h-10 w-10 text-emerald-600" />
                 </div>
                 <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Welcome back, {studentData.full_name}!</h3>
                 <p className="text-slate-500 mb-8 max-w-md mx-auto">We found your profile. Please confirm your registration for this upcoming episode.</p>
-                <WhatsAppConsent number={studentData.whatsapp_number ? `${studentData.country_code || countryCode} ${studentData.whatsapp_number}` : ''} checked={whatsappOptIn} onChange={setWhatsappOptIn} disabled={isSubmitting}/>
+                <WhatsAppConsent number={studentData.whatsapp_number ? `${countryCode} ${studentData.whatsapp_number}` : ''} checked={whatsappOptIn} onChange={setWhatsappOptIn} disabled={isSubmitting}/>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button
-                    onClick={() => setStep(1)}
+                    onClick={returnToLookup}
+                    disabled={isSubmitting}
                     className="flex-1 py-4 px-4 border border-slate-200 rounded-xl shadow-sm text-base font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
                   >
                     Not you?
@@ -653,34 +684,40 @@ const RegistrationForm = () => {
               </div>
             )}
 
-            {/* Step 2: Full Form (New User) */}
-            {step === 2 && !studentFound && (
+            {/* Step 2: New profile or missing details for a returning attendee. */}
+            {step === 2 && needsProfileDetails && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Tell us about yourself</h3>
-                <p className="text-slate-500 mb-8">We need a few details to complete your profile.</p>
+                <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">{studentFound ? 'Complete your profile' : 'Tell us about yourself'}</h3>
+                <p className="text-slate-500 mb-8">{studentFound ? `Welcome back${studentData.full_name ? `, ${studentData.full_name}` : ''}! Please add the missing details below before confirming your registration. Your saved details will be kept.` : 'We need a few details to complete your profile. If you joined before with a different contact number, please use your existing email so we can keep your event history together.'}</p>
 
                 <form onSubmit={handleRegister} className="space-y-5" noValidate>
-                  <div>
+                  {showField('full_name') && <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Full Name<span className="text-red-500 ml-1">*</span></label>
                     <input type="text" name="full_name" value={studentData.full_name} onChange={handleFormChange} placeholder="e.g. John Doe" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.full_name ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
                     {validationErrors.full_name && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.full_name}</p>}
-                  </div>
+                  </div>}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 ${showGroup('email', 'whatsapp_number', 'country_code') ? '' : 'hidden'}`}>
+                    {showField('email') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Email<span className="text-red-500 ml-1">*</span></label>
-                      <input type="email" name="email" value={studentData.email} onChange={handleFormChange} placeholder="e.g. john@example.com" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.email ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      <input type="email" name="email" value={studentData.email} onChange={handleFormChange} onBlur={checkEnteredEmail} disabled={checkingEmail} placeholder="e.g. john@example.com" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.email ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
                       {validationErrors.email && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.email}</p>}
-                    </div>
-                    <div>
+                    </div>}
+                    {showGroup('whatsapp_number', 'country_code') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp Number<span className="text-red-500 ml-1">*</span></label>
-                      <input type="text" name="whatsapp_number" value={studentData.whatsapp_number} onChange={handleFormChange} placeholder="e.g. 9876543210" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.whatsapp_number ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      <div className="flex gap-2">
+                        <select aria-label="WhatsApp country code" value={countryCode} onChange={e=>{setCountryCode(e.target.value);setWhatsappOptIn(false);setValidationErrors(prev=>({...prev,country_code:null}));}} className="w-28 min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2.5 focus:outline-none focus:ring-2 focus:ring-dos">
+                          {countries.map(country=><option key={country.code} value={country.dial}>{country.dial} · {country.name}</option>)}
+                        </select>
+                        <input type="tel" inputMode="tel" name="whatsapp_number" value={studentData.whatsapp_number} onChange={handleFormChange} readOnly={studentFound&&!showField('whatsapp_number')} placeholder="e.g. 9876543210" className={`min-w-0 flex-1 px-4 py-2.5 bg-slate-50 border ${validationErrors.whatsapp_number ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
+                      </div>
                       {validationErrors.whatsapp_number && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.whatsapp_number}</p>}
-                    </div>
+                      {validationErrors.country_code && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.country_code}</p>}
+                    </div>}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 ${showGroup('gender', 'college') ? '' : 'hidden'}`}>
+                    {showField('gender') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Gender<span className="text-red-500 ml-1">*</span></label>
                       <select name="gender" value={studentData.gender} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.gender ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}>
                         <option value="">Select...</option>
@@ -689,29 +726,29 @@ const RegistrationForm = () => {
                         <option value="Other">Other</option>
                       </select>
                       {validationErrors.gender && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.gender}</p>}
-                    </div>
-                    <div>
+                    </div>}
+                    {showField('college') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">College Name<span className="text-red-500 ml-1">*</span></label>
                       <input type="text" name="college" value={studentData.college} onChange={handleFormChange} placeholder="e.g. Descience Institute of Technology" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.college ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
                       {validationErrors.college && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.college}</p>}
-                    </div>
+                    </div>}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 ${showGroup('degree', 'department') ? '' : 'hidden'}`}>
+                    {showField('degree') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Degree<span className="text-red-500 ml-1">*</span></label>
                       <input type="text" name="degree" value={studentData.degree} onChange={handleFormChange} placeholder="e.g. B.Tech" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.degree ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
                       {validationErrors.degree && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.degree}</p>}
-                    </div>
-                    <div>
+                    </div>}
+                    {showField('department') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Department / Branch<span className="text-red-500 ml-1">*</span></label>
                       <input type="text" name="department" placeholder="e.g. Computer Science" value={studentData.department} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.department ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`} />
                       {validationErrors.department && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.department}</p>}
-                    </div>
+                    </div>}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 ${showGroup('year_of_study', 'is_dos_club_member') ? '' : 'hidden'}`}>
+                    {showField('year_of_study') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Year of Study<span className="text-red-500 ml-1">*</span></label>
                       <select name="year_of_study" value={studentData.year_of_study} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.year_of_study ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}>
                         <option value="">Select...</option>
@@ -722,8 +759,8 @@ const RegistrationForm = () => {
                         <option value="Passed Out">Passed Out</option>
                       </select>
                       {validationErrors.year_of_study && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.year_of_study}</p>}
-                    </div>
-                    <div>
+                    </div>}
+                    {showField('is_dos_club_member') && <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Are you a DOS CLUB member?<span className="text-red-500 ml-1">*</span></label>
                       <select name="is_dos_club_member" value={studentData.is_dos_club_member} onChange={handleFormChange} className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.is_dos_club_member ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}>
                         <option value="">Select...</option>
@@ -731,31 +768,32 @@ const RegistrationForm = () => {
                         <option value="No">No</option>
                       </select>
                       {validationErrors.is_dos_club_member && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.is_dos_club_member}</p>}
-                    </div>
+                    </div>}
                   </div>
 
-                  <div>
+                  {showField('excited_topic') && <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">What tech stack or topic are you currently most excited about?<span className="text-red-500 ml-1">*</span></label>
                     <textarea name="excited_topic" value={studentData.excited_topic} onChange={handleFormChange} rows="2" placeholder="e.g. Artificial Intelligence, Web Development" className={`w-full px-4 py-2.5 bg-slate-50 border ${validationErrors.excited_topic ? 'border-red-500' : 'border-slate-200'} rounded-lg focus:ring-2 focus:ring-dos focus:outline-none`}></textarea>
                     {validationErrors.excited_topic && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.excited_topic}</p>}
-                  </div>
+                  </div>}
 
 
-                  <WhatsAppConsent number={studentData.whatsapp_number ? `${studentData.country_code || countryCode} ${studentData.whatsapp_number}` : ''} checked={whatsappOptIn} onChange={setWhatsappOptIn} disabled={isSubmitting}/>
+                  <WhatsAppConsent number={studentData.whatsapp_number ? `${countryCode} ${studentData.whatsapp_number}` : ''} checked={whatsappOptIn} onChange={setWhatsappOptIn} disabled={isSubmitting}/>
                   <div className="pt-4 flex flex-col sm:flex-row gap-4">
                     <button
                       type="button"
-                      onClick={() => setStep(1)}
+                      onClick={returnToLookup}
+                      disabled={isSubmitting}
                       className="sm:w-1/3 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
                     >
                       Go Back
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || checkingEmail}
                       className="w-full py-4 px-4 border border-transparent rounded-xl shadow-sm text-base font-bold text-white bg-dos hover:bg-dos-dark transition-all disabled:opacity-70"
                     >
-                      {isSubmitting ? 'Registering...' : 'Complete Registration'}
+                      {checkingEmail ? 'Checking saved profile…' : isSubmitting ? 'Registering...' : 'Complete Registration'}
                     </button>
                   </div>
 
