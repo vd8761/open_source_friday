@@ -11,7 +11,7 @@ async function studentActivities(db, ids) {
     LEFT JOIN attendance_syncs a ON a.episode_id=e.id LEFT JOIN attendance_overrides o ON o.registration_id=er.id
     LEFT JOIN zoom_registration_jobs j ON j.registration_id=er.id
     WHERE er.student_id=ANY($1::integer[]) ORDER BY e.event_date DESC,e.id DESC,er.id DESC`,[ids])).rows;
-  const participants=(await db.query(`SELECT p.* FROM attendance_participants p JOIN episode_registrations er ON er.id=p.registration_id WHERE er.student_id=ANY($1::integer[])`,[ids])).rows;
+  const participants=(await db.query(`SELECT p.* FROM attendance_participants p JOIN episode_registrations er ON er.id=p.registration_id WHERE er.student_id=ANY($1::integer[]) AND p.duplicate_of IS NULL`,[ids])).rows;
   const sessions=new Map();for(const p of participants){if(!sessions.has(p.registration_id))sessions.set(p.registration_id,[]);sessions.get(p.registration_id).push(p);}
   const result=new Map(ids.map(id=>[id,{events:[],summary:{registrations:0,attended:0,present:0,partial:0,absent:0,not_synced:0,zoom_minutes:0},latest_attended:null,latest_registration:null}]));
   for(const r of registrations){

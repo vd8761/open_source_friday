@@ -211,3 +211,24 @@ Student names in Contacts, event attendees, meeting attendance, recent dashboard
 The preview shows current name/college/year/department/contact details and an event timeline. It separates registration count from recorded attendance, shows the latest attended event separately from the latest registration, and labels repeated registration separately from returning attendance. Event attendance and the profile share the same status calculation. Overlapping Zoom sessions are combined, incomplete reports remain unknown, and manual status adjustments are honored. Event-specific WhatsApp choices are shown in the timeline; no global contact permission is inferred. Academic fields represent the current student profile, not historical snapshots.
 
 The directory is one row per saved student profile, with event filters selecting students registered for that event while retaining their full activity summary. Filtered downloads include year, department, registration/attendance counts and latest attended event. Trashed test events and invitation-only CSV records do not appear as student activity.
+
+### Review rejoin sessions and duplicate records
+
+Event pages have Attendees, Meeting attendance and Needs review tabs. The review badge counts unresolved participant records. Link / combine time assigns a verified session to an existing application registration. A student who leaves and returns should have both sessions linked, not discarded. Overlapping timestamp intervals count once. Duration-only totals remain estimates because overlap cannot be established.
+
+Mark duplicate is for an unresolved report row that represents an already recorded connection. Choose the original record and enter a reason. It is excluded from totals and the unresolved badge, but the raw evidence and audit entry remain. Excluded duplicate records can be restored for review with a reason. Decisions survive an identical report resync; if the original target disappears from a replacement snapshot, the remaining record returns to review rather than being silently discarded. Registered participant sessions already combine automatically; unmatched names are never automatically assigned.
+
+Adjust attendance opens a popup with status and a required reason. Saving writes the same audited manual adjustment; it never edits the original report evidence. Student Event activity uses the shared pager, initially five events per page.
+
+### Import historical Zoom, Google Meet and Teams attendance
+
+1. Retrieve the original host report while it is available:
+   - Zoom: Analytics & Reports → Meetings & Webinars → Meeting and webinar history → choose the date range and meeting → export participant details. [Zoom guide](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0073594).
+   - Google Meet: use the attendance Google Sheet sent to the organizer for eligible meetings/accounts, then download as CSV. [Google guide](https://support.google.com/meet/answer/10090454). Reports depend on the Workspace edition and whether attendance tracking was available; unavailable historical reports cannot be reconstructed by OSF.
+   - Teams: open the meeting's Attendance report as an organizer/co-organizer and download the CSV. Retention and permissions apply. [Microsoft guide](https://support.microsoft.com/en-au/teams/meetings/manage-meeting-attendance-reports-in-microsoft-teams).
+2. In OSF, open the event's Meeting attendance → Attendance sources → Import a past attendance report. Choose the provider and download the common import template. Native exports may need their participant section/columns mapped to this template.
+3. Use Email, Name and numeric Duration Minutes. Optional Join Time / Leave Time must be ISO timestamps including timezone, such as `2026-10-30T19:00:00+05:30`. Do not mix a per-person aggregate duration with its detailed session rows, as that can double count. Detailed intervals are preferred when available; duration-only totals are labeled estimated.
+4. Supply a stable meeting/session reference. Imports replace that episode's same-session snapshot; they do not combine unrelated meetings or create registrations.
+5. Mark the report complete only after checking that it contains the full meeting. A complete report can mark unmatched registrations absent; incomplete reports leave them unknown. Confirm import, then resolve unidentified participants under Needs review. A missing application registration is never created merely because someone appears in a provider report.
+
+Direct Zoom sync remains available for linked meetings. Google Meet and Teams currently use this standardized CSV path, not an automatic API connector. Historical availability is governed by the provider; previously downloaded reports remain useful even if the provider no longer retains them.

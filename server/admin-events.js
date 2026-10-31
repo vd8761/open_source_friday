@@ -100,7 +100,7 @@ function createAdminEventsRouter({pool,authenticateToken}) {
       CASE WHEN j.status='registered' THEN 'zoom_managed' ELSE COALESCE(j.invitation_status,'not_sent') END AS invitation_status,
       j.meeting_id AS zoom_meeting_id,j.zoom_registered_at,j.next_attempt_at AS zoom_next_attempt_at,CASE WHEN j.status='registered' THEN NULL ELSE j.last_error END AS invitation_error
       ${attendeeFrom} WHERE ${where} ORDER BY ${orders[sort]} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,page_size,(page-1)*page_size]);
-    return {episode:ep.rows[0],data:rows.rows,total:count.rows[0].total,page,page_size};
+    return {episode:ep.rows[0],data:rows.rows,total:count.rows[0].total,page,page_size,review_count:(await pool.query('SELECT COUNT(*)::integer AS count FROM attendance_participants WHERE episode_id=$1 AND registration_id IS NULL AND duplicate_of IS NULL',[req.params.episodeId])).rows[0].count};
   }));
   router.post('/episodes/:episodeId/attendees/:registrationId/whatsapp-withdrawal',route(async req=>{
     for (const value of [req.params.episodeId,req.params.registrationId])
