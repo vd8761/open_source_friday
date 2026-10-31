@@ -1,3 +1,4 @@
+import { AdminBreadcrumb } from './AdminPageChrome';
 import ConfirmDialog from './ConfirmDialog';
 import { formatIST } from '../utils/dateTime';
 import { isRegistrationOpen } from '../utils/episodeTime';
@@ -156,12 +157,9 @@ export default function OutreachTool() {
   const sortedCampaigns=[...campaigns].sort((a,b)=>{const key=listSort.replace(/_desc$/,'').replace('created','created_at');const result=typeof a[key]==='number'?a[key]-b[key]:String(a[key]||'').localeCompare(String(b[key]||''),undefined,{numeric:true,sensitivity:'base'});return listSort.endsWith('_desc')?-result:result;});
   return (
     <main className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6 text-slate-800">
-      <Link to="/dashboard" className="text-dos font-semibold">
-        ← Dashboard
-      </Link>
+      {(creating||campaignId||showTrash)&&<AdminBreadcrumb items={[["Email invitations","/admin/invitations"],[creating?"Create campaign":editing?"Edit draft":showTrash?"Campaign trash":"Campaign details"]]}/>}
       <div>
-        <h1 className="text-3xl font-extrabold">{creating?"Create campaign":editing?"Edit draft campaign":campaignId?"View campaign":"Email invitations"}</h1>
-        {(creating||campaignId)&&<Link to="/admin/invitations" className="mt-2 inline-block text-sm text-dos underline">← Campaign list</Link>}
+        <h1 className="text-2xl font-bold">{creating?"Create campaign":editing?"Edit draft campaign":campaignId?(detail?.campaign.subject||"Campaign details"):showTrash?"Campaign trash":"Email invitations"}</h1>
         <p className="mt-2 text-slate-500">
           Invite students to register in the application. Zoom emails the
           meeting link after registration.
@@ -180,20 +178,13 @@ export default function OutreachTool() {
           {message}
         </div>
       )}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
-        <p>
-          <strong>Sender:</strong>{" "}
-          {config?.sender.configured
-            ? `Configured · ${config.sender.from_name} <${config.sender.from_email}>`
-            : "Not configured on backend. You can prepare drafts; sending stays disabled."}
-        </p>
-        <p className="mt-1 text-slate-500">
-          Sent does not confirm inbox delivery. Opens are approximate. Batching
-          controls pace; it does not guarantee inbox placement.
-        </p>
-      </div>
+      <details className="rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs text-slate-500">
+        <summary className="cursor-pointer font-medium">{config===null?'Checking Sender…':config.sender.configured?`Sender connected · ${config.sender.from_email}`:'Sender not configured'} · Delivery notes</summary>
+        <p className="mt-2">Sent does not confirm inbox delivery. Opens are approximate. Batching controls pace; it does not guarantee inbox placement.</p>
+        {config&&!config.sender.configured&&<p className="mt-2">You can prepare drafts; configure Sender on the backend before sending.</p>}
+      </details>
       {(creating||editing)&&<section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5">
-        <h2 className="text-xl font-bold">{editing?'Edit invitation details':'Prepare an invitation'}</h2>
+        <h2 className="sr-only">{editing?'Edit invitation details':'Prepare an invitation'}</h2>
         {editing&&<p className="text-sm text-slate-500">The episode and imported audience are fixed for this draft. You can edit its subject, message and sending pace. To change the audience, create a new campaign.</p>}
         {!editing&&<>
         <div className="grid sm:grid-cols-2 gap-4">
@@ -435,13 +426,13 @@ export default function OutreachTool() {
       </section>}
       {listView&&<section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-bold">{showTrash ? 'Campaign trash' : 'Campaigns'}</h2>
-          {!showTrash&&<Link to="/admin/invitations/new" className={buttonClass}>Create campaign</Link>}
+          <h2 className="sr-only">{showTrash ? 'Campaign trash' : 'Campaigns'}</h2>
+          {!showTrash&&<Link to="/admin/invitations/new" className="admin-primary">Create campaign</Link>}
           <div className="ml-auto flex flex-wrap items-center gap-4">
-          <button disabled={busy||!campaigns.length} className="text-sm text-dos underline" onClick={()=>exportRows(sortedCampaigns,[['Subject','subject'],['Episode','episode_number'],['Status','status'],['Recipients','recipients'],['Sent','sent'],['Created','created_at']],'campaigns.csv')}>Download list CSV</button>
+          <button disabled={busy||!campaigns.length} className="admin-action" onClick={()=>exportRows(sortedCampaigns,[['Subject','subject'],['Episode','episode_number'],['Status','status'],['Recipients','recipients'],['Sent','sent'],['Created','created_at']],'campaigns.csv')}>Download list CSV</button>
           <button
             disabled={busy}
-            className="text-dos font-semibold"
+            className="admin-action"
             onClick={() =>
               action(async () => {
                 await refresh();
@@ -451,7 +442,7 @@ export default function OutreachTool() {
           >
             Refresh
           </button>
-          <Link to={showTrash?'/admin/invitations':'/admin/invitations/trash'} className="text-sm text-slate-500 hover:text-slate-700 underline">{showTrash?'Back to campaigns':'Campaign trash'}</Link>
+          {!showTrash&&<Link to="/admin/invitations/trash" className="text-sm text-slate-500 hover:text-slate-700">Campaign trash</Link>}
           </div>
         </div>
         <div className="overflow-auto">
@@ -483,19 +474,19 @@ export default function OutreachTool() {
                   <td className="p-3">{c.sent}</td>
                   <td className="p-3">{c.delivered}</td>
                   <td className="p-3">{c.opened}</td><td className="p-3 whitespace-nowrap">{date(c.created_at)}</td>
-                  <td className="p-3"><button disabled={busy} className="text-rose-700 font-semibold whitespace-nowrap" aria-label={`${showTrash ? 'Restore' : 'Delete'} campaign: ${c.subject}`} onClick={()=>action(async()=>{await load(c.id);setCampaignConfirmation(showTrash ? 'restore' : 'trash');})}>{showTrash ? 'Restore' : 'Delete'}</button>{showTrash&&<button disabled={busy} className="ml-4 text-xs font-semibold text-rose-700 underline" onClick={()=>action(async()=>{await load(c.id);setDeletePhrase('');setCampaignConfirmation('purge');})}>Delete permanently</button>}</td>
+                  <td className="p-3"><button disabled={busy} className="admin-danger" aria-label={`${showTrash ? 'Restore' : 'Delete'} campaign: ${c.subject}`} onClick={()=>action(async()=>{await load(c.id);setCampaignConfirmation(showTrash ? 'restore' : 'trash');})}>{showTrash ? 'Restore' : 'Delete'}</button>{showTrash&&<button disabled={busy} className="admin-danger ml-2" onClick={()=>action(async()=>{await load(c.id);setDeletePhrase('');setCampaignConfirmation('purge');})}>Delete permanently</button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         {!campaigns.length && (
-          <p className="text-slate-500">{showTrash ? "Campaign trash is empty." : "No campaigns yet."}</p>
+          <p className="text-slate-500">{config===null?"Loading campaigns…":showTrash ? "Campaign trash is empty." : "No campaigns yet."}</p>
         )}
       </section>}
       {!listView&&!editing&&detail && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
-          <h2 className="text-xl font-bold">{detail.campaign.subject}</h2>
+          <h2 className="sr-only">Campaign information</h2>
           <p className="whitespace-pre-wrap text-sm">{detail.campaign.body}</p>
           {campaignEpisode&&<p className="text-sm text-slate-600">Episode {campaignEpisode.episode_number} · <a className="text-dos underline" href={`/register/episode-${campaignEpisode.episode_number}`} target="_blank" rel="noopener noreferrer">{campaignEpisode.title}</a> · {String(campaignEpisode.event_date).slice(0,10)} · {campaignEpisode.event_time} IST</p>}
           <p className="text-sm">
@@ -563,7 +554,7 @@ export default function OutreachTool() {
             >
               Sync Sender reports
             </button>
-            <button disabled={busy} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-rose-700" onClick={()=>setCampaignConfirmation(detail.campaign.deleted_at ? 'restore' : 'trash')}>{detail.campaign.deleted_at ? 'Restore campaign' : 'Delete campaign'}</button>
+            <button disabled={busy} className="admin-danger" onClick={()=>setCampaignConfirmation(detail.campaign.deleted_at ? 'restore' : 'trash')}>{detail.campaign.deleted_at ? 'Restore campaign' : 'Delete campaign'}</button>
             <button
               disabled={busy}
               className={buttonClass}
@@ -637,7 +628,7 @@ export default function OutreachTool() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          <button disabled={busy||!recipients.length} className="text-dos underline text-sm" onClick={()=>exportRows(sortedRecipients,[['Name','full_name'],['Email','email'],['Queue','send_status'],['Sent','sent_at'],['Delivered','delivered_at'],['Opened','opened_at'],['Registered','registered']],'filtered-invitation-recipients.csv')}>Download filtered recipients CSV</button>
+          <button disabled={busy||!recipients.length} className="admin-action" onClick={()=>exportRows(sortedRecipients,[['Name','full_name'],['Email','email'],['Queue','send_status'],['Sent','sent_at'],['Delivered','delivered_at'],['Opened','opened_at'],['Registered','registered']],'filtered-invitation-recipients.csv')}>Download filtered recipients CSV</button>
           <div className="max-h-[560px] overflow-auto">
             <table className="w-full text-sm text-left">
               <thead>

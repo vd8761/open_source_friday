@@ -7,7 +7,7 @@ import { adminApi } from './utils/adminApi';
 import { TablePager } from './components/AdminDataTable';
 import { UpcomingEvents } from './components/EventList';
 import { Link } from 'react-router-dom';
-import { Calendar, Users, RefreshCw, CheckCircle2, LogOut, ArrowLeft, Bell, Send } from 'lucide-react';
+import { Calendar, Users, RefreshCw, CheckCircle2, ArrowLeft, Bell, Send } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -32,7 +32,6 @@ export default function Dashboard() {
   const [pushStats, setPushStats] = useState({ total: 0, welcomeSent: 0 });
   const [pushForm, setPushForm] = useState({ title: '', body: '', url: '' });
   const [sendingPush, setSendingPush] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [registrationChange,setRegistrationChange]=useState(null),[changingRegistration,setChangingRegistration]=useState(false),[registrationError,setRegistrationError]=useState('');
 
   // Toast Notification State
@@ -43,62 +42,6 @@ export default function Dashboard() {
     setTimeout(() => {
       setToast(prev => ({ ...prev, visible: false }));
     }, 3000);
-  };
-
-  // Change Password State
-  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
-  const [changingPassword, setChangingPassword] = useState(false);
-
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    setPasswordError('');
-    setPasswordSuccess('');
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError('New passwords do not match.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters.');
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      const token = localStorage.getItem('adminToken');
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ oldPassword, newPassword })
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        setPasswordSuccess('Password updated successfully!');
-        setOldPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setTimeout(() => {
-          setChangePasswordModalOpen(false);
-          setPasswordSuccess('');
-        }, 1500);
-      } else {
-        setPasswordError(result.error || 'Failed to change password');
-      }
-    } catch (err) {
-      setPasswordError('Network error. Please try again.');
-    } finally {
-      setChangingPassword(false);
-    }
   };
 
   const TOTAL_WEEKS = 52;
@@ -175,10 +118,7 @@ export default function Dashboard() {
     fetchEpisodes();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken');
-    navigate('/login');
-  };
+
 
   const totalRegistrations = totals.registrations;
   const totalEpisodesCreated = totals.episodes;
@@ -203,86 +143,34 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Top Navigation Bar */}
-      <nav className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 cursor-pointer" onClick={() => setViewMode('summary')}>
-              <img src="/dos_logo.png" alt="DOS Logo" className="h-8 sm:h-10 w-auto object-contain drop-shadow-sm" />
-              <h1 className="hidden sm:block text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-dos to-dos-dark whitespace-nowrap">
-                Open Source Friday
-              </h1>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Profile Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setProfileOpen(!profileOpen)}
-                  className="h-9 px-3 bg-dos-light/20 text-dos hover:bg-dos hover:text-white rounded-full flex items-center justify-center transition-all focus:ring-2 focus:ring-dos focus:outline-none font-bold text-sm shadow-sm"
-                  title="Account options" aria-expanded={profileOpen}
-                >
-                  Account
-                </button>
-
-                {profileOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50">
-                    <div className="p-2 flex flex-col gap-1">
-                      <button
-                        onClick={() => {
-                          setProfileOpen(false);
-                          setChangePasswordModalOpen(true);
-                        }}
-                        className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
-                      >
-                        Change Password
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Logout
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <p className="text-sm text-slate-500">Event times are IST. Registration stays open until 30 minutes after the event starts, unless disabled by an admin.</p>
+
         {loadError && <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{loadError}</div>}
 
         {/* Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard Overview</h2>
+            <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
             <p className="mt-1 text-slate-500 text-sm">Plan the next workshop and follow new registrations.</p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             <button
               onClick={() => { setViewMode('push'); fetchPushData(); }}
-              className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 shadow-sm text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
+              className="admin-action"
             >
               <Bell className="mr-2 h-4 w-4 text-amber-500" />
               Send Push Notification
             </button>
-            <button onClick={() => navigate('/admin/invitations')}
-              className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50">Email Invitations</button>
             <button
               onClick={() => navigate('/admin/episodes/new')}
-              className="inline-flex items-center justify-center px-4 py-2.5 border border-slate-200 shadow-sm text-sm font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
+              className="admin-primary"
             >
-              + Create Episode
+              Create event
             </button>
             <button
               onClick={viewMode === 'push' ? fetchPushData : refreshDashboard} disabled={loading || upcoming.loading}
-              className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-semibold rounded-xl text-white bg-dos hover:bg-dos-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dos transition-all active:scale-95 cursor-pointer"
+              className="admin-action"
             >
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh Data
@@ -401,86 +289,7 @@ export default function Dashboard() {
 
       {registrationChange&&<ConfirmDialog title={`${registrationChange.currentStatus?'Close':'Open'} registrations?`} confirmLabel={registrationChange.currentStatus?'Close registrations':'Open registrations'} cancelLabel="Keep current setting" danger={registrationChange.currentStatus} busy={changingRegistration} error={registrationError} onConfirm={confirmRegistrationChange} onCancel={()=>setRegistrationChange(null)}><p>Would you like to {registrationChange.currentStatus?'pause':'allow'} new registrations for <strong>Episode {upcoming.result.data.find(e=>e.id===registrationChange.episodeId)?.episode_number}</strong>?</p><p>{registrationChange.currentStatus?'Existing registrations will be kept. Please reopen registrations when you are ready to accept more attendees.':'Registration can remain open until 30 minutes after the scheduled start, provided the event is active.'}</p></ConfirmDialog>}
 
-      {/* Change Password Modal */}
-      {changePasswordModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="text-lg font-bold text-slate-900">Change Admin Password</h3>
-              <button
-                onClick={() => setChangePasswordModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
 
-            <form onSubmit={handleChangePassword} className="p-6 space-y-4">
-              {passwordError && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100">
-                  {passwordError}
-                </div>
-              )}
-              {passwordSuccess && (
-                <div className="bg-emerald-50 text-emerald-600 p-3 rounded-lg text-sm font-medium border border-emerald-100 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  {passwordSuccess}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Current Password</label>
-                <input
-                  type="password"
-                  value={oldPassword}
-                  onChange={(e) => setOldPassword(e.target.value)}
-                  className="block w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:border-dos text-sm"
-                  placeholder="Enter current password"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">New Password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="block w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:border-dos text-sm"
-                  placeholder="Enter new password (min 6 chars)"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="block w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-dos focus:border-dos text-sm"
-                  placeholder="Re-enter new password"
-                />
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setChangePasswordModalOpen(false)}
-                  className="flex-1 py-2 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={changingPassword}
-                  className="flex-1 py-2 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-dos hover:bg-dos-dark transition-colors disabled:opacity-50"
-                >
-                  {changingPassword ? 'Updating...' : 'Update Password'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

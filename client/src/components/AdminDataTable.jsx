@@ -17,9 +17,11 @@ export function TablePager({table,compact=false}) {
 }
 export function TableFilters({fields,defaults,onApply}) {
   const [draft,setDraft]=useState(defaults);
-  return <form className="rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={e=>{e.preventDefault();onApply(draft);}}>
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{fields.map(f=><label key={f.key} className="text-xs font-semibold text-slate-600">{f.label}{f.options?<select className={fieldClass} value={draft[f.key]||''} onChange={e=>setDraft({...draft,[f.key]:e.target.value})}>{f.options.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>:<input className={fieldClass} type={f.type||'text'} maxLength={150} placeholder={f.placeholder} value={draft[f.key]||''} onChange={e=>setDraft({...draft,[f.key]:e.target.value})}/>}</label>)}</div>
-    <div className="mt-3 flex gap-4 text-sm"><button className="rounded-lg bg-dos px-4 py-2 font-semibold text-white">Apply filters</button><button type="button" className="underline" onClick={()=>{setDraft(defaults);onApply(defaults);}}>Reset filters</button></div>
+  const first=fields[0],advanced=fields.slice(1),count=advanced.filter(f=>Boolean(draft[f.key])).length;
+  function field(f){return <label key={f.key} className="block text-xs font-semibold text-slate-600">{f.label}{f.options?<select className={fieldClass} value={draft[f.key]||''} onChange={e=>setDraft({...draft,[f.key]:e.target.value})}>{f.options.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>:<input className={fieldClass} type={f.type||'text'} maxLength={150} placeholder={f.placeholder} value={draft[f.key]||''} onChange={e=>setDraft({...draft,[f.key]:e.target.value})}/>}</label>;}
+  return <form className="rounded-xl border border-slate-200 bg-slate-50/60 p-4" onSubmit={e=>{e.preventDefault();onApply(draft);}}>
+    <div className="flex flex-wrap items-end gap-3"><div className="min-w-52 flex-1">{first&&field(first)}</div><button className="admin-primary">Apply filters</button><button type="button" className="admin-action" onClick={()=>{setDraft(defaults);onApply(defaults);}}>Reset filters</button></div>
+    {advanced.length>0&&<details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-slate-600">More filters{count>0?` · ${count} selected`:''}</summary><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{advanced.map(field)}</div></details>}
   </form>;
 }
 
