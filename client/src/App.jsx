@@ -5,6 +5,8 @@ import Home from './Home';
 import PolicyPage from './components/PolicyPage';
 import { policyLinks } from './utils/policyLinks';
 import Dashboard from './Dashboard';
+import ContactsPage from './components/ContactsPage';
+import StudentActivityPage from './components/StudentActivityPage';
 import AdminNavigation from './components/AdminNavigation';
 import OutreachTool from './components/OutreachTool';
 import AttendanceTool from './components/AttendanceTool';
@@ -58,6 +60,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           {/* Admin Routes */}
+          <Route path="/admin/students/:studentId" element={<ProtectedRoute><StudentActivityPage /></ProtectedRoute>} />
+          <Route path="/admin/contacts" element={<ProtectedRoute><ContactsPage /></ProtectedRoute>} />
           <Route path="/admin/trash" element={<ProtectedRoute><EventHistoryPage mode="trash" /></ProtectedRoute>} />
           <Route path="/admin/past-events" element={<ProtectedRoute><PastEventsPage /></ProtectedRoute>} />
           <Route path="/admin/archived-events" element={<ProtectedRoute><PastEventsPage archivedOnly /></ProtectedRoute>} />

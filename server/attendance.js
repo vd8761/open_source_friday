@@ -227,6 +227,9 @@ async function saveAttendance(
     ],
   );
 }
+function attendanceStatus({overrideStatus,sessionCount,seconds,thresholdMinutes=30,reportComplete=false}) {
+  return overrideStatus||(sessionCount?(seconds>=thresholdMinutes*60?'present':'partial'):reportComplete?'absent':'not_synced');
+}
 async function attendanceReport(db, episodeId, options, {all=false} = {}) {
   let paging,search='',college='';
   if(options){
@@ -250,7 +253,7 @@ async function attendanceReport(db, episodeId, options, {all=false} = {}) {
   ).rows;
   const registrations = (
     await db.query(
-      `SELECT er.id AS registration_id,s.full_name,s.email,s.college,er.registered_at::timestamptz AS registered_at,o.status AS override_status,o.note AS override_note
+      `SELECT er.id AS registration_id,s.id AS student_id,s.full_name,s.email,s.college,er.registered_at::timestamptz AS registered_at,o.status AS override_status,o.note AS override_note
     FROM episode_registrations er JOIN students s ON s.id=er.student_id LEFT JOIN attendance_overrides o ON o.registration_id=er.id
     WHERE er.episode_id=$1 ORDER BY er.registered_at DESC,er.id DESC`,
       [episodeId],
@@ -267,15 +270,7 @@ async function attendanceReport(db, episodeId, options, {all=false} = {}) {
       minutes: Math.round((seconds / 60) * 10) / 10,
       joined: sessions.length > 0,
       sessions: sessions.length,
-      status:
-        row.override_status ||
-        (sessions.length
-          ? seconds >= (sync?.threshold_minutes || 30) * 60
-            ? "present"
-            : "partial"
-          : sync?.report_complete
-            ? "absent"
-            : "not_synced"),
+      status: attendanceStatus({overrideStatus:row.override_status,sessionCount:sessions.length,seconds,thresholdMinutes:sync?.threshold_minutes||30,reportComplete:sync?.report_complete}),
       duration_estimated: sessions.some((s) => !s.join_time || !s.leave_time),
     };
   });
@@ -349,4 +344,5 @@ module.exports = {
   combinedSeconds,
   saveAttendance,
   attendanceReport,
+  attendanceStatus,
 };

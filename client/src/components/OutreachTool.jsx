@@ -1,4 +1,5 @@
 import { AdminBreadcrumb } from './AdminPageChrome';
+import StudentLink from './StudentLink';
 import ConfirmDialog from './ConfirmDialog';
 import { formatIST } from '../utils/dateTime';
 import { isRegistrationOpen } from '../utils/episodeTime';
@@ -474,7 +475,7 @@ export default function OutreachTool() {
                   <td className="p-3">{c.sent}</td>
                   <td className="p-3">{c.delivered}</td>
                   <td className="p-3">{c.opened}</td><td className="p-3 whitespace-nowrap">{date(c.created_at)}</td>
-                  <td className="p-3"><button disabled={busy} className="admin-danger" aria-label={`${showTrash ? 'Restore' : 'Delete'} campaign: ${c.subject}`} onClick={()=>action(async()=>{await load(c.id);setCampaignConfirmation(showTrash ? 'restore' : 'trash');})}>{showTrash ? 'Restore' : 'Delete'}</button>{showTrash&&<button disabled={busy} className="admin-danger ml-2" onClick={()=>action(async()=>{await load(c.id);setDeletePhrase('');setCampaignConfirmation('purge');})}>Delete permanently</button>}</td>
+                  <td className="p-3"><div className="flex flex-wrap items-center gap-2"><button disabled={busy} className={showTrash?'admin-action':'admin-danger'} aria-label={`${showTrash ? 'Restore' : 'Delete'} campaign: ${c.subject}`} onClick={()=>action(async()=>{await load(c.id);setCampaignConfirmation(showTrash ? 'restore' : 'trash');})}>{showTrash ? 'Restore' : 'Delete'}</button>{showTrash&&<button disabled={busy} className="admin-danger" onClick={()=>action(async()=>{await load(c.id);setDeletePhrase('');setCampaignConfirmation('purge');})}>Delete permanently</button>}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -521,7 +522,7 @@ export default function OutreachTool() {
           )}
           <div className="flex gap-3 flex-wrap">
             {!detail.campaign.deleted_at&&detail.campaign.status==='draft'&&!detail.campaign.started_at&&!detail.batches.length&&<Link className={buttonClass} to={`/admin/invitations/${selected}/edit`}>Edit draft</Link>}
-            {detail.campaign.deleted_at&&<button disabled={busy} className="text-rose-700 underline" onClick={()=>{setDeletePhrase('');setCampaignConfirmation('purge');}}>Delete permanently</button>}
+            {detail.campaign.deleted_at&&<button disabled={busy} className="admin-danger" onClick={()=>{setDeletePhrase('');setCampaignConfirmation('purge');}}>Delete permanently</button>}
             {!detail.campaign.deleted_at && ["draft", "paused"].includes(detail.campaign.status) && (
               <button
                 disabled={
@@ -554,7 +555,7 @@ export default function OutreachTool() {
             >
               Sync Sender reports
             </button>
-            <button disabled={busy} className="admin-danger" onClick={()=>setCampaignConfirmation(detail.campaign.deleted_at ? 'restore' : 'trash')}>{detail.campaign.deleted_at ? 'Restore campaign' : 'Delete campaign'}</button>
+            <button disabled={busy} className={detail.campaign.deleted_at?'admin-action':'admin-danger'} onClick={()=>setCampaignConfirmation(detail.campaign.deleted_at ? 'restore' : 'trash')}>{detail.campaign.deleted_at ? 'Restore campaign' : 'Delete campaign'}</button>
             <button
               disabled={busy}
               className={buttonClass}
@@ -648,7 +649,7 @@ export default function OutreachTool() {
                 {sortedRecipients.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100">
                     <td className="p-3">
-                      {r.full_name}
+                      <StudentLink id={r.student_id}>{r.full_name||r.email}</StudentLink>
                       <br />
                       {r.email}
                     </td>

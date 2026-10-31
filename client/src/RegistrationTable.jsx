@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { formatIST } from './utils/dateTime';
 import { SortHeader } from './components/AdminDataTable';
+import StudentLink from './components/StudentLink';
 import InfoTooltip from './components/InfoTooltip';
 import { Mail, GraduationCap, BookOpen, Phone, Search, UserX, Trash2 } from 'lucide-react';
 
@@ -55,7 +56,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                         </span>
                       </div>
                       <div className="ml-3 min-w-0">
-                        <div className="max-w-[200px] truncate text-sm font-bold text-slate-900 group-hover:text-dos transition-colors" title={row.full_name}>{row.full_name}</div>
+                        <div className="max-w-[200px] truncate text-sm font-bold text-slate-900 group-hover:text-dos transition-colors" title={row.full_name}><StudentLink id={row.id}>{row.full_name}</StudentLink></div>
                         <div className="max-w-[200px] text-sm text-slate-500 flex items-center gap-1 mt-0.5" title={row.email}>
                           <Mail className="h-3 w-3 shrink-0" /> <span className="truncate">{row.email}</span>
                         </div>
@@ -128,7 +129,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     {row.invitation_status==='rate_limited'&&row.zoom_next_attempt_at&&<div className="mt-1 text-xs text-slate-500">Next retry: {formatIST(row.zoom_next_attempt_at)}</div>}
                     {row.invitation_status === 'zoom_managed' && /^\d{9,11}$/.test(row.zoom_meeting_id || '') ? (
                       <a href={`https://zoom.us/meeting/${row.zoom_meeting_id}#registration`} target="_blank" rel="noopener noreferrer"
-                        className="mt-2 inline-block px-3 py-1.5 rounded-lg bg-dos text-white font-bold text-xs">Resend in Zoom</a>
+                        className="admin-primary mt-2">Resend in Zoom</a>
                     ) : onSendZoomInvitation && <button type="button" disabled={!row.zoom_enabled || sendingStudentId !== null || (row.invitation_status === 'rate_limited' && new Date(row.zoom_next_attempt_at) > new Date())}
                       onClick={() => sendInvitation(row.id)}
                       className="mt-2 px-3 py-1.5 rounded-lg bg-dos text-white font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed">

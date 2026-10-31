@@ -1,4 +1,5 @@
 import { formatIST } from './utils/dateTime';
+import StudentLink from './components/StudentLink';
 import ConfirmDialog from './components/ConfirmDialog';
 import { useAdminPage } from './utils/useAdminPage';
 import React, { useState, useEffect } from 'react';
@@ -281,7 +282,7 @@ export default function Dashboard() {
               <TablePager table={upcoming} compact/>
             </section>
             <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="min-h-[88px] border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Users className="h-5 w-5 text-dos"/>Recently registered</h2><p className="mt-1 text-xs text-slate-500">Latest 5 registrations · all workshops</p></div>
-              {loading?<p className="p-5 text-slate-500">Loading recent attendees…</p>:loadError?<p className="p-5 text-sm text-rose-700">Recent registrations could not be refreshed.</p>:recent.length?<ol className="divide-y divide-slate-100">{recent.map((r,i)=><li key={i} className="grid grid-cols-[1rem_2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3"><span className="text-xs text-slate-400" aria-label={`Serial number ${i+1}`}>{i+1}</span><span aria-label={`Episode ${r.episode_number}`} className="rounded-md bg-dos-light/10 px-1 py-1.5 text-center text-xs font-bold text-dos">#{r.episode_number}</span><div className="min-w-0"><p className="truncate text-sm font-semibold" title={r.full_name}>{r.full_name}</p><p className="mt-0.5 truncate text-xs text-slate-500" title={r.college||'College not provided'}>{r.college||'College not provided'}</p></div></li>)}</ol>:<p className="p-5 text-sm text-slate-500">No registrations yet.</p>}
+              {loading?<p className="p-5 text-slate-500">Loading recent attendees…</p>:loadError?<p className="p-5 text-sm text-rose-700">Recent registrations could not be refreshed.</p>:recent.length?<ol className="divide-y divide-slate-100">{recent.map((r,i)=><li key={i} className="grid grid-cols-[1rem_2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3"><span className="text-xs text-slate-400" aria-label={`Serial number ${i+1}`}>{i+1}</span><span aria-label={`Episode ${r.episode_number}`} className="rounded-md bg-dos-light/10 px-1 py-1.5 text-center text-xs font-bold text-dos">#{r.episode_number}</span><div className="min-w-0"><p className="truncate text-sm font-semibold" title={r.full_name}><StudentLink id={r.student_id}>{r.full_name}</StudentLink></p><p className="mt-0.5 truncate text-xs text-slate-500" title={r.college||'College not provided'}>{r.college||'College not provided'}</p></div></li>)}</ol>:<p className="p-5 text-sm text-slate-500">No registrations yet.</p>}
             </section>
           </div>
         )}
