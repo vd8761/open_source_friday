@@ -71,6 +71,13 @@ test('admin event tables page and filter on the server and keep dashboard recent
   const partial=(await get('/episodes/1/attendance?page=1&search=Attendee%2064&college=Alpha&status=partial&joined=yes')).body;assert.equal(partial.total,1);assert.equal(partial.data[0].registration_id,64);assert.equal(partial.counts.not_synced,63);
   await db.exec('UPDATE attendance_syncs SET report_complete=TRUE');
   const absent=(await get('/episodes/1/attendance?page=1&status=absent&joined=no')).body;assert.equal(absent.total,63);assert.equal(absent.counts.absent,63);assert.equal(absent.data.length,10);
+  const longest=(await get('/episodes/1/attendance?sort=minutes_desc&page_size=1')).body;assert.equal(longest.data[0].registration_id,65);assert.equal(longest.total,65);
+  const shortest=(await get('/episodes/1/attendance?sort=minutes_asc')).body;assert.equal(shortest.data[0].minutes,0);
+  const exportResponse=await fetch(base+'/episodes/1/attendance/export?status=absent&joined=no&sort=name',{headers:{Authorization:'Bearer test'}});
+  assert.equal(exportResponse.status,200);const csv=await exportResponse.text();assert.equal(csv.trim().split('\n').length,64);assert.doesNotMatch(csv,/Attendee 64|Attendee 65/);
+  assert.equal((await get('/episodes/1/attendance?sort=constructor')).status,400);
+  assert.equal((await get('/episodes/1/attendees?sort=name_desc')).status,200);
+  const countsSorted=await get('/events?period=past&sort=registrations_desc');assert.equal(countsSorted.status,200);assert.equal(countsSorted.body.data[0].id,1);
   for(const path of ['/episodes/1/attendance?page=0','/episodes/1/attendance?page_size=51','/episodes/1/attendance?page=1&status=unknown','/episodes/1/attendance?page=1&joined=maybe'])assert.equal((await get(path)).status,400,path);
   assert.equal((await db.query('SELECT COUNT(*)::integer AS n FROM episode_registrations')).rows[0].n,65);
  }finally{if(server)await new Promise(r=>server.close(r));await db.close();}

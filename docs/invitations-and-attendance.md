@@ -181,3 +181,16 @@ This is recoverable deletion within OSF; it does not delete subscribers/groups/c
 Before saving a draft, **Clear imported CSV** clears only the uploaded/pasted audience and preview. The original CSV file on the administrator's computer is unaffected.
 
 A paused campaign does not resume automatically after a rate limit. Resume requires administrator action and an event whose registration window is still open. Once the event has ended or its registration cutoff has passed, discard the old campaign rather than sending an expired invitation.
+
+
+### Campaign pages and permanent cleanup
+
+Email invitations opens on the campaign list. Select a subject to review its episode, content, pacing, recipients and reports; use Create campaign for a separate preparation page. Edit draft is available only while status is draft, no batch exists and the campaign has never started. Editing covers content and pacing; the episode and imported audience remain fixed. Create a new campaign to replace that audience.
+
+Campaign trash is a gray link to the right of Refresh. Inside trash, Delete permanently requires typing `DELETE PERMANENTLY` and confirming. It removes OSF campaign content, imported audience and reports and cannot be reversed. It does not erase student registrations, attendance or Sender records. Unsubscribe/complaint suppressions and minimal episode/email exclusions for previously submitted invitations remain, so deleting campaign history cannot enable duplicate invitations. Event Trash also offers permanent deletion of an already trashed snapshot, with the same typed confirmation; active/past real events cannot be purged this way.
+
+### Sorting and filtered downloads
+
+Select a table heading with arrows to toggle ascending/descending order. Attendance, attendee and past-event ordering is applied before pagination. For longest attendance, select Minutes until the down arrow appears. Download filtered attendance CSV includes every matching registration, regardless of the visible page. Attendee and past-event CSV exports also include all matching pages, with the selected order. Campaign recipient downloads respect the recipient search and sort.
+
+The Zoom import/settings section is collapsed by default. Expand it for sync, threshold and CSV import controls; the last-sync time stays visible below the collapsed panel. Admin navigation consistently links Dashboard, Past events, Email invitations, Create event and Event trash, with contextual Attendees/Meeting attendance tabs on episode pages.

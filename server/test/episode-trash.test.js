@@ -97,6 +97,13 @@ test('sample Trash preserves related history and profiles and restores without r
     assert.equal((await request('/episodes/21/archive','POST',{confirmation:'ARCHIVE EPISODE 21'})).status,409);
     const future=(await request('/episodes/21/trash-preview')).body;
     assert.equal((await request('/episodes/21/trash','POST',{confirmation:'TRASH EPISODE 21',fingerprint:future.fingerprint})).status,200);
+    const futureTrash=(await request('/episode-trash')).body.data.find(e=>e.episode_number===21);
+    const purgePath=`/episode-trash/${futureTrash.id}`;
+    assert.equal((await request(purgePath,'DELETE',{confirmation:'DELETE PERMANENTLY'},false)).status,401);
+    assert.equal((await request(purgePath,'DELETE',{confirmation:'wrong'})).status,400);
+    assert.equal((await request(purgePath,'DELETE',{confirmation:'DELETE PERMANENTLY'})).status,200);
+    assert.equal((await request(purgePath+'/restore','POST')).status,404);
+    assert.equal((await db.query('SELECT * FROM episode_registrations WHERE episode_id=18')).rows.length,1);
     await db.exec("UPDATE episodes SET is_silent=TRUE WHERE id=18");
     assert.equal((await request('/episodes/18/trash-preview')).status,409);
   } finally {if(server)await new Promise(r=>server.close(r));await db.close();}

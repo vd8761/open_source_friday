@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { formatIST } from './utils/dateTime';
+import { SortHeader } from './components/AdminDataTable';
 import InfoTooltip from './components/InfoTooltip';
 import { Mail, GraduationCap, BookOpen, Phone, Search, UserX, Trash2 } from 'lucide-react';
 
-export default function RegistrationTable({ data, onDeleteRegistration, onSendZoomInvitation, onWithdrawWhatsApp, startIndex=0 }) {
+export default function RegistrationTable({ data, onDeleteRegistration, onSendZoomInvitation, onWithdrawWhatsApp, startIndex=0, sort, onSort }) {
   const [sendingStudentId, setSendingStudentId] = useState(null);
   const sendInvitation = async (studentId) => {
     setSendingStudentId(studentId);
@@ -32,11 +33,12 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <th scope="col" className="px-4 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">S.No.</th>
-              <th className="px-4 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Attendee</th>
-              <th className="px-4 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Academic Info</th>
+              <SortHeader label="Attendee" values={["name","name_desc"]} sort={sort} onSort={onSort}/><SortHeader label="Registered (IST)" values={["oldest","newest"]} sort={sort} onSort={onSort}/>
+              <SortHeader label="Academic info / College" values={["college","college_desc"]} sort={sort} onSort={onSort}/>
               <th className="px-4 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
               <th className="px-4 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Interests & Club</th>
-              <th className="px-4 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Zoom Invitation <InfoTooltip label="About Zoom invitations">Zoom enrollment is separate from application signup. Zoom sends the personal meeting-link email after enrollment. Inbox delivery is not tracked by this application. All displayed times are IST.</InfoTooltip></th>
+              <SortHeader label={<span>Zoom invitation <InfoTooltip label="About Zoom invitations">Zoom enrollment is separate from application signup. Zoom sends the personal meeting-link email after enrollment. Inbox delivery is not tracked by this application. All displayed times are IST.</InfoTooltip></span>}/>
+
               <th className="px-4 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
@@ -61,6 +63,7 @@ export default function RegistrationTable({ data, onDeleteRegistration, onSendZo
                     </div>
                   </td>
 
+                  <td className="px-4 py-4 whitespace-nowrap text-xs text-slate-500">{formatIST(row.registered_at)}</td>
                   <td className="px-4 py-4 min-w-[200px] max-w-[260px]">
                     <div className="text-sm text-slate-900 font-medium flex items-center gap-1.5">
                       <GraduationCap className="h-4 w-4 text-slate-400" />

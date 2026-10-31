@@ -227,7 +227,7 @@ async function saveAttendance(
     ],
   );
 }
-async function attendanceReport(db, episodeId, options) {
+async function attendanceReport(db, episodeId, options, {all=false} = {}) {
   let paging,search='',college='';
   if(options){
     paging=pageOptions(options);
@@ -281,6 +281,10 @@ async function attendanceReport(db, episodeId, options) {
   });
   const counts=data.reduce((acc,row)=>({...acc,[row.status]:(acc[row.status]||0)+1}),{});
   const filtered=paging?data.filter(row=>(!search||`${row.full_name} ${row.email} ${row.college||''}`.toLowerCase().includes(search))&&(!college||String(row.college||'').toLowerCase().includes(college))&&(!options.status||row.status===options.status)&&(!options.joined||(row.joined?'yes':'no')===options.joined)):data;
+  const sorts={newest:(a,b)=>new Date(b.registered_at)-new Date(a.registered_at),oldest:(a,b)=>new Date(a.registered_at)-new Date(b.registered_at),name:(a,b)=>a.full_name.localeCompare(b.full_name),name_desc:(a,b)=>b.full_name.localeCompare(a.full_name),college:(a,b)=>String(a.college||'').localeCompare(String(b.college||'')),college_desc:(a,b)=>String(b.college||'').localeCompare(String(a.college||'')),minutes_desc:(a,b)=>b.duration_seconds-a.duration_seconds,minutes_asc:(a,b)=>a.duration_seconds-b.duration_seconds,sessions_desc:(a,b)=>b.sessions-a.sessions,sessions_asc:(a,b)=>a.sessions-b.sessions,status:(a,b)=>a.status.localeCompare(b.status),status_desc:(a,b)=>b.status.localeCompare(a.status),joined:(a,b)=>Number(a.joined)-Number(b.joined),joined_desc:(a,b)=>Number(b.joined)-Number(a.joined)};
+  const sort=options?.sort||'newest';
+  if(!Object.hasOwn(sorts,sort))throw new InputError('Invalid attendance sort.',400);
+  filtered.sort((a,b)=>sorts[sort](a,b)||b.registration_id-a.registration_id);
   return {
     sync,
     automatic_sync:
@@ -289,7 +293,7 @@ async function attendanceReport(db, episodeId, options) {
           episodeId,
         ])
       ).rows[0] || null,
-    data:paging?filtered.slice((paging.page-1)*paging.page_size,paging.page*paging.page_size):data,
+    data:paging&&!all?filtered.slice((paging.page-1)*paging.page_size,paging.page*paging.page_size):filtered,
     ...(paging?{total:filtered.length,...paging,counts,registration_options:participants.some(p=>!p.registration_id)?registrations.map(r=>({registration_id:r.registration_id,full_name:r.full_name,email:r.email})):[]}:{}),
     unmatched: participants.filter((p) => !p.registration_id),
     audit: (

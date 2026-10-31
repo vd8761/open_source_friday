@@ -5,6 +5,7 @@ import Home from './Home';
 import PolicyPage from './components/PolicyPage';
 import { policyLinks } from './utils/policyLinks';
 import Dashboard from './Dashboard';
+import AdminNavigation from './components/AdminNavigation';
 import OutreachTool from './components/OutreachTool';
 import AttendanceTool from './components/AttendanceTool';
 import EventHistoryPage from './components/EventHistoryPage';
@@ -24,7 +25,7 @@ const ProtectedRoute = ({ children }) => {
     // If there is no token, redirect to login
     return <Navigate to="/login" replace />;
   }
-  return children;
+  return <div className="admin-area"><AdminNavigation />{children}</div>;
 };
 
 function AttendeesRoute() {
@@ -61,6 +62,7 @@ function App() {
           <Route path="/admin/past-events" element={<ProtectedRoute><PastEventsPage /></ProtectedRoute>} />
           <Route path="/admin/archived-events" element={<ProtectedRoute><PastEventsPage archivedOnly /></ProtectedRoute>} />
           <Route path="/admin/episodes/:id/attendees" element={<ProtectedRoute><AttendeesRoute /></ProtectedRoute>} />
+          {['/admin/invitations/new','/admin/invitations/trash','/admin/invitations/:campaignId','/admin/invitations/:campaignId/edit'].map(path=><Route key={path} path={path} element={<ProtectedRoute><OutreachTool key={path}/></ProtectedRoute>} />)}
           <Route path="/admin/invitations" element={<ProtectedRoute><OutreachTool /></ProtectedRoute>} />
           <Route path="/admin/episodes/:id/attendance" element={<ProtectedRoute><AttendanceRoute /></ProtectedRoute>} />
           <Route 

@@ -50,7 +50,8 @@ async function previewImport(db, episodeId, csv, filters = {}) {
     UNION ALL SELECT email, reason FROM invite_suppressions
     UNION ALL SELECT r.email, 'Already invited for this episode' AS reason FROM invite_recipients r
     JOIN invite_campaigns c ON c.id=r.campaign_id JOIN invite_batches b ON b.id=r.batch_id
-    WHERE c.episode_id=$1 AND b.status IN ('sending','submitted','review')`,
+    WHERE c.episode_id=$1 AND b.status IN ('sending','submitted','review')
+    UNION ALL SELECT email, 'Already invited for this episode' AS reason FROM invite_sent_history WHERE episode_id=$1`,
     [episodeId],
   );
   const excluded = new Map(rows.map((row) => [row.email, row.reason]));
@@ -154,6 +155,7 @@ async function skipIneligible(db, campaignId, episodeId) {
     WHERE r.campaign_id=$1 AND r.send_status='queued' AND (
       EXISTS(SELECT 1 FROM invite_suppressions x WHERE x.email=r.email)
       OR EXISTS(SELECT 1 FROM episode_registrations er JOIN students s ON s.id=er.student_id WHERE er.episode_id=$2 AND LOWER(TRIM(s.email))=r.email)
+      OR EXISTS(SELECT 1 FROM invite_sent_history h WHERE h.episode_id=$2 AND h.email=r.email)
       OR EXISTS(SELECT 1 FROM invite_recipients other JOIN invite_campaigns c ON c.id=other.campaign_id
         JOIN invite_batches b ON b.id=other.batch_id WHERE other.campaign_id<>$1 AND c.episode_id=$2 AND other.email=r.email AND b.status IN ('sending','submitted','review'))
     )`,

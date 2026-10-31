@@ -112,6 +112,12 @@ function createEpisodeTrashRouter({ pool, authenticateToken }) {
   router.get('/episode-trash',route(async (req,db) => ({ data:(await db.query(`SELECT id,episode_number,title,deleted_at FROM episode_trash WHERE restored_at IS NULL ORDER BY deleted_at DESC`)).rows })));
   router.get('/episodes/:episodeId/trash-preview',route(async (req,db) => preview(await snapshotEpisode(db,req.params.episodeId))));
   router.post('/episodes/:episodeId/trash',route(async (req,db) => moveToTrash(db,req.params.episodeId,req.body,req.user.id),true));
+  router.delete('/episode-trash/:trashId',route(async(req,db)=>{
+    if(req.body?.confirmation!=='DELETE PERMANENTLY')throw new InputError('Please type DELETE PERMANENTLY to confirm.',400);
+    const result=await db.query('DELETE FROM episode_trash WHERE id=$1 AND restored_at IS NULL RETURNING id',[req.params.trashId]);
+    if(!result.rows.length)throw new InputError('This event is not in Trash.',404);
+    return {message:'Trashed event snapshot permanently deleted. It can no longer be restored.'};
+  },true));
   router.post('/episode-trash/:trashId/restore',route(async (req,db) => restoreFromTrash(db,req.params.trashId,req.user.id),true));
   return router;
 }

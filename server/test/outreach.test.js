@@ -134,7 +134,7 @@ const request = async (path, method = "GET", body) => {
 };
 async function resetCampaigns() {
   await db.exec(
-    "DELETE FROM invite_delivery_imports; DELETE FROM invite_recipients; DELETE FROM invite_batches; DELETE FROM invite_campaigns; DELETE FROM invite_suppressions;",
+    "DELETE FROM invite_sent_history; DELETE FROM invite_delivery_imports; DELETE FROM invite_recipients; DELETE FROM invite_batches; DELETE FROM invite_campaigns; DELETE FROM invite_suppressions;",
   );
 }
 async function makeCampaign(
@@ -1034,4 +1034,39 @@ test("campaign trash refuses uncertain sends and keeps historical invitation exc
   await db.query("UPDATE invite_batches SET status='submitted' WHERE campaign_id=$1",[c.id]);
   assert.equal((await request(`/outreach/campaigns/${c.id}/trash`,'POST')).status,200);
   const preview=await previewImport(db,1,'Email\none@example.com');assert.equal(preview.contacts.length,0);assert.match(preview.excluded[0].reason,/Already invited/);
+});
+
+
+test('draft editing locks after first start and validates settings',async()=>{
+ await resetCampaigns();const c=await makeCampaign();
+ const body={subject:'Updated draft',body:'Updated message',batch_size:10,interval_minutes:20,pause_after_first_batch:true};
+ assert.equal((await request(`/outreach/campaigns/${c.id}`,'PATCH',body)).status,200);
+ const saved=(await request(`/outreach/campaigns/${c.id}`)).body;assert.equal(saved.campaign.subject,'Updated draft');assert.equal(saved.data.length,3);
+ assert.equal((await request(`/outreach/campaigns/${c.id}`,'PATCH',{...body,batch_size:0})).status,400);
+ assert.equal((await request(`/outreach/campaigns/${c.id}/start`,'POST')).status,200);
+ assert.ok((await request(`/outreach/campaigns/${c.id}`)).body.campaign.started_at);
+ assert.equal((await request(`/outreach/campaigns/${c.id}`,'PATCH',body)).status,409);
+ await request(`/outreach/campaigns/${c.id}/pause`,'POST');assert.equal((await request(`/outreach/campaigns/${c.id}`,'PATCH',body)).status,409);
+});
+
+test('permanent campaign deletion requires trash and confirmation and preserves duplicate-send protection',async()=>{
+ await resetCampaigns();const c=await makeCampaign();
+ const path=`/outreach/campaigns/${c.id}`;
+ assert.equal((await request(path,'DELETE',{confirmation:'DELETE PERMANENTLY'})).status,409);
+ await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[c.id]);await processInviteBatch(pool,senderStub(),env);
+ const sent=(await db.query("SELECT email FROM invite_recipients WHERE campaign_id=$1 AND send_status='submitted'",[c.id])).rows;
+ assert.ok(sent.length);
+ await db.query("INSERT INTO invite_suppressions(email,reason) VALUES('optout@example.com','Unsubscribed')");
+ assert.equal((await request(path+'/trash','POST')).status,200);
+ assert.equal((await request(path,'DELETE',{confirmation:'wrong'})).status,400);
+ assert.equal((await request(path,'DELETE',{confirmation:'DELETE PERMANENTLY'})).status,200);
+ assert.equal((await request(path)).status,404);
+ for(const table of ['invite_batches','invite_recipients','invite_delivery_imports'])assert.equal((await db.query(`SELECT COUNT(*)::integer AS n FROM ${table}`)).rows[0].n,0);
+ assert.equal((await db.query('SELECT COUNT(*)::integer AS n FROM invite_suppressions')).rows[0].n,1);
+ assert.equal((await db.query('SELECT COUNT(*)::integer AS n FROM episode_registrations')).rows[0].n,2);
+ const csv='Email\n'+sent.map(r=>r.email).join('\n');assert.equal((await previewImport(db,1,csv)).contacts.length,0);
+ // A previously queued draft must also exclude addresses purged after submission elsewhere.
+ const other=await makeCampaign('Email\nthree@example.com');
+ await db.query("INSERT INTO invite_sent_history(episode_id,email) VALUES(1,'three@example.com') ON CONFLICT DO NOTHING");
+ await db.query("UPDATE invite_campaigns SET status='running' WHERE id=$1",[other.id]);const sender=senderStub();await processInviteBatch(pool,sender,env);assert.equal(sender.calls.filter(c=>c[0]==='send').length,0);
 });
