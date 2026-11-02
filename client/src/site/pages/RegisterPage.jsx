@@ -36,7 +36,7 @@ function SpeakerLine({ ep, dark = true, size = 'md' }) {
     <div key={s.id ?? s.name} className="flex items-center gap-3.5">
       <SpeakerAvatar speaker={s} tone="gradient" className={size === 'md' ? 'h-[52px] w-[52px] text-lg' : 'h-11 w-11 text-base'} />
       <div className="flex min-w-0 flex-col gap-0.5">
-        <Link to={sitePaths.speakers} className={cx('font-semibold no-underline hover:underline', size === 'md' ? 'text-base' : 'text-[15px]', dark ? 'text-white' : 'text-osf-ink')}>{s.fullName}</Link>
+        <Link to={sitePaths.speakers} className={cx('font-semibold no-underline', size === 'md' ? 'text-base' : 'text-[15px]', dark ? 'text-white' : 'text-osf-ink')}>{s.fullName}</Link>
         {s.role && <span className={cx(size === 'md' ? 'text-sm' : 'text-[13px]', dark ? 'text-osf-fog' : 'text-osf-muted')}>{s.role}</span>}
       </div>
     </div>
@@ -61,7 +61,7 @@ function EpisodePanel({ ep, details }) {
         </div>
         <h1 className="m-0 text-[clamp(26px,2.6vw,32px)] font-semibold leading-[1.1] tracking-[-0.01em]">{ep.title}</h1>
         <SpeakerLine ep={ep} />
-        <Link to={ep.recapPath} className="self-start py-1 font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-mint no-underline hover:underline">FULL DETAILS &amp; AGENDA -&gt;</Link>
+        <Link to={ep.recapPath} className="self-start py-1 font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-mint no-underline">FULL DETAILS &amp; AGENDA -&gt;</Link>
       </div>
       <div className="flex flex-col gap-6 p-6 sm:p-7">
         <div className="grid grid-cols-2 gap-2.5">

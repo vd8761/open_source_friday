@@ -11,7 +11,6 @@ import EventHistoryPage from './components/EventHistoryPage';
 import PastEventsPage from './components/PastEventsPage';
 import AttendeesPage from './components/AttendeesPage';
 import Login from './Login';
-import PwaInstallPrompt from './PwaInstallPrompt';
 import AdminEpisodeForm from './components/AdminEpisodeForm';
 import SpeakersAdminPage from './components/SpeakersAdminPage';
 import TipsAdminPage from './components/TipsAdminPage';
@@ -51,7 +50,7 @@ function App() {
 
   return (
       <Router>
-        <PwaInstallPrompt />
+        {/* Install-app prompt hidden until the app launch (owner, 2 Nov 2026). */}
         <Routes>
           <Route path="/login" element={<Login />} />
           

@@ -138,7 +138,7 @@ export default function EpisodeRecapPage() {
           <div className="flex flex-wrap gap-2"><Tag>#OSF-EP{ep.num}</Tag>{ep.domain && <Tag variant="outline">{ep.domain}</Tag>}<Tag variant="muted">{ep.dateLong}</Tag></div>
           <h1 className="m-0 text-[clamp(32px,4.4vw,52px)] font-semibold leading-[1.05] tracking-[-0.02em]">{ep.title}</h1>
           <div className="flex flex-wrap gap-5">{ep.speakers.map((s) => (
-            <div key={s.id ?? s.name} className="flex items-center gap-3.5"><SpeakerAvatar speaker={s} tone="gradient" className="h-14 w-14 text-lg" /><div className="flex flex-col gap-0.5"><Link to={sitePaths.speakers} className="font-semibold text-osf-ink no-underline hover:underline">{s.name}</Link>{s.role && <span className="text-sm text-osf-muted">{s.role}</span>}</div></div>
+            <div key={s.id ?? s.name} className="flex items-center gap-3.5"><SpeakerAvatar speaker={s} tone="gradient" className="h-14 w-14 text-lg" /><div className="flex flex-col gap-0.5"><Link to={sitePaths.speakers} className="font-semibold text-osf-ink no-underline">{s.name}</Link>{s.role && <span className="text-sm text-osf-muted">{s.role}</span>}</div></div>
           ))}</div>
         </header>
 

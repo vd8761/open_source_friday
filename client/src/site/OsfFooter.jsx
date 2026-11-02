@@ -14,7 +14,7 @@ const osfLinks = [
 ];
 
 const colHeading = 'mb-2.5 font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-mint';
-const colLink = 'block py-2 text-base text-osf-cloud no-underline hover:text-white hover:underline underline-offset-4';
+const colLink = 'block py-2 text-base text-osf-cloud no-underline hover:text-white';
 
 export default function OsfFooter() {
   const { next } = useSiteData();
