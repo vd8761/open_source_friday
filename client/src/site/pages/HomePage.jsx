@@ -1,5 +1,6 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Mic } from 'lucide-react';
 import { ArrowLink, Button, Card, Container, DataState, DateBadge, Eyebrow, GradientText, SectionHeading, SpeakerAvatar, Tag, Terminal } from '../ui';
 import { heroBackground } from '../utils';
 import { audiences, howItWorks, tickerItems } from '../data';
@@ -8,12 +9,66 @@ import { sitePaths } from '../paths';
 
 const joinNames = (list) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`);
 
+function useNow(ms = 1000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), ms); return () => clearInterval(t); }, [ms]);
+  return now;
+}
+const pad = (n) => String(n).padStart(2, '0');
+
+// Live countdown to the episode (IST); flips to LIVE NOW during the session and to a wrap message after.
+function Countdown({ ep }) {
+  const now = useNow();
+  const [s, e] = (ep.time24 || '').replace(' IST', '').split(' – ');
+  const startsAt = Date.parse(`${ep.isoDay}T${s}:00+05:30`), endsAt = Date.parse(`${ep.isoDay}T${e}:00+05:30`);
+  if (Number.isNaN(startsAt)) return null;
+  if (now >= startsAt && now < endsAt) return <span className="flex items-center gap-2 font-osf-mono text-sm font-bold tracking-[0.08em] text-osf-mint"><span className="osf-live-dot text-osf-mint" />LIVE NOW — JOIN ON ZOOM</span>;
+  if (now >= endsAt) return <span className="font-osf-mono text-sm font-bold tracking-[0.08em] text-osf-fog">THAT'S A WRAP · RECORDING SOON</span>;
+  const left = Math.floor((startsAt - now) / 1000);
+  const units = [[Math.floor(left / 86400), 'D'], [Math.floor(left / 3600) % 24, 'H'], [Math.floor(left / 60) % 60, 'M'], [left % 60, 'S']].filter(([v, u]) => u !== 'D' || v > 0);
+  return (
+    <span className="flex items-baseline gap-2.5" aria-label="Time until the session starts">
+      {units.map(([v, u]) => <span key={u} className="flex items-baseline gap-0.5"><span className="text-[26px] font-bold tabular-nums leading-none">{pad(v)}</span><span className="font-osf-mono text-[10px] text-osf-fog">{u}</span></span>)}
+    </span>
+  );
+}
+
+// Hero spotlight: the next episode's speaker, front and centre, with floating context chips.
+function SpeakerSpotlight({ ep, lead }) {
+  return (
+    <div className="relative mx-auto w-full max-w-[460px] flex-[1_1_380px] px-2 pb-10 pt-6 sm:px-6">
+      <Link to={ep.recapPath} className="osf-float group relative block rounded-[36px] bg-white p-2.5 text-white no-underline shadow-[0_40px_80px_-36px_rgba(16,34,43,0.55)]">
+        <span className="relative block overflow-hidden rounded-[28px] bg-linear-135 from-osf-sky to-osf-mint">
+          <img src={lead.photo} alt={lead.name} className="block aspect-[4/5] w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
+          <span className="absolute inset-x-0 bottom-0 h-3/5 bg-linear-to-t from-osf-ink/90 via-osf-ink/40 to-transparent" />
+          <span className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-2 font-osf-mono text-[11px] font-bold tracking-[0.08em] text-osf-ink"><span className="osf-live-dot text-osf-leaf" />{ep.weekday === 'Fri' ? 'THIS FRIDAY' : `${ep.weekday.toUpperCase()} ${Number(ep.day)} ${ep.mon}`} · EP {ep.num}</span>
+          <span className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-5 pb-16 pt-5 sm:px-6">
+            <span className="font-osf-mono text-[10px] tracking-[0.12em] text-osf-mint">IN THE SPOTLIGHT</span>
+            <span className="text-[clamp(22px,2.4vw,28px)] font-semibold leading-tight">{lead.name}</span>
+            {(lead.designation || lead.company) && <span className="text-[15px] text-osf-cloud">{lead.designation}{lead.designation && lead.company && ' · '}{lead.company && <span className="font-semibold text-white">{lead.company}</span>}</span>}
+          </span>
+        </span>
+      </Link>
+      <span className="osf-float-slow absolute -right-1 top-[14%] hidden items-center gap-2 rounded-full border border-osf-line bg-white/95 px-3.5 py-2.5 font-osf-mono text-[11px] font-bold tracking-[0.08em] text-osf-ink shadow-osf-card sm:inline-flex"><Mic aria-hidden="true" className="h-3.5 w-3.5 text-osf-leaf" />LIVE Q&amp;A · FREE</span>
+      <div className="absolute inset-x-0 bottom-0 flex justify-center">
+        <div className="osf-float-slow flex flex-col items-center gap-1.5 rounded-2xl bg-osf-ink px-5 py-3.5 text-white shadow-osf-card">
+          <span className="font-osf-mono text-[10px] tracking-[0.12em] text-osf-fog">STARTS IN · {ep.weekday.toUpperCase()} {ep.start} IST</span>
+          <Countdown ep={ep} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
-  const { next: ep, stats, clubStats, episodes } = useSiteData();
+  const { next: ep, stats, clubStats, episodes, speakers } = useSiteData();
   const lead = ep?.speakers[0];
+  const faces = speakers.filter((s) => s.photo).slice(0, 5);
   return (
     <section id="top" className="relative overflow-hidden bg-osf-mist px-4 pb-24 pt-14 sm:px-6 sm:pt-[72px]" style={heroBackground([['leaf', '18% 45%', 0.2, 32], ['sky', '78% 40%', 0.16, 30]])}>
-      <Container className="flex flex-wrap items-center gap-14">
+      <span aria-hidden="true" className="osf-blob left-[-120px] top-[10%] h-[380px] w-[380px] bg-[rgba(76,175,80,0.22)]" />
+      <span aria-hidden="true" className="osf-blob right-[-80px] top-[30%] h-[420px] w-[420px] bg-[rgba(21,147,195,0.18)] [animation-delay:-6s]" />
+      <Container className="relative flex flex-wrap items-center gap-14">
         <div className="flex min-w-0 flex-[999_1_540px] flex-col gap-7">
           {ep ? (
             <Link to={ep.recapPath} className="flex max-w-full items-center gap-3.5 self-start rounded-2xl border border-osf-line bg-white/90 py-2 pl-2 pr-[18px] text-osf-ink no-underline hover:border-osf-leaf">
@@ -42,13 +97,17 @@ function Hero() {
           {stats && (
             <div className="flex flex-wrap items-center gap-x-7 gap-y-3 text-[15px] text-osf-muted">
               <span><strong className="text-lg text-osf-ink">{stats.episodes_shipped}</strong> episodes shipped</span>
-              <span><strong className="text-lg text-osf-ink">{stats.speakers_count}</strong> speakers</span>
+              <span className="flex items-center gap-3">
+                {faces.length > 0 && <span aria-hidden="true" className="flex items-center">{faces.map((s, i) => <img key={s.id} src={s.photo} alt="" className="h-9 w-9 rounded-full border-2 border-osf-mist object-cover" style={{ marginLeft: i ? -10 : 0 }} />)}</span>}
+                <span><strong className="text-lg text-osf-ink">{stats.speakers_count}</strong> speakers</span>
+              </span>
               {clubStats[0] && <span><strong className="text-lg text-osf-ink">{clubStats[0].value}</strong> {clubStats[0].label}</span>}
             </div>
           )}
         </div>
 
-        <Terminal title="~/open-source-fridays" className="max-w-[520px] flex-[1_1_400px]"
+        {/* The speaker spotlight when the next episode has a speaker photo; the terminal otherwise. */}
+        {ep && lead?.photo ? <SpeakerSpotlight ep={ep} lead={lead} /> : <Terminal title="~/open-source-fridays" className="max-w-[520px] flex-[1_1_400px]"
           footer={<div className="flex items-center justify-between border-t border-osf-line px-[18px] py-3 font-osf-mono text-[11px] tracking-[0.08em] text-osf-muted"><span><span className="text-[#4CAF50]">●</span> LIVE EVERY FRIDAY</span><span>EP {ep ? ep.num : episodes.length || '—'} / ∞</span></div>}>
           <div className="flex flex-col p-5 font-osf-mono text-[13px] leading-[1.9] text-osf-ink sm:p-6 sm:text-sm">
             <span><span className="text-osf-leaf">~/osf ❯</span> ./next_episode.sh</span>
@@ -67,7 +126,7 @@ function Hero() {
             )}
             <span className="mt-2"><span className="text-osf-leaf">~/osf ❯</span> <span className="bg-osf-ink text-osf-ink">_</span></span>
           </div>
-        </Terminal>
+        </Terminal>}
       </Container>
     </section>
   );
@@ -116,7 +175,7 @@ function EpisodesSection() {
         <SectionHeading eyebrow="/ 02 — EPISODES" title="The Friday lineup." action={<ArrowLink to={sitePaths.episodes}>VIEW ALL {episodes.length || ''} EPISODES</ArrowLink>} />
         <DataState loading={loading} error={error} />
         {!loading && !error && <div className="flex flex-wrap items-stretch gap-5">
-          {ep ? <Card as="article" className="flex min-w-0 flex-[999_1_520px] flex-wrap gap-7 p-6 sm:p-8">
+          {ep ? <Card as="article" className="relative flex min-w-0 flex-[999_1_520px] flex-wrap gap-7 overflow-hidden !bg-osf-mist p-6 shadow-osf-card sm:p-8" style={heroBackground([['leaf', '12% 30%', 0.18, 34], ['sky', '88% 80%', 0.14, 32]])}>
             <DateBadge day={ep.day} mon={ep.mon} size="lg" />
             <div className="flex min-w-0 flex-[999_1_300px] flex-col gap-3.5">
               <div className="flex flex-wrap gap-2">
