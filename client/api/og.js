@@ -43,12 +43,16 @@ export default async function handler(req, res) {
     if (data && data.success && data.episode) {
       const ep = data.episode;
       
-      const title = `Episode ${ep.episode_number}: ${ep.title} | Open Source Friday`;
+      // Escape for HTML attributes so a quote in a title cannot break the tags.
+      const attr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const title = attr(`Episode ${ep.episode_number}: ${ep.title} | Open Source Friday`);
+      const pageUrl = attr(`${protocol}://${host}/register/episode-${ep.episode_number}`);
       
       // Strip HTML tags from description if they used the rich text editor
       const rawDescription = ep.description ? ep.description.replace(/<[^>]*>?/gm, '') : '';
       let description = ep.meta_description || rawDescription.substring(0, 160);
       if (!ep.meta_description && rawDescription.length > 160) description += '...';
+      description = attr(description.replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim());
       
       // Set image URL to the new dynamic backend endpoint that serves the binary image
       // Fallback to the wide logo to force large image preview on WhatsApp
@@ -69,10 +73,14 @@ export default async function handler(req, res) {
       
       html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
       html = html.replace(/<meta property="og:description" content=".*?" \/>/g, `<meta property="og:description" content="${description}" />`);
-      html = html.replace(/<meta property="og:image" content=".*?" \/>/g, `<meta property="og:image" content="${imageUrl}" />\n  <meta property="og:image:width" content="1200" />\n  <meta property="og:image:height" content="630" />`);
+      // index.html already carries og:image:width/height, so only the image URL changes here.
+      html = html.replace(/<meta property="og:image" content=".*?" \/>/g, `<meta property="og:image" content="${imageUrl}" />`);
+      // Shared links should open the episode, not the home page (LinkedIn uses og:url).
+      html = html.replace(/<meta property="og:url" content=".*?" \/>/g, `<meta property="og:url" content="${pageUrl}" />`);
+      html = html.replace(/<meta property="twitter:url" content=".*?" \/>/g, `<meta property="twitter:url" content="${pageUrl}" />`);
       
       // Insert twitter card tag if not present
-      if (!html.includes('<meta name="twitter:card"')) {
+      if (!html.includes('twitter:card"')) {
         html = html.replace('</head>', `  <meta name="twitter:card" content="summary_large_image" />\n</head>`);
       } else {
         html = html.replace(/<meta name="twitter:card" content=".*?" \/>/g, `<meta name="twitter:card" content="summary_large_image" />`);
