@@ -3,13 +3,14 @@ import { NavLink, useLocation } from 'react-router-dom';
 import AdminAccount from './AdminAccount';
 
 // v2.0 look: mono uppercase links with a green underline for the active section, as on the public site.
-// Tips, Speaker pitches and Site settings live in the Account menu (AdminAccount).
+// Email invitations, Site settings and Event trash live in the Account menu (AdminAccount).
 const links = [
   ['/dashboard', 'Dashboard', true],
   ['/admin/past-events', 'Past events'],
   ['/admin/speakers', 'Speakers'],
-  ['/admin/invitations', 'Email invitations'],
   ['/admin/contacts', 'Attendee contacts'],
+  ['/admin/speaker-applications', 'Speaker pitches'],
+  ['/admin/tips', 'Tips'],
 ];
 
 export default function AdminNavigation(){
@@ -23,7 +24,6 @@ export default function AdminNavigation(){
       </NavLink>
       <nav aria-label="Admin navigation" className="order-3 flex w-full gap-1 overflow-x-auto xl:order-none xl:w-auto">
         {links.map(([to,label,end])=><NavLink key={to} to={to} end={end} className={({isActive})=>item({isActive:isActive||(to==='/admin/contacts'&&pathname.startsWith('/admin/students/'))})}>{label}</NavLink>)}
-        <NavLink to="/admin/trash" className={item}>Event trash</NavLink>
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-4"><AdminAccount/></div>
     </div>

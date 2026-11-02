@@ -232,3 +232,38 @@ test('speaker backfill dry-runs by default and applies the owner-approved CSV in
   assert.equal((await db.query("SELECT COUNT(*)::int AS n FROM speakers WHERE name='Ghost'")).rows[0].n, 0);
   assert.match((await backfill(db, [{ name: 'A', episodes: '1' }, { name: 'Mr. a', episodes: '2' }])).errors[0], /duplicate/);
 });
+
+test('adding old student records fills blanks only, never overwrites, and previews before importing', async () => {
+  const db = new PGlite();
+  await db.exec(`CREATE TABLE students(id SERIAL PRIMARY KEY,full_name TEXT,email TEXT,whatsapp_number TEXT,country_code TEXT,gender TEXT,college TEXT,degree TEXT,department TEXT,year_of_study TEXT,is_dos_club_member TEXT,excited_topic TEXT);
+    INSERT INTO students(full_name,email,whatsapp_number,country_code,college) VALUES ('Asha K','asha@example.com',NULL,NULL,'Old College'),('Ravi','ravi@example.com','9000000002','+91',NULL);`);
+  const pool = { query: (...a) => db.query(...a), connect: async () => ({ query: (...a) => db.query(...a), release() {} }) };
+  const app = express(); app.use(express.json());
+  app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken: (req, res, next) => req.headers.authorization === 'Bearer admin' ? next() : res.status(401).json({ success: false }) }));
+  const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
+  const call = async (method, p, body) => { const r = await fetch(`http://127.0.0.1:${server.address().port}/api/admin${p}`, { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer admin' }, body: body && JSON.stringify(body) }); return { status: r.status, body: r.headers.get('content-type').includes('json') ? await r.json() : await r.text() }; };
+  try {
+    assert.match((await call('GET', '/contacts/import-template')).body, /^full_name,email,whatsapp_number,country_code/);
+    // Single add: an existing email fills only blank fields.
+    const one = await call('POST', '/contacts', { full_name: 'Asha Kumar', email: ' ASHA@example.com ', college: 'New College', degree: 'B.E.', gender: 'female', year_of_study: '2' });
+    assert.deepEqual([one.body.status, one.body.fills], ['update', ['gender', 'degree', 'year_of_study']]);
+    assert.deepEqual((await db.query("SELECT full_name,college,degree,gender,year_of_study FROM students WHERE email='asha@example.com'")).rows[0],
+      { full_name: 'Asha K', college: 'Old College', degree: 'B.E.', gender: 'Female', year_of_study: '2nd Year' });
+    assert.equal((await call('POST', '/contacts', { full_name: 'No Contact' })).status, 400);
+    assert.equal((await call('POST', '/contacts', { full_name: 'Bad', email: 'x@y.co', gender: 'robot' })).status, 400);
+    // Import: preview first, nothing written; errors block the import.
+    const csv = 'Name,Email,Phone,Year\nNew One,new1@example.com,9000000101,passed out\nRavi R,,9000000002,1\nRavi again,ravi@example.com,,\nDup,new1@example.com,,\nBroken,not-an-email,,\n';
+    const preview = await call('POST', '/contacts/import', { csv });
+    assert.deepEqual(preview.body.summary, { new: 1, update: 1, unchanged: 1, error: 2 });
+    assert.deepEqual(preview.body.rows.find(r => r.line === 2).notes, ['country code assumed +91']);
+    assert.match(preview.body.rows.find(r => r.line === 5).errors.email, /row 2/);
+    assert.equal((await db.query('SELECT COUNT(*)::int n FROM students')).rows[0].n, 2);
+    assert.equal((await call('POST', '/contacts/import', { csv, dry_run: false })).status, 400);
+    const clean = csv.split('\n').filter(l => !/^(Dup|Broken)/.test(l)).join('\n');
+    const done = await call('POST', '/contacts/import', { csv: clean, dry_run: false });
+    assert.deepEqual([done.status, done.body.dry_run, done.body.summary], [200, false, { new: 1, update: 1, unchanged: 1, error: 0 }]);
+    assert.deepEqual((await db.query("SELECT full_name,year_of_study FROM students WHERE email='new1@example.com'")).rows[0], { full_name: 'New One', year_of_study: 'Passed Out' });
+    assert.equal((await db.query("SELECT year_of_study FROM students WHERE email='ravi@example.com'")).rows[0].year_of_study, '1st Year');
+    assert.equal((await call('POST', '/contacts/import', { csv: 'foo,bar\n1,2\n' })).status, 400);
+  } finally { await new Promise(r => server.close(r)); }
+});

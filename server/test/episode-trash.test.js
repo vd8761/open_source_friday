@@ -77,7 +77,7 @@ test('sample Trash preserves related history and profiles and restores without r
     assert.deepEqual((await db.query('SELECT episode_id,speaker_id FROM episode_speakers')).rows,[{episode_id:16,speaker_id:1}]);
     assert.equal((await db.query('SELECT episode_id FROM tips')).rows[0].episode_id,16);
     const restored=(await db.query('SELECT * FROM episodes WHERE id=16')).rows[0];
-    assert.equal(restored.is_test,true);assert.equal(restored.is_active,false);assert.equal(restored.is_registration_open,false);
+    assert.equal(restored.is_test,true);assert.equal(restored.is_active,true);assert.equal(restored.is_registration_open,false);assert.equal(restored.is_silent,true);
     assert.equal((await db.query('SELECT * FROM invite_campaigns')).rows[0].status,'paused');
     assert.equal((await db.query('SELECT * FROM attendance_tasks')).rows[0].status,'paused');
     assert.equal((await db.query('SELECT * FROM invite_batches')).rows[0].provider_diagnostic.response_body,'evidence');
@@ -109,6 +109,13 @@ test('sample Trash preserves related history and profiles and restores without r
     assert.equal((await request(purgePath,'DELETE',{confirmation:'DELETE PERMANENTLY'})).status,200);
     assert.equal((await request(purgePath+'/restore','POST')).status,404);
     assert.equal((await db.query('SELECT * FROM episode_registrations WHERE episode_id=18')).rows.length,1);
+    // A restored future event returns to Upcoming (active) but paused: registration closed and silent.
+    await db.exec("INSERT INTO episodes(id,episode_number,title,is_silent,is_active,is_registration_open,event_date) VALUES(22,22,'Future restore',FALSE,TRUE,TRUE,'2099-11-06')");
+    const f22=(await request('/episodes/22/trash-preview')).body;
+    assert.equal((await request('/episodes/22/trash','POST',{confirmation:'TRASH EPISODE 22',fingerprint:f22.fingerprint})).status,200);
+    const t22=(await request('/episode-trash')).body.data.find(e=>e.episode_number===22);
+    assert.equal((await request(`/episode-trash/${t22.id}/restore`,'POST')).status,200);
+    assert.deepEqual((await db.query('SELECT is_active,is_registration_open,is_silent FROM episodes WHERE id=22')).rows[0],{is_active:true,is_registration_open:false,is_silent:true});
     await db.exec("UPDATE episodes SET is_silent=TRUE WHERE id=18");
     assert.equal((await request('/episodes/18/trash-preview')).status,409);
   } finally {if(server)await new Promise(r=>server.close(r));await db.close();}

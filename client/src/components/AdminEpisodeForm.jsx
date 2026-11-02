@@ -52,7 +52,6 @@ const AdminEpisodeForm = () => {
   const [eventDate, setEventDate] = useState(null);
   const [startTime, setStartTime] = useState(null);
   const [endTime, setEndTime] = useState(null);
-  const [currentStep, setCurrentStep] = useState(1);
   const [errors, setErrors] = useState({});
 
   const [message, setMessage] = useState('');
@@ -167,35 +166,28 @@ const AdminEpisodeForm = () => {
     if (el3) el3.value = '';
   };
 
-  const handleNext = () => {
-    setMessage('');
-    let newErrors = {};
-    if (currentStep === 1) {
-      if (!formData.episode_number) newErrors.episode_number = 'Episode Number is required';
-      if (!formData.title) newErrors.title = 'Title is required';
-    }
-    if (currentStep === 2) {
-      if (!eventDate) newErrors.eventDate = 'Event Date is required';
-      if (!startTime) newErrors.startTime = 'Start Time is required';
-      if (!endTime) newErrors.endTime = 'End Time is required';
-    }
-    if (currentStep === 3) {
-      if (!formData.presenter_name) newErrors.presenter_name = 'Presenter Name is required';
-    }
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-    
-    setErrors({});
-    setCurrentStep(prev => prev + 1);
+  // One-page form: the checks that used to run step by step now run together before saving.
+  const validateAll = () => {
+    const newErrors = {};
+    if (!formData.episode_number) newErrors.episode_number = 'Episode Number is required';
+    if (!formData.title) newErrors.title = 'Title is required';
+    if (!eventDate) newErrors.eventDate = 'Event Date is required';
+    if (!startTime) newErrors.startTime = 'Start Time is required';
+    if (!endTime) newErrors.endTime = 'End Time is required';
+    if (!formData.presenter_name) newErrors.presenter_name = 'Presenter Name is required';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e, confirmed=false) => {
     e.preventDefault();
-    if(id&&originalRegistrationOpen&&!formData.is_registration_open&&!confirmed){setCloseConfirmation(true);return;}
     setMessage('');
+    if (!validateAll()) {
+      setMessage('Please fill in the highlighted fields.');
+      window.scrollTo(0, 0);
+      return;
+    }
+    if(id&&originalRegistrationOpen&&!formData.is_registration_open&&!confirmed){setCloseConfirmation(true);return;}
     
     if (!eventDate || !startTime || !endTime) {
       setMessage('Please select a valid date, start time, and end time.');
@@ -328,17 +320,8 @@ const AdminEpisodeForm = () => {
           <div className="mb-8">
             <div className="flex justify-between items-start mb-4 gap-4">
               <h1 className="text-2xl font-bold text-slate-900">{id ? 'Edit event' : 'Create event'}</h1>
-              <span className="text-sm font-bold text-dos bg-dos-light/20 px-3 py-1 rounded-full whitespace-nowrap shrink-0">Step {currentStep} of 4</span>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-2">
-              <div className="bg-dos h-2 rounded-full transition-all duration-500" style={{ width: `${(currentStep / 4) * 100}%` }}></div>
-            </div>
-            <p className="mt-4 text-slate-500 text-sm font-medium">
-              {currentStep === 1 && "Start with the basic details for this episode."}
-              {currentStep === 2 && "When is this episode happening?"}
-              {currentStep === 3 && "Who is presenting this episode?"}
-              {currentStep === 4 && "Add a rich description for the event."}
-            </p>
+            <p className="text-slate-500 text-sm font-medium">All event details on one page. Save when you're done.</p>
           </div>
 
           {message && (
@@ -357,8 +340,9 @@ const AdminEpisodeForm = () => {
             </div>
           )}
           
-          <form onSubmit={(e) => { e.preventDefault(); if(currentStep === 4) handleSubmit(e); }} className="space-y-6">
-            {currentStep === 1 && (
+          <form onSubmit={handleSubmit} noValidate className="space-y-8">
+            <section aria-labelledby="ep-basics" className="space-y-4 border-t border-slate-100 pt-6 first:border-t-0 first:pt-0">
+              <div><h2 id="ep-basics" className="text-lg font-bold text-slate-900">Basics</h2><p className="text-xs text-slate-500">Episode number, title, mode and Zoom meeting.</p></div>
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
@@ -385,9 +369,10 @@ const AdminEpisodeForm = () => {
                   </div>
                 </div>
               </div>
-            )}
+            </section>
 
-            {currentStep === 2 && (
+            <section aria-labelledby="ep-schedule" className="space-y-4 border-t border-slate-100 pt-6 first:border-t-0 first:pt-0">
+              <div><h2 id="ep-schedule" className="text-lg font-bold text-slate-900">Schedule</h2><p className="text-xs text-slate-500">All times are India Standard Time (IST).</p></div>
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                 {formData.event_mode === 'Online' && (
                   <div className="mb-6">
@@ -446,15 +431,16 @@ const AdminEpisodeForm = () => {
                   </div>
                 </div>
               </div>
-            )}
+            </section>
 
-            {currentStep === 3 && (
+            <section aria-labelledby="ep-people" className="space-y-4 border-t border-slate-100 pt-6 first:border-t-0 first:pt-0">
+              <div><h2 id="ep-people" className="text-lg font-bold text-slate-900">Speakers, presenter and photos</h2><p className="text-xs text-slate-500">Pick speakers for the website, then check the presenter fields and photos.</p></div>
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                 <EpisodeSpeakersFields value={v2} onChange={setV2} onPresenter={(fields) => setFormData(prev => ({ ...prev, ...fields }))} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Name</label>
-                    <input type="text" name="presenter_name" value={formData.presenter_name} onChange={handleChange} required={currentStep === 3} placeholder="e.g. Jane Doe"
+                    <input type="text" name="presenter_name" value={formData.presenter_name} onChange={handleChange} required placeholder="e.g. Jane Doe"
                       className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 transition-all outline-none text-slate-700 ${errors.presenter_name ? 'border-rose-500 focus:ring-rose-200' : 'border-slate-200 focus:border-dos focus:ring-dos'}`} />
                     {errors.presenter_name && <p className="text-rose-500 text-xs mt-1.5 font-medium">{errors.presenter_name}</p>}
                   </div>
@@ -523,9 +509,10 @@ const AdminEpisodeForm = () => {
                   </div>
                 </div>
               </div>
-            )}
+            </section>
 
-            {currentStep === 4 && (
+            <section aria-labelledby="ep-details" className="space-y-4 border-t border-slate-100 pt-6 first:border-t-0 first:pt-0">
+              <div><h2 id="ep-details" className="text-lg font-bold text-slate-900">Description and settings</h2><p className="text-xs text-slate-500">Link preview text, full description, test event and silent mode.</p></div>
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="mb-4 rounded-xl border border-slate-200 p-4">
                   <label className="flex items-center gap-3 font-bold text-sm text-slate-700">
@@ -568,24 +555,13 @@ const AdminEpisodeForm = () => {
                   </div>
                 </div>
               </div>
-            )}
+            </section>
 
-            <div className="pt-6 mt-8 flex justify-between items-center border-t border-slate-100">
-              {currentStep > 1 ? (
-                <button type="button" onClick={() => setCurrentStep(prev => prev - 1)} className="px-6 py-3 border border-slate-200 text-sm font-bold rounded-xl text-slate-700 bg-white hover:bg-slate-50 transition-all shadow-sm">
-                  Back
-                </button>
-              ) : <div></div>}
-
-              {currentStep < 4 ? (
-                <button type="button" onClick={handleNext} className="px-8 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-dos hover:bg-dos-dark transition-all shadow-sm">
-                  Next Step
-                </button>
-              ) : (
-                <button type="button" onClick={handleSubmit} className="px-8 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-dos hover:bg-dos-dark transition-all shadow-md hover:shadow-lg active:scale-[0.98]" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving...' : (id ? 'Save Changes' : 'Create Episode')}
-                </button>
-              )}
+            <div className="sticky bottom-0 -mx-8 -mb-8 flex justify-end gap-3 rounded-b-2xl border-t border-slate-100 bg-white/95 px-8 py-4 backdrop-blur">
+              <button type="button" onClick={() => navigate('/dashboard')} className="admin-action" disabled={isSubmitting}>Cancel</button>
+              <button type="submit" className="admin-primary" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : (id ? 'Save Changes' : 'Create Episode')}
+              </button>
             </div>
           </form>
         </div>
