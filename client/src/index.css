@@ -184,3 +184,5 @@ a.admin-danger, a.admin-danger:hover, a.admin-danger:focus-visible {
   background-size: 64px 64px;
 }
 .admin-area h1, .admin-area h2 { letter-spacing: -0.02em; }
+/* Admin nav tabs show state with their bottom bar only, never a text underline. */
+.admin-area header nav a, .admin-area header nav a:hover { text-decoration: none !important; }
