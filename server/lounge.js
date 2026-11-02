@@ -5,13 +5,14 @@ const { InputError } = require('./outreach-csv');
 const { studentActivities } = require('./student-activity');
 const { dryRun } = require('./runtime-flags');
 
-// Attendee lounge for past episodes. A visitor proves they own an email with a 6-digit code, then sees
-// the members-only part of every episode they attended (marked present). Materials are links only.
+// Attendee lounge for past episodes. For each episode, a visitor proves they own an email with a 6-digit
+// code; the unlock covers that episode only and opens it if they were marked present. Materials are links only.
 const CODE_MINUTES = 10, MAX_ATTEMPTS = 5, SESSION_DAYS = 14;
 const normEmail = v => String(v || '').trim().toLowerCase();
 // Lounge sessions are signed with a key derived from JWT_SECRET, so they can never pass as an admin token.
 const loungeKey = secret => crypto.createHmac('sha256', String(secret || '')).update('osf-lounge-session-v1').digest();
-const codeHash = (secret, studentId, code) => crypto.createHmac('sha256', loungeKey(secret)).update(`${studentId}:${code}`).digest('hex');
+const codeHash = (secret, studentId, episode, code) => crypto.createHmac('sha256', loungeKey(secret)).update(`${studentId}:${episode}:${code}`).digest('hex');
+const episodeNumber = v => { const n = Number(String(v ?? '').replace(/^episode-/, '')); if (!Number.isInteger(n) || n < 1) throw new InputError('Episode not found.', 404); return n; };
 
 // Messages never mention the attendance threshold.
 const DENIED = {
@@ -32,7 +33,7 @@ const httpsUrl = (v, label) => {
 function createCodeMailer({ env = process.env, flags, fetchImpl = fetch }) {
   const allow = String(env.TEST_EMAIL_ALLOWLIST || env.ZOOM_TEST_ALLOWLIST || '').split(',').map(normEmail).filter(Boolean);
   const enabled = env.ENABLE_EMAIL_CODES == null || env.ENABLE_EMAIL_CODES === '' ? flags.production : env.ENABLE_EMAIL_CODES === 'true';
-  return async function sendCode(email, name, code) {
+  return async function sendCode(email, name, code, episode) {
     if (!enabled || (!flags.production && !allow.includes(normEmail(email)))) { dryRun('Lounge', 'unlock code email not sent'); return false; }
     if (!env.SENDER_API_TOKEN) throw new Error('SENDER_API_TOKEN is not configured.');
     const res = await fetchImpl('https://api.sender.net/v2/message/send', {
@@ -41,9 +42,9 @@ function createCodeMailer({ env = process.env, flags, fetchImpl = fetch }) {
       body: JSON.stringify({
         from: { email: env.SENDER_FROM_EMAIL || 'info@descienceosclub.com', name: env.SENDER_FROM_NAME || 'Descience Open Source Club' },
         to: { email, name: name || undefined },
-        subject: `${code} is your Open Source Fridays lounge code`,
-        text: `Your code to unlock the Open Source Fridays lounge is ${code}. It expires in ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email.`,
-        html: `<p>Your code to unlock the Open Source Fridays lounge:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email.</p>`,
+        subject: `${code} is your code for the Episode ${episode} lounge`,
+        text: `Your code to unlock the Open Source Fridays Episode ${episode} lounge is ${code}. It expires in ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email.`,
+        html: `<p>Your code to unlock the Open Source Fridays <strong>Episode ${episode}</strong> lounge:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email.</p>`,
       }),
     });
     if (!res.ok) throw new Error(`Sender returned HTTP ${res.status}`);
@@ -69,40 +70,41 @@ function createLoungeRouter({ pool, secret, verifyRecaptcha, sendCode, limiter, 
   // Always answers the same way, so the form never reveals whether an email is in the system.
   router.post('/lounge/request-code', limiter, route(async req => {
     if (!await verifyRecaptcha(req.body?.recaptcha_token, 'lounge_code')) throw new InputError('Security check failed. Please refresh the page and try again.', 400);
-    const email = normEmail(req.body?.email);
+    const email = normEmail(req.body?.email), episode = episodeNumber(req.body?.episode);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw new InputError('Enter a valid email address.', 400);
     const student = (await pool.query('SELECT id,full_name,email FROM students WHERE LOWER(BTRIM(email))=$1 ORDER BY id LIMIT 1', [email])).rows[0];
     if (student) {
       const recent = (await pool.query("SELECT COUNT(*)::int n FROM lounge_codes WHERE student_id=$1 AND created_at > NOW() - INTERVAL '15 minutes'", [student.id])).rows[0].n;
       if (recent < 3) {
         const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-        await pool.query(`INSERT INTO lounge_codes(student_id,code_hash,expires_at) VALUES($1,$2,NOW() + INTERVAL '${CODE_MINUTES} minutes')`, [student.id, codeHash(secret, student.id, code)]);
-        await sendCode(student.email.trim(), student.full_name, code);
+        await pool.query(`INSERT INTO lounge_codes(student_id,episode_number,code_hash,expires_at) VALUES($1,$2,$3,NOW() + INTERVAL '${CODE_MINUTES} minutes')`, [student.id, episode, codeHash(secret, student.id, episode, code)]);
+        await sendCode(student.email.trim(), student.full_name, code, episode);
       }
     }
-    return { message: `If this email is registered with Open Source Fridays, a 6-digit code is on its way. It expires in ${CODE_MINUTES} minutes.` };
+    return { message: `If this email is registered with Open Source Fridays, a 6-digit code for the Episode ${episode} lounge is on its way. It expires in ${CODE_MINUTES} minutes.` };
   }));
 
   router.post('/lounge/verify', limiter, route(async req => {
-    const email = normEmail(req.body?.email), code = String(req.body?.code || '').trim();
+    const email = normEmail(req.body?.email), code = String(req.body?.code || '').trim(), episode = episodeNumber(req.body?.episode);
     const wrong = new InputError('That code is not right or has expired. Request a new one.', 400);
     if (!/^\d{6}$/.test(code)) throw wrong;
     const student = (await pool.query('SELECT id,full_name FROM students WHERE LOWER(BTRIM(email))=$1 ORDER BY id LIMIT 1', [email])).rows[0];
     if (!student) throw wrong;
-    const row = (await pool.query('SELECT * FROM lounge_codes WHERE student_id=$1 AND used_at IS NULL AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1', [student.id])).rows[0];
+    const row = (await pool.query('SELECT * FROM lounge_codes WHERE student_id=$1 AND episode_number=$2 AND used_at IS NULL AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1', [student.id, episode])).rows[0];
     if (!row || row.attempts >= MAX_ATTEMPTS) throw wrong;
-    const expected = Buffer.from(row.code_hash, 'hex'), given = Buffer.from(codeHash(secret, student.id, code), 'hex');
+    const expected = Buffer.from(row.code_hash, 'hex'), given = Buffer.from(codeHash(secret, student.id, episode, code), 'hex');
     if (!crypto.timingSafeEqual(expected, given)) { await pool.query('UPDATE lounge_codes SET attempts=attempts+1 WHERE id=$1', [row.id]); throw wrong; }
     await pool.query('UPDATE lounge_codes SET used_at=NOW() WHERE id=$1', [row.id]);
-    const token = jwt.sign({ sid: student.id }, loungeKey(secret), { audience: 'osf-lounge', expiresIn: `${SESSION_DAYS}d` });
-    return { token, name: student.full_name, expires_in_days: SESSION_DAYS };
+    const token = jwt.sign({ sid: student.id, ep: episode }, loungeKey(secret), { audience: 'osf-lounge', expiresIn: `${SESSION_DAYS}d` });
+    return { token, name: student.full_name, episode, expires_in_days: SESSION_DAYS };
   }));
 
   // Members-only part of one episode, for the student in the session.
   router.get('/lounge/episodes/:n', route(async req => {
-    const { sid } = session(req);
-    const n = Number(String(req.params.n).replace(/^episode-/, ''));
-    if (!Number.isInteger(n)) throw new InputError('Episode not found.', 404);
+    const { sid, ep: unlocked } = session(req);
+    const n = episodeNumber(req.params.n);
+    // A session opens only the episode it was unlocked for.
+    if (unlocked !== n) throw new InputError(`Unlock the Episode ${n} lounge with a code to continue.`, 401);
     const ep = (await pool.query('SELECT id,episode_number,lounge_notes,recording_url,materials FROM episodes WHERE episode_number=$1', [n])).rows[0];
     if (!ep) throw new InputError('Episode not found.', 404);
     const activity = (await studentActivities(pool, [sid])).get(sid);

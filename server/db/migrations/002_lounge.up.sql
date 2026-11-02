@@ -17,3 +17,5 @@ CREATE TABLE IF NOT EXISTS lounge_codes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS lounge_codes_student_idx ON lounge_codes (student_id, created_at DESC);
+-- Each code unlocks one episode only; attending one episode never opens another's lounge.
+ALTER TABLE lounge_codes ADD COLUMN IF NOT EXISTS episode_number INTEGER;

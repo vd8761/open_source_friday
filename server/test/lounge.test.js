@@ -39,25 +39,25 @@ async function setup() {
   return { db, call, sent, close: () => new Promise(r => server.close(r)) };
 }
 async function unlock(call, sent, email) {
-  await call('POST', '/lounge/request-code', { email, recaptcha_token: 'ok' });
-  return (await call('POST', '/lounge/verify', { email, code: sent.at(-1).code })).body.token;
+  await call('POST', '/lounge/request-code', { email, episode: 16, recaptcha_token: 'ok' });
+  return (await call('POST', '/lounge/verify', { email, episode: 16, code: sent.at(-1).code })).body.token;
 }
 
 test('only students marked present unlock an episode lounge, with a gentle reason otherwise', async () => {
   const { db, call, sent, close } = await setup();
   try {
-    assert.equal((await call('POST', '/lounge/request-code', { email: 'present@example.com', recaptcha_token: 'bad' })).status, 400);
-    const unknown = await call('POST', '/lounge/request-code', { email: 'nobody@example.com', recaptcha_token: 'ok' });
-    const known = await call('POST', '/lounge/request-code', { email: ' Present@Example.com ', recaptcha_token: 'ok' });
+    assert.equal((await call('POST', '/lounge/request-code', { email: 'present@example.com', episode: 16, recaptcha_token: 'bad' })).status, 400);
+    const unknown = await call('POST', '/lounge/request-code', { email: 'nobody@example.com', episode: 16, recaptcha_token: 'ok' });
+    const known = await call('POST', '/lounge/request-code', { email: ' Present@Example.com ', episode: 16, recaptcha_token: 'ok' });
     assert.equal(unknown.body.message, known.body.message);
     assert.equal(sent.length, 1);
     assert.match(sent[0].code, /^\d{6}$/);
     assert.ok(!JSON.stringify((await db.query('SELECT * FROM lounge_codes')).rows).includes(sent[0].code));
     const wrong = sent[0].code === '000000' ? '111111' : '000000';
-    assert.equal((await call('POST', '/lounge/verify', { email: 'present@example.com', code: wrong })).status, 400);
-    const ok = await call('POST', '/lounge/verify', { email: 'present@example.com', code: sent[0].code });
+    assert.equal((await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: wrong })).status, 400);
+    const ok = await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: sent[0].code });
     assert.equal(ok.status, 200);
-    assert.equal((await call('POST', '/lounge/verify', { email: 'present@example.com', code: sent[0].code })).status, 400); // single use
+    assert.equal((await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: sent[0].code })).status, 400); // single use
     const granted = await call('GET', '/lounge/episodes/16', null, ok.body.token);
     assert.deepEqual(granted.body, { success: true, access: 'granted', notes: 'Speaker notes.', recording_url: 'https://youtu.be/x', materials: [{ title: 'Slides', url: 'https://drive.google.com/x' }] });
     for (const [email, reason] of [['partial@example.com', 'partial'], ['absent@example.com', 'absent'], ['never@example.com', 'not_registered']]) {
@@ -68,15 +68,22 @@ test('only students marked present unlock an episode lounge, with a gentle reaso
       assert.ok(!('notes' in r) && !('materials' in r));
     }
     assert.equal((await call('GET', '/lounge/episodes/16')).status, 401);
+    // Unlocking Episode 16 never opens another episode's lounge; a code for 16 cannot unlock 15.
+    await db.exec("INSERT INTO episodes(episode_number,title,event_date,event_time) VALUES (15,'Niche domains','2026-10-23','7:00 PM - 8:00 PM')");
+    const cross = await call('GET', '/lounge/episodes/15', null, ok.body.token);
+    assert.equal(cross.status, 401);
+    assert.match(cross.body.error, /Episode 15/);
+    await call('POST', '/lounge/request-code', { email: 'present@example.com', episode: 16, recaptcha_token: 'ok' });
+    assert.equal((await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 15, code: sent.at(-1).code })).status, 400);
   } finally { await close(); }
 });
 
 test('codes are limited per student and sessions cannot cross into admin', async () => {
   const { call, sent, close } = await setup();
   try {
-    for (let i = 0; i < 5; i++) await call('POST', '/lounge/request-code', { email: 'present@example.com', recaptcha_token: 'ok' });
+    for (let i = 0; i < 5; i++) await call('POST', '/lounge/request-code', { email: 'present@example.com', episode: 16, recaptcha_token: 'ok' });
     assert.equal(sent.length, 3);
-    const token = (await call('POST', '/lounge/verify', { email: 'present@example.com', code: sent.at(-1).code })).body.token;
+    const token = (await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: sent.at(-1).code })).body.token;
     assert.equal((await call('GET', '/admin/episodes/1/lounge', null, token)).status, 401);
     const admin = jwt.sign({ id: 1 }, SECRET);
     assert.equal((await call('GET', '/lounge/episodes/16', null, admin)).status, 401);
@@ -92,10 +99,10 @@ test('code emails go out only when enabled, and only to the test allowlist outsi
   const calls = [];
   const fetchImpl = async (url, opts) => { calls.push(JSON.parse(opts.body).to.email); return { ok: true }; };
   const preview = { production: false };
-  assert.equal(await createCodeMailer({ env: {}, flags: preview, fetchImpl })('a@x.com', 'A', '123456'), false);
+  assert.equal(await createCodeMailer({ env: {}, flags: preview, fetchImpl })('a@x.com', 'A', '123456', 16), false);
   const on = createCodeMailer({ env: { ENABLE_EMAIL_CODES: 'true', TEST_EMAIL_ALLOWLIST: 'owner@x.com', SENDER_API_TOKEN: 't' }, flags: preview, fetchImpl });
-  assert.equal(await on('student@x.com', 'S', '123456'), false);
-  assert.equal(await on('Owner@x.com', 'O', '123456'), true);
-  assert.equal(await createCodeMailer({ env: { SENDER_API_TOKEN: 't' }, flags: { production: true }, fetchImpl })('anyone@x.com', 'A', '123456'), true);
+  assert.equal(await on('student@x.com', 'S', '123456', 16), false);
+  assert.equal(await on('Owner@x.com', 'O', '123456', 16), true);
+  assert.equal(await createCodeMailer({ env: { SENDER_API_TOKEN: 't' }, flags: { production: true }, fetchImpl })('anyone@x.com', 'A', '123456', 16), true);
   assert.deepEqual(calls, ['Owner@x.com', 'anyone@x.com']);
 });
