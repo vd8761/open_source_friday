@@ -129,7 +129,7 @@ function EpisodesSection() {
               </div>
               <div className="mt-1.5 flex flex-wrap gap-2.5">
                 {ep.registrationOpen && <Button to={ep.registerPath} size="sm">RESERVE YOUR SEAT -&gt;</Button>}
-                <Button to={ep.registerPath} size="sm" variant="outline">AGENDA &amp; DETAILS</Button>
+                <Button to={ep.recapPath} size="sm" variant="outline">AGENDA &amp; DETAILS</Button>
               </div>
             </div>
           </Card> : (

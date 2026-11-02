@@ -61,6 +61,7 @@ function EpisodePanel({ ep, details }) {
         </div>
         <h1 className="m-0 text-[clamp(26px,2.6vw,32px)] font-semibold leading-[1.1] tracking-[-0.01em]">{ep.title}</h1>
         <SpeakerLine ep={ep} />
+        <Link to={ep.recapPath} className="self-start py-1 font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-mint no-underline hover:underline">FULL DETAILS &amp; AGENDA -&gt;</Link>
       </div>
       <div className="flex flex-col gap-6 p-6 sm:p-7">
         <div className="grid grid-cols-2 gap-2.5">

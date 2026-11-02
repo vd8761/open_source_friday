@@ -51,12 +51,12 @@ export default function EpisodesPage() {
             </div>
             <div className="flex flex-[1_1_200px] flex-col gap-2.5">
               {ep.registrationOpen && <Button to={ep.registerPath} size="lg">RESERVE YOUR SEAT -&gt;</Button>}
-              <Button to={ep.registerPath} size="sm" variant="outlineDark">AGENDA &amp; DETAILS</Button>
+              <Button to={ep.recapPath} size="sm" variant="outlineDark">AGENDA &amp; DETAILS</Button>
             </div>
           </article>}
           {!loading && !error && <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
             {later.map((c) => (
-              <Link key={c.num} to={c.registerPath} className="flex items-center gap-4 rounded-[20px] border border-osf-line bg-white p-5 text-osf-ink no-underline hover:border-osf-leaf">
+              <Link key={c.num} to={c.recapPath} className="flex items-center gap-4 rounded-[20px] border border-osf-line bg-white p-5 text-osf-ink no-underline hover:border-osf-leaf">
                 <span className="w-14 flex-none text-center leading-[1.1]"><span className="block text-2xl font-bold">{c.day}</span><span className="font-osf-mono text-[10px] tracking-[0.1em] text-osf-muted">{c.mon}</span></span>
                 <span className="flex min-w-0 flex-col gap-0.5"><span className="font-osf-mono text-[10px] tracking-[0.1em] text-osf-muted">EP {c.num} · UPCOMING</span><span className="text-base font-semibold">{c.title}</span></span>
               </Link>

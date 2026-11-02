@@ -47,7 +47,10 @@ function createCodeMailer({ env = process.env, flags, fetchImpl = fetch }) {
         html: `<p>Your code to unlock the Open Source Fridays <strong>Episode ${episode}</strong> lounge:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email.</p>`,
       }),
     });
-    if (!res.ok) throw new Error(`Sender returned HTTP ${res.status}`);
+    // Sender can answer 200 with success:false; treat that as a failure too. Log its message id (no address) for tracing.
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.success === false) throw new Error(`Sender did not accept the code email (HTTP ${res.status}).`);
+    console.log(`[Lounge] code email accepted by Sender (episode ${episode}, message ${body.emailId || 'unknown'})`);
     return true;
   };
 }

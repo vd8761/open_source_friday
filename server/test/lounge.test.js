@@ -97,7 +97,7 @@ test('codes are limited per student and sessions cannot cross into admin', async
 
 test('code emails go out only when enabled, and only to the test allowlist outside production', async () => {
   const calls = [];
-  const fetchImpl = async (url, opts) => { calls.push(JSON.parse(opts.body).to.email); return { ok: true }; };
+  const fetchImpl = async (url, opts) => { calls.push(JSON.parse(opts.body).to.email); return { ok: true, json: async () => ({ success: true, emailId: 'e1' }) }; };
   const preview = { production: false };
   assert.equal(await createCodeMailer({ env: {}, flags: preview, fetchImpl })('a@x.com', 'A', '123456', 16), false);
   const on = createCodeMailer({ env: { ENABLE_EMAIL_CODES: 'true', TEST_EMAIL_ALLOWLIST: 'owner@x.com', SENDER_API_TOKEN: 't' }, flags: preview, fetchImpl });
@@ -105,4 +105,6 @@ test('code emails go out only when enabled, and only to the test allowlist outsi
   assert.equal(await on('Owner@x.com', 'O', '123456', 16), true);
   assert.equal(await createCodeMailer({ env: { SENDER_API_TOKEN: 't' }, flags: { production: true }, fetchImpl })('anyone@x.com', 'A', '123456', 16), true);
   assert.deepEqual(calls, ['Owner@x.com', 'anyone@x.com']);
+  const refused = createCodeMailer({ env: { SENDER_API_TOKEN: 't' }, flags: { production: true }, fetchImpl: async () => ({ ok: true, json: async () => ({ success: false }) }) });
+  await assert.rejects(refused('a@x.com', 'A', '123456', 16), /did not accept/);
 });

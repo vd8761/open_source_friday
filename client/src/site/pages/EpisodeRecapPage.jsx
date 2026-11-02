@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { Lock, PlayCircle, FileText, Link2, X } from 'lucide-react';
 import { Button, Card, Container, Field, GradientText, SpeakerAvatar, Tag } from '../ui';
 import { cx } from '../utils';
 import { API_URL, episodeView, postJson } from '../api';
 import { sitePaths } from '../paths';
+import EventDetails from './EventDetails';
 
 // Each episode is unlocked separately and remembered on this browser for 14 days, keyed by episode number.
 const STORE = 'osf-lounge';
@@ -114,7 +115,8 @@ export default function EpisodeRecapPage() {
 
   if (error) return <Container as="main" className="flex flex-col items-start gap-5 px-4 py-24 sm:px-6"><h1 className="m-0 text-4xl font-semibold">Episode not found</h1><Button to={sitePaths.episodes} variant="outline">ALL EPISODES</Button></Container>;
   if (!ep) return <Container as="main" className="px-4 py-24 sm:px-6"><p role="status" className="m-0 text-osf-muted">Loading episode…</p></Container>;
-  if (ep.upcoming) return <Navigate to={ep.registerPath} replace />;
+  // One page per episode: details and agenda before it runs, recap and attendee lounge after.
+  if (ep.upcoming) return <EventDetails ep={ep} />;
 
   const hasLounge = ep.lounge && (ep.lounge.has_notes || ep.lounge.materials_count > 0 || ep.lounge.has_recording);
   const unlocked = lounge?.access === 'granted';
