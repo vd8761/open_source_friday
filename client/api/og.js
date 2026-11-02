@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       // Escape for HTML attributes so a quote in a title cannot break the tags.
       const attr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const title = attr(`Episode ${ep.episode_number}: ${ep.title} | Open Source Friday`);
-      const pageUrl = attr(`${protocol}://${host}/register/episode-${ep.episode_number}`);
+      const pageUrl = attr(req.query.page === 'recap' ? `${protocol}://${host}/episodes/${ep.episode_number}` : `${protocol}://${host}/register/episode-${ep.episode_number}`);
       
       // Strip HTML tags from description if they used the rich text editor
       const rawDescription = ep.description ? ep.description.replace(/<[^>]*>?/gm, '') : '';

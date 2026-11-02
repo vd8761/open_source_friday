@@ -18,3 +18,8 @@ export async function saveEpisodeV2(episodeId, v2) {
   await adminApi(`/episodes/${episodeId}/speakers`, { method: 'PUT', body: { speaker_ids: v2.speaker_ids } });
   await adminApi(`/episodes/${episodeId}/v2-details`, { method: 'PUT', body: { domain: v2.domain || null, agenda: v2.agenda.map(a => a.trim()).filter(Boolean), short_blurb: v2.short_blurb } });
 }
+
+// Past-episode lounge: public recap plus attendee-only notes, links and recording.
+export const emptyLounge = { recap: '', lounge_notes: '', recording_url: '', materials: [] };
+export const loadLounge = async (episodeId) => (await adminApi(`/episodes/${episodeId}/lounge`)).lounge;
+export const saveLounge = (episodeId, lounge) => adminApi(`/episodes/${episodeId}/lounge`, { method: 'PUT', body: lounge });

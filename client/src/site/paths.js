@@ -6,5 +6,6 @@ export const sitePaths = {
   who: '/who-its-for',
   speak: '/speak',
   register: '/register/:episode_number',
+  recap: '/episodes/:episode_number',
   policies: '/privacy-policy'
 };

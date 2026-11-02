@@ -60,7 +60,7 @@ export default function WhoPage() {
             <div className="flex min-w-0 flex-[1_1_340px] flex-col gap-3">
               <span className="font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-leaf">START WITH THESE</span>
               {picks.map((e) => (
-                <Link key={e.num} to={e.upcoming ? e.registerPath : sitePaths.episodes} className="flex flex-col gap-1.5 rounded-[18px] border border-osf-line bg-osf-mist px-5 py-[18px] text-osf-ink no-underline hover:border-osf-leaf">
+                <Link key={e.num} to={e.upcoming ? e.registerPath : e.recapPath} className="flex flex-col gap-1.5 rounded-[18px] border border-osf-line bg-osf-mist px-5 py-[18px] text-osf-ink no-underline hover:border-osf-leaf">
                   <span className="font-osf-mono text-[11px] tracking-[0.1em] text-osf-muted">EP {e.num}{e.upcoming ? ` · UPCOMING · ${e.weekday.toUpperCase()} ${Number(e.day)} ${e.mon}` : e.domain ? ` · ${e.domain}` : ''}</span>
                   <span className="text-[17px] font-semibold leading-[1.3]">{e.title}</span>
                 </Link>

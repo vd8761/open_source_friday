@@ -10,6 +10,7 @@ import WhoPage from './pages/WhoPage';
 import SpeakPage from './pages/SpeakPage';
 import PoliciesPage from './pages/PoliciesPage';
 import RegisterPage from './pages/RegisterPage';
+import EpisodeRecapPage from './pages/EpisodeRecapPage';
 import { SiteDataProvider } from './api';
 import './site.css';
 import { policyLinks } from '../utils/policyLinks';
@@ -39,6 +40,7 @@ export default function SiteApp() {
           <Route path={sitePaths.who} element={<WhoPage />} />
           <Route path={sitePaths.speak} element={withRecaptcha(<SpeakPage />)} />
           <Route path={sitePaths.register} element={withRecaptcha(<RegisterPage />)} />
+          <Route path={sitePaths.recap} element={withRecaptcha(<EpisodeRecapPage />)} />
           {policyLinks.map(([url]) => <Route key={url} path={url} element={<PoliciesPage slug={url.slice(1)} />} />)}
           <Route path="*" element={<Navigate to={sitePaths.home} replace />} />
         </Routes>

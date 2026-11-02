@@ -97,7 +97,7 @@ export default function EpisodesPage() {
                 </div>
                 <div className="flex min-w-0 flex-[999_1_420px] flex-col gap-2">
                   <div className="flex flex-wrap gap-1.5"><Tag>#OSF-EP{e.num}</Tag>{e.domain && <Tag variant="outline">{e.domain}</Tag>}<Tag variant="muted">COMPLETED</Tag></div>
-                  <h3 className="m-0 text-[21px] font-semibold leading-tight">{e.title}</h3>
+                  <h3 className="m-0 text-[21px] font-semibold leading-tight"><Link to={e.recapPath} className="text-osf-ink no-underline hover:text-osf-leaf hover:underline">{e.title}</Link></h3>
                   {e.blurb && <p className="m-0 text-[15px] leading-[1.55] text-osf-muted">{e.blurb}</p>}
                 </div>
                 <div className="flex flex-[1_1_220px] flex-col gap-1">

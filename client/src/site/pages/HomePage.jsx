@@ -142,7 +142,7 @@ function EpisodesSection() {
           <div className="flex min-w-0 flex-[1_1_340px] flex-col gap-2.5">
             <span className="px-1 font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-muted">RECENTLY SHIPPED</span>
             {recent.map((e) => (
-              <Link key={e.num} to={sitePaths.episodes} className="flex items-center gap-3.5 rounded-2xl border border-osf-line bg-white/70 p-3.5 text-osf-ink no-underline hover:border-osf-leaf">
+              <Link key={e.num} to={e.recapPath} className="flex items-center gap-3.5 rounded-2xl border border-osf-line bg-white/70 p-3.5 text-osf-ink no-underline hover:border-osf-leaf">
                 <span className="w-[52px] flex-none text-center leading-[1.1]"><span className="block text-[22px] font-bold">{e.day}</span><span className="font-osf-mono text-[10px] text-osf-muted">{e.mon}</span></span>
                 <span className="flex min-w-0 flex-col gap-0.5"><span className="font-osf-mono text-[10px] tracking-[0.1em] text-osf-muted">EP {e.num} · COMPLETED</span><span className="text-[15px] font-semibold">{e.title}</span></span>
               </Link>

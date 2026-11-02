@@ -103,7 +103,10 @@ function ClosedNotice({ details, concluded }) {
             <p className="m-0 text-[17px] leading-[1.55] text-osf-muted">Registration is currently <strong className="text-osf-danger">disabled</strong> for this event.</p>
             <p className="m-0 text-[17px] leading-[1.55] text-osf-muted">This episode is scheduled for <strong className="text-osf-ink">{formatEpisodeDate(details.event_date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {details.event_time}</strong>.</p>
           </>}
-      <Button to={sitePaths.episodes} variant="outline" className="self-start">BROWSE UPCOMING EPISODES</Button>
+      <div className="flex flex-wrap gap-2.5">
+        {concluded && <Button to={`/episodes/${details.episode_number}`} className="self-start">SEE WHAT HAPPENED -&gt;</Button>}
+        <Button to={sitePaths.episodes} variant="outline" className="self-start">BROWSE UPCOMING EPISODES</Button>
+      </div>
       <div className="flex flex-col gap-2 rounded-[20px] border border-osf-leaf-edge bg-osf-leaf-wash p-5">
         <span className="text-[15px] font-semibold">Have a query? Contact us on WhatsApp</span>
         <span className="text-sm leading-[1.55] text-osf-muted">Follow our WhatsApp channel to stay updated on upcoming episodes and get your questions answered.</span>

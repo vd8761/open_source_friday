@@ -82,6 +82,7 @@ export function episodeView(e, now = Date.now()) {
     cover: absolute(e.cover_url),
     speakers: (e.speakers || []).map(speakerView),
     registerPath: `/register/episode-${e.episode_number}`,
+    recapPath: `/episodes/${e.episode_number}`,
   };
 }
 

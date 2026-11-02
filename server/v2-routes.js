@@ -2,6 +2,7 @@ const express = require('express');
 const { InputError } = require('./outreach-csv');
 const { pageOptions } = require('./table-query');
 const { registerStudentImportRoutes } = require('./student-import');
+const { registerLoungeAdminRoutes } = require('./lounge');
 const { DOMAINS, loadEpisodes, computeStats, syncPresenterColumns, publicSpeaker, sendDataImage, validate: v } = require('./v2-data');
 
 const route = (fn, message = 'Unable to complete this request. Please try again.') => async (req, res) => {
@@ -117,7 +118,7 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
 
 function createV2AdminRouter({ pool, authenticateToken }) {
   const router = express.Router();
-  router.use(['/speakers', '/episodes/:id/speakers', '/episodes/:id/v2-details', '/tips', '/speaker-applications', '/site-settings', '/contacts'], authenticateToken);
+  router.use(['/speakers', '/episodes/:id/speakers', '/episodes/:id/v2-details', '/episodes/:id/lounge', '/tips', '/speaker-applications', '/site-settings', '/contacts'], authenticateToken);
   const transaction = async fn => {
     const db = await pool.connect();
     try { await db.query('BEGIN'); const result = await fn(db); await db.query('COMMIT'); return result; }
@@ -239,6 +240,7 @@ function createV2AdminRouter({ pool, authenticateToken }) {
     return {};
   }));
   registerStudentImportRoutes(router, { pool, route });
+  registerLoungeAdminRoutes(router, { pool, route });
   return router;
 }
 

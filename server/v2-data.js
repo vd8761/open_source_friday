@@ -4,11 +4,13 @@ const { episodeStart, episodeEnd } = require('./episode-time');
 const { InputError } = require('./outreach-csv');
 
 const DOMAINS = ['ai_engineer', 'cloud_computing', 'open_source', 'digital_skills'];
-const migration = fs.readFileSync(path.join(__dirname, 'db/migrations/001_v2_core.up.sql'), 'utf8');
+const migrationDir = path.join(__dirname, 'db/migrations');
+// Every *.up.sql in order (001_, 002_, …). Each is idempotent, so running them on every start is safe.
+const migrations = fs.readdirSync(migrationDir).filter(f => f.endsWith('.up.sql')).sort().map(f => fs.readFileSync(path.join(migrationDir, f), 'utf8'));
 
 // PGlite runs multi-statement SQL through exec(); node-postgres accepts it in query() without parameters.
 async function initV2DB(db) {
-  await (db.exec ? db.exec(migration) : db.query(migration));
+  for (const sql of migrations) await (db.exec ? db.exec(sql) : db.query(sql));
 }
 
 // Speaker name keys used to de-duplicate legacy presenter_name values ("Mr. A B" = "A B").
@@ -46,7 +48,10 @@ const episodeColumns = `e.id,e.episode_number,e.title,e.event_date,e.event_time,
 // Episodes with their speakers. Episodes not yet linked to speakers fall back to the v1.0 presenter_* columns.
 async function loadEpisodes(db, { episodeNumber, withDescription = false } = {}) {
   const values = episodeNumber == null ? [] : [episodeNumber];
-  const { rows } = await db.query(`SELECT ${episodeColumns}${withDescription ? ',e.description' : ''} FROM episodes e
+  // The detail view adds the public recap and counts of what the attendee lounge holds (never its links).
+  const detail = withDescription ? `,e.description,e.recap,(e.lounge_notes IS NOT NULL AND e.lounge_notes <> '') AS has_notes,
+    jsonb_array_length(e.materials) AS materials_count,(e.recording_url IS NOT NULL) AS has_recording` : '';
+  const { rows } = await db.query(`SELECT ${episodeColumns}${detail} FROM episodes e
     ${values.length ? 'WHERE e.episode_number=$1' : ''} ORDER BY e.episode_number DESC`, values);
   if (!rows.length) return [];
   const links = (await db.query(`SELECT es.episode_id,es.sort,s.* FROM episode_speakers es JOIN speakers s ON s.id=es.speaker_id
@@ -63,7 +68,7 @@ async function loadEpisodes(db, { episodeNumber, withDescription = false } = {})
       archived: Boolean(e.archived_at), domain: e.domain || null, agenda: e.agenda || [], short_blurb: e.short_blurb || null,
       cover_url: e.has_cover ? `/api/episodes/${e.episode_number}/cover` : null, speakers,
       speaker_keys: linked.length ? links.filter(l => l.episode_id === e.id).map(l => `id:${l.id}`) : e.presenter_name ? [`name:${nameKey(e.presenter_name)}`] : [],
-      ...(withDescription ? { description: e.description } : {}),
+      ...(withDescription ? { description: e.description, recap: e.recap || null, lounge: { has_notes: e.has_notes, materials_count: e.materials_count, has_recording: e.has_recording } } : {}),
     };
   });
 }

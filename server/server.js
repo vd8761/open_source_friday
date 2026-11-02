@@ -26,7 +26,8 @@ const { createOutreachRouter } = require('./outreach-routes');
 const { syncRecentInviteReports, syncRecentAttendance } = require('./outreach-workers');
 const { runtimeFlags, guardZoom, guardSender, pushAllowed, dryRun } = require('./runtime-flags');
 const { initV2DB } = require('./v2-data');
-const { createV2PublicRouter, createV2AdminRouter } = require('./v2-routes');
+const { createV2PublicRouter, createV2AdminRouter, rateLimit } = require('./v2-routes');
+const { createLoungeRouter, createCodeMailer } = require('./lounge');
 const flags = runtimeFlags();
 const sender = guardSender(createSenderClient(), flags);
 const zoom = guardZoom(createZoomClient(), flags);
@@ -823,6 +824,8 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
 
 app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: verifyRecaptchaToken }));
 app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken }));
+app.use('/api', createLoungeRouter({ pool, secret: process.env.JWT_SECRET, verifyRecaptcha: verifyRecaptchaToken,
+  sendCode: createCodeMailer({ flags }), limiter: rateLimit({ limit: 10, windowMs: 15 * 60000 }) }));
 app.use('/api/admin', createOutreachRouter({ pool, sender, zoom, authenticateToken }));
 app.use('/api/admin', createAdminEventsRouter({ pool, authenticateToken }));
 app.use('/api/admin', createEpisodeTrashRouter({ pool, authenticateToken }));

@@ -12,6 +12,17 @@
       "destination": "/api/og"
     },
     {
+      "source": "/episodes/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|facebookexternalhit|facebookcatalog|whatsapp|telegram|slack|discord|linkedin|twitter|pinterest|embedly|skype|vkshare|quora|redditbot|applebot|google-inspectiontool).*"
+        }
+      ],
+      "destination": "/api/og?page=recap"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

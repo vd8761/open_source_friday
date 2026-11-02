@@ -11,7 +11,8 @@ const { createV2PublicRouter, createV2AdminRouter, rateLimit, futureFridays } = 
 const photo = 'data:image/jpeg;base64,' + Buffer.from('jpeg-bytes').toString('base64');
 async function setup({ recaptcha = true, limit = 100 } = {}) {
   const db = new PGlite();
-  await db.exec(`CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,description TEXT,event_date TIMESTAMP,
+  await db.exec(`CREATE TABLE students(id SERIAL PRIMARY KEY,full_name TEXT,email TEXT,whatsapp_number TEXT,country_code TEXT);
+    CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,description TEXT,event_date TIMESTAMP,
       event_time TEXT DEFAULT '7:00 PM - 8:00 PM',presenter_name TEXT,presenter_designation TEXT,presenter_photo_url TEXT,cover_photo_url TEXT,
       event_mode TEXT DEFAULT 'Online',is_active BOOLEAN DEFAULT TRUE,is_registration_open BOOLEAN DEFAULT TRUE,is_test BOOLEAN DEFAULT FALSE,archived_at TIMESTAMPTZ);
     INSERT INTO episodes(episode_number,title,description,event_date,presenter_name,presenter_designation,presenter_photo_url,cover_photo_url) VALUES
@@ -205,7 +206,8 @@ test('speaker backfill dry-runs by default and applies the owner-approved CSV in
   const names = { 1: 'Mohanraaj Govindaswamy', 2: 'Ariyappan P', 3: 'Ariyappan P', 4: 'Ariyappan', 5: 'Mr Sathya Prakash Sekaran', 6: 'Rajesh Kanna',
     7: 'Padmanaban Varatharajan', 8: 'Bharathiraja Thangappalam', 9: 'Bharathiraja Thangappalam', 10: 'Mr Karthikeyan Natarajan', 11: 'Mr Karthikeyan Natarajan',
     12: 'Dr. Jayaprakash Natarajan, PhD', 13: 'Mr. Arumugam V', 14: 'Mr. Arumugam V', 15: 'Mr. Selvaganapathi Ramachandran', 16: 'Mr. Selvaganapathi Ramachandran' };
-  await db.exec(`CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,presenter_name TEXT,presenter_designation TEXT,presenter_photo_url TEXT);
+  await db.exec(`CREATE TABLE students(id SERIAL PRIMARY KEY);
+    CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,presenter_name TEXT,presenter_designation TEXT,presenter_photo_url TEXT);
     INSERT INTO episodes(episode_number,title,presenter_name,presenter_photo_url) VALUES ${Object.entries(names).map(([n, name]) => `(${n},'Ep ${n}','${name}','data:image/jpeg;base64,${n}')`).join(',')};`);
   await initV2DB(db);
   const speakers = read(path.join(__dirname, '../../docs/v2/speakers-approved.csv'));

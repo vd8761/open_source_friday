@@ -11,7 +11,8 @@ import { format, parse } from 'date-fns';
 import Cropper from 'react-easy-crop';
 import getCroppedImg from '../utils/cropImage';
 import EpisodeSpeakersFields from './EpisodeSpeakersFields';
-import { emptyEpisodeV2, loadEpisodeV2, saveEpisodeV2 } from '../utils/episodeV2';
+import EpisodeLoungeFields from './EpisodeLoungeFields';
+import { emptyEpisodeV2, loadEpisodeV2, saveEpisodeV2, emptyLounge, loadLounge, saveLounge } from '../utils/episodeV2';
 import './AdminEpisodeForm.css';
 
 const fonts = ['arial', 'comic-sans', 'courier-new', 'georgia', 'helvetica', 'lucida', 'tahoma', 'times-new-roman', 'trebuchet', 'verdana'];
@@ -60,6 +61,7 @@ const AdminEpisodeForm = () => {
   const { id } = useParams();
 
   const [v2, setV2] = useState(emptyEpisodeV2);
+  const [lounge, setLounge] = useState(emptyLounge);
   useEffect(() => {
     if (id) {
       const fetchEpisode = async () => {
@@ -90,6 +92,7 @@ const AdminEpisodeForm = () => {
               is_registration_open: ep.is_registration_open !== undefined ? ep.is_registration_open : true
             });
             loadEpisodeV2(ep.episode_number).then(setV2).catch(() => {});
+            loadLounge(id).then(setLounge).catch(() => {});
             if (ep.event_date) setEventDate(calendarInputDate(ep.event_date));
             if (ep.event_time) {
               const [startStr, endStr] = ep.event_time.split(' - ');
@@ -240,7 +243,7 @@ const AdminEpisodeForm = () => {
 
       const data = await response.json();
       if (response.ok && data.success) {
-        try { await saveEpisodeV2(id || data.episode.id, v2); }
+        try { await saveEpisodeV2(id || data.episode.id, v2); await saveLounge(id || data.episode.id, { ...lounge, materials: lounge.materials.filter(m => m.title.trim() || m.url.trim()) }); }
         catch (v2Error) {
           setMessage(`The episode was saved, but its speakers and website details were not: ${v2Error.message}`);
           setIsSubmitting(false);
@@ -538,6 +541,11 @@ const AdminEpisodeForm = () => {
                   </div>
                 </div>
               </div>
+            </section>
+
+            <section aria-labelledby="ep-after" className="space-y-4 border-t border-slate-100 pt-6">
+              <div><h2 id="ep-after" className="text-lg font-bold text-slate-900">After the episode</h2><p className="text-xs text-slate-500">Fill this in once the episode has run. It powers the episode's recap page and attendee lounge.</p></div>
+              <EpisodeLoungeFields value={lounge} onChange={setLounge} />
             </section>
 
             <div className="sticky bottom-0 -mx-8 -mb-8 flex justify-end gap-3 rounded-b-2xl border-t border-slate-100 bg-white/95 px-8 py-4 backdrop-blur">
