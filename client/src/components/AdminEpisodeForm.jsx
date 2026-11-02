@@ -450,7 +450,7 @@ const AdminEpisodeForm = () => {
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-dos focus:border-dos transition-all outline-none text-slate-700" />
                   </div>
                 </div>
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Profile Photo */}
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">Profile Photo</label>
@@ -470,15 +470,16 @@ const AdminEpisodeForm = () => {
                     )}
                   </div>
 
-                  {/* Upcoming Cover Photo */}
+                  {/* One banner for the website and for WhatsApp/LinkedIn link previews. The site shows upcoming/completed status itself,
+                      so the v1.0 "past cover" upload is no longer needed (any saved past cover is kept unchanged). */}
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Upcoming Cover (Active)</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Event banner</label>
                     {!formData.cover_photo_url || (isCropping && croppingType === 'cover') ? (
                       <div className="relative border-2 border-dashed border-slate-300 rounded-2xl hover:border-dos hover:bg-slate-50/50 transition-all bg-slate-50 flex justify-center items-center overflow-hidden p-8 h-48">
                         <input type="file" id="cover-upload" accept="image/*" onChange={(e) => handlePhotoChange(e, 'cover')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                         <div className="text-center pointer-events-none">
                           <svg className="mx-auto h-8 w-8 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                          <p className="mt-2 text-xs font-bold text-dos">Upcoming Cover (16:9)</p>
+                          <p className="mt-2 text-xs font-bold text-dos">Banner (16:9) · website and social sharing</p>
                         </div>
                       </div>
                     ) : (
@@ -489,24 +490,6 @@ const AdminEpisodeForm = () => {
                     )}
                   </div>
 
-                  {/* Past Cover Photo */}
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Past Cover (Completed)</label>
-                    {!formData.past_cover_photo_url || (isCropping && croppingType === 'past_cover') ? (
-                      <div className="relative border-2 border-dashed border-slate-300 rounded-2xl hover:border-dos hover:bg-slate-50/50 transition-all bg-slate-50 flex justify-center items-center overflow-hidden p-8 h-48">
-                        <input type="file" id="past-cover-upload" accept="image/*" onChange={(e) => handlePhotoChange(e, 'past_cover')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                        <div className="text-center pointer-events-none">
-                          <svg className="mx-auto h-8 w-8 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                          <p className="mt-2 text-xs font-bold text-dos">Past Cover (16:9)</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative group p-3 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center justify-center h-48">
-                        <img src={formData.past_cover_photo_url} alt="Past Cover" className="w-full h-24 object-cover rounded-xl shadow-sm border border-slate-200" />
-                        <button type="button" onClick={() => { setFormData(prev => ({...prev, past_cover_photo_url: ''})); setTimeout(() => { const el = document.getElementById('past-cover-upload'); if(el) el.value = ''; }, 0); }} className="mt-3 px-4 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 transition-colors">Change Photo</button>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </section>

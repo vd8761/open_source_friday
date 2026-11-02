@@ -47,6 +47,13 @@ function SpeakerLine({ ep, dark = true, size = 'md' }) {
 function EpisodePanel({ ep, details }) {
   return (
     <Card as="article" className="flex min-w-0 max-w-[480px] flex-[1_1_400px] flex-col overflow-hidden rounded-[28px]">
+      {/* The admin-uploaded banner (also used for WhatsApp/LinkedIn previews); status comes from the schedule, not the image. */}
+      {ep.cover && (
+        <div className="relative aspect-video bg-osf-ink">
+          <img src={ep.cover} alt={`Episode ${ep.num} banner`} className="block h-full w-full object-cover" />
+          <Tag variant={ep.upcoming ? 'leaf' : 'dark'} className="absolute left-4 top-4">{ep.upcoming ? 'UPCOMING' : 'COMPLETED'} · EP {ep.num}</Tag>
+        </div>
+      )}
       <div className="osf-grid-dark osf-grid-dark-sm flex flex-col gap-[18px] bg-osf-ink p-6 text-white sm:p-7">
         <div className="flex items-center gap-4">
           <DateBadge day={ep.day} mon={ep.mon} />
