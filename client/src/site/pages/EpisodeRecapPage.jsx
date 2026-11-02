@@ -30,7 +30,8 @@ function UnlockDialog({ episode, onClose, onUnlocked }) {
     try {
       if (!executeRecaptcha) throw new Error('Security check not ready. Please wait a moment and try again.');
       const r = await postJson('/api/lounge/request-code', { email, episode, recaptcha_token: await executeRecaptcha('lounge_code') });
-      setNote(r.message); setStep('code');
+      // Only attendees marked present are emailed a code; everyone else sees the reason here.
+      setNote(r.message); setStep(r.sent ? 'code' : 'denied');
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
   async function verify(e) {
@@ -46,15 +47,21 @@ function UnlockDialog({ episode, onClose, onUnlocked }) {
       <section role="dialog" aria-modal="true" aria-labelledby="unlock-h" className="relative w-full max-w-md rounded-[28px] bg-white p-6 shadow-osf-card sm:p-8">
         <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="absolute right-4 top-4 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-osf-muted hover:bg-osf-mist"><X className="h-5 w-5" /></button>
         <span className="font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-leaf">/ ATTENDEE LOUNGE</span>
-        <h2 id="unlock-h" className="mb-2 mt-2 text-[28px] font-semibold leading-tight">{step === 'email' ? `Unlock the Episode ${episode} lounge` : 'Check your inbox'}</h2>
+        <h2 id="unlock-h" className="mb-2 mt-2 text-[28px] font-semibold leading-tight">{step === 'email' ? `Unlock the Episode ${episode} lounge` : step === 'code' ? 'Check your inbox' : 'Not this time'}</h2>
         {step === 'email' ? (
           <form onSubmit={requestCode} className="flex flex-col gap-4">
-            <p className="m-0 text-[15px] leading-normal text-osf-muted">Use the email you registered with. We'll send a 6-digit code to confirm it's you. Each episode's lounge is unlocked separately.</p>
+            <p className="m-0 text-[15px] leading-normal text-osf-muted">Use the email you registered with. If you joined this episode live, we'll send a 6-digit code to confirm it's you. Each episode's lounge is unlocked separately.</p>
             <Field id="lounge-email" label="Email"><input id="lounge-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="osf-field" placeholder="you@example.com" /></Field>
             {error && <p role="alert" className="m-0 text-[15px] font-semibold text-osf-danger">{error}</p>}
             <Button type="submit" block disabled={busy} className="disabled:opacity-60">{busy ? 'SENDING…' : 'SEND MY CODE ->'}</Button>
             <p className="m-0 text-xs text-osf-muted">Protected by reCAPTCHA.</p>
           </form>
+        ) : step === 'denied' ? (
+          <div className="flex flex-col gap-4">
+            <p role="status" className="m-0 flex gap-3 rounded-2xl border border-osf-leaf-edge bg-osf-leaf-wash p-4 text-[16px] leading-normal"><Lock aria-hidden="true" className="mt-0.5 h-5 w-5 flex-none text-osf-leaf" />{note}</p>
+            <Button to={sitePaths.episodes} block onClick={onClose}>SEE UPCOMING EPISODES -&gt;</Button>
+            <button type="button" onClick={() => { setStep('email'); setNote(''); }} className="osf-link cursor-pointer self-start border-0 bg-transparent p-0 py-2 font-osf-mono text-xs font-bold tracking-[0.08em]">TRY A DIFFERENT EMAIL</button>
+          </div>
         ) : (
           <form onSubmit={verify} className="flex flex-col gap-4">
             <p className="m-0 text-[15px] leading-normal text-osf-muted">{note}</p>

@@ -38,39 +38,39 @@ async function setup() {
   const call = async (method, p, body, token) => { const r = await fetch(base + p, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body && JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
   return { db, call, sent, close: () => new Promise(r => server.close(r)) };
 }
-async function unlock(call, sent, email) {
-  await call('POST', '/lounge/request-code', { email, episode: 16, recaptcha_token: 'ok' });
-  return (await call('POST', '/lounge/verify', { email, episode: 16, code: sent.at(-1).code })).body.token;
-}
 
-test('only students marked present unlock an episode lounge, with a gentle reason otherwise', async () => {
+test('only students marked present are emailed a code; others see the reason without any email', async () => {
   const { db, call, sent, close } = await setup();
   try {
     assert.equal((await call('POST', '/lounge/request-code', { email: 'present@example.com', episode: 16, recaptcha_token: 'bad' })).status, 400);
-    const unknown = await call('POST', '/lounge/request-code', { email: 'nobody@example.com', episode: 16, recaptcha_token: 'ok' });
-    const known = await call('POST', '/lounge/request-code', { email: ' Present@Example.com ', episode: 16, recaptcha_token: 'ok' });
-    assert.equal(unknown.body.message, known.body.message);
+    for (const [email, reason] of [['nobody@example.com', 'not_registered'], ['never@example.com', 'not_registered'], ['absent@example.com', 'absent'], ['partial@example.com', 'partial']]) {
+      const r = (await call('POST', '/lounge/request-code', { email, episode: 16, recaptcha_token: 'ok' })).body;
+      assert.deepEqual([r.sent, r.reason], [false, reason]);
+      assert.doesNotMatch(r.message, /\d+\s*(min|minute)|30/i);
+    }
+    assert.equal(sent.length, 0);
+    assert.equal((await db.query('SELECT COUNT(*)::int n FROM lounge_codes')).rows[0].n, 0);
+    const ok = (await call('POST', '/lounge/request-code', { email: ' Present@Example.com ', episode: 16, recaptcha_token: 'ok' })).body;
+    assert.equal(ok.sent, true);
     assert.equal(sent.length, 1);
     assert.match(sent[0].code, /^\d{6}$/);
     assert.ok(!JSON.stringify((await db.query('SELECT * FROM lounge_codes')).rows).includes(sent[0].code));
     const wrong = sent[0].code === '000000' ? '111111' : '000000';
     assert.equal((await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: wrong })).status, 400);
-    const ok = await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: sent[0].code });
-    assert.equal(ok.status, 200);
+    const verified = await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: sent[0].code });
+    assert.equal(verified.status, 200);
     assert.equal((await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: sent[0].code })).status, 400); // single use
-    const granted = await call('GET', '/lounge/episodes/16', null, ok.body.token);
+    const granted = await call('GET', '/lounge/episodes/16', null, verified.body.token);
     assert.deepEqual(granted.body, { success: true, access: 'granted', notes: 'Speaker notes.', recording_url: 'https://youtu.be/x', materials: [{ title: 'Slides', url: 'https://drive.google.com/x' }] });
-    for (const [email, reason] of [['partial@example.com', 'partial'], ['absent@example.com', 'absent'], ['never@example.com', 'not_registered']]) {
-      const token = await unlock(call, sent, email);
-      const r = (await call('GET', '/lounge/episodes/episode-16', null, token)).body;
-      assert.deepEqual([r.access, r.reason], ['denied', reason]);
-      assert.doesNotMatch(r.message, /\d+\s*(min|minute)|30/i);
-      assert.ok(!('notes' in r) && !('materials' in r));
-    }
+    // Attendance is re-checked on every visit: if an admin changes it, the lounge closes.
+    await db.exec("UPDATE attendance_overrides SET status='absent' WHERE registration_id=1");
+    const denied = (await call('GET', '/lounge/episodes/16', null, verified.body.token)).body;
+    assert.deepEqual([denied.access, denied.reason], ['denied', 'absent']);
+    assert.ok(!('notes' in denied) && !('materials' in denied));
     assert.equal((await call('GET', '/lounge/episodes/16')).status, 401);
     // Unlocking Episode 16 never opens another episode's lounge; a code for 16 cannot unlock 15.
-    await db.exec("INSERT INTO episodes(episode_number,title,event_date,event_time) VALUES (15,'Niche domains','2026-10-23','7:00 PM - 8:00 PM')");
-    const cross = await call('GET', '/lounge/episodes/15', null, ok.body.token);
+    await db.exec("UPDATE attendance_overrides SET status='present' WHERE registration_id=1; INSERT INTO episodes(episode_number,title,event_date,event_time) VALUES (15,'Niche domains','2026-10-23','7:00 PM - 8:00 PM')");
+    const cross = await call('GET', '/lounge/episodes/15', null, verified.body.token);
     assert.equal(cross.status, 401);
     assert.match(cross.body.error, /Episode 15/);
     await call('POST', '/lounge/request-code', { email: 'present@example.com', episode: 16, recaptcha_token: 'ok' });
@@ -81,7 +81,9 @@ test('only students marked present unlock an episode lounge, with a gentle reaso
 test('codes are limited per student and sessions cannot cross into admin', async () => {
   const { call, sent, close } = await setup();
   try {
-    for (let i = 0; i < 5; i++) await call('POST', '/lounge/request-code', { email: 'present@example.com', episode: 16, recaptcha_token: 'ok' });
+    const statuses = [];
+    for (let i = 0; i < 5; i++) statuses.push((await call('POST', '/lounge/request-code', { email: 'present@example.com', episode: 16, recaptcha_token: 'ok' })).status);
+    assert.deepEqual(statuses, [200, 200, 200, 429, 429]);
     assert.equal(sent.length, 3);
     const token = (await call('POST', '/lounge/verify', { email: 'present@example.com', episode: 16, code: sent.at(-1).code })).body.token;
     assert.equal((await call('GET', '/admin/episodes/1/lounge', null, token)).status, 401);
