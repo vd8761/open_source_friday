@@ -12,6 +12,8 @@ let zoomJobStatus = 'registered';
 process.env.JWT_SECRET = 'test-only-secret';
 // These tests cover v1.0 production behaviour; runtime-flags.test.js covers the non-production guards.
 process.env.OSF_ENV = 'production';
+// Pre-set so a developer's local server/.env (loaded by dotenv, which never overrides) cannot switch these off.
+for (const name of ['ENABLE_WORKERS', 'ENABLE_ZOOM', 'ENABLE_SENDER', 'ENABLE_PUSH']) process.env[name] = '';
 process.env.CRON_SECRET = 'test-cron-secret';
 let closed = false;
 let queueFailure = false;

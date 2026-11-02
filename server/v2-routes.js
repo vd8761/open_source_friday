@@ -66,7 +66,7 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
     const { rows } = await pool.query(`SELECT s.*, COALESCE(json_agg(json_build_object('episode_number',e.episode_number,'title',e.title,
         'event_date',e.event_date::date,'domain',e.domain) ORDER BY e.episode_number) FILTER (WHERE e.id IS NOT NULL), '[]') AS episodes
       FROM speakers s LEFT JOIN episode_speakers es ON es.speaker_id=s.id
-      LEFT JOIN episodes e ON e.id=es.episode_id AND e.is_test IS NOT TRUE AND e.is_active IS NOT FALSE
+      LEFT JOIN episodes e ON e.id=es.episode_id AND e.is_test IS NOT TRUE
       WHERE s.is_published GROUP BY s.id ORDER BY s.name`);
     return { speakers: rows.map(s => ({ ...publicSpeaker(s), episodes: s.episodes, episode_count: s.episodes.length, is_repeat: s.episodes.length > 1 })) };
   }));

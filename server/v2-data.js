@@ -70,9 +70,10 @@ async function loadEpisodes(db, { episodeNumber, withDescription = false } = {})
 
 // Every number shown on the site is computed from episodes and speakers; nothing is hand-edited.
 function computeStats(episodes, now = Date.now()) {
-  const counted = episodes.filter(e => !e.is_test && e.is_active !== false);
+  // Past episodes count even when deactivated (v1.0 deactivates old episodes); only test events are excluded.
+  const counted = episodes.filter(e => !e.is_test);
   const shipped = counted.filter(e => episodeEnd(e) !== null && episodeEnd(e) <= now);
-  const upcoming = counted.filter(e => !e.archived && episodeEnd(e) !== null && episodeEnd(e) > now)
+  const upcoming = counted.filter(e => e.is_active !== false && !e.archived && episodeEnd(e) !== null && episodeEnd(e) > now)
     .sort((a, b) => episodeStart(a) - episodeStart(b));
   const appearances = new Map();
   for (const e of [...shipped, ...upcoming]) for (const key of new Set(e.speaker_keys)) appearances.set(key, (appearances.get(key) || 0) + 1);

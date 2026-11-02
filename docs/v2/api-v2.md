@@ -44,3 +44,10 @@ node server/scripts/backfill-speakers.js docs/v2/speakers-approved-draft.csv --e
 ```
 
 This is a dry run that prints the plan. Add `--apply` only after the owner approves the CSV. Production also needs `--confirm-production` and a Neon snapshot first.
+
+## Local development
+
+- `server/.env` (git-ignored) points only at the Neon `opensourcefriday-v2-dev` copy, with every integration off.
+- Run the API on **port 5050**: macOS AirPlay Receiver holds port 5000.
+- Point the client at it with `VITE_API_URL=http://localhost:5050`.
+- The dev copy has its own admin login, so production credentials do not work there.

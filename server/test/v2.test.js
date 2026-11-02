@@ -119,13 +119,15 @@ test('stats are computed from data, merging speaker names and excluding test eve
   const stats = computeStats([
     ep(1, '2026-07-24', ['name:ariyappan p'], { domain: 'ai_engineer' }), ep(2, '2026-07-31', ['name:ariyappan p']),
     ep(3, '2026-10-09', ['id:7', 'id:8']), ep(4, '2099-01-02', ['id:8']), ep(5, '2026-01-01', ['name:tester'], { is_test: true }),
-    ep(6, '2099-01-09', ['id:9'], { archived: true }),
+    ep(6, '2099-01-09', ['id:9'], { archived: true }), ep(7, '2026-06-05', ['name:ariyappan p'], { is_active: false }),
+    ep(8, '2099-01-16', ['id:10'], { is_active: false }),
   ], now);
-  assert.equal(stats.episodes_shipped, 3);
+  // Deactivated past episodes still shipped; deactivated future ones are not upcoming.
+  assert.equal(stats.episodes_shipped, 4);
   assert.equal(stats.upcoming_count, 1);
   assert.equal(stats.speakers_count, 3);
   assert.equal(stats.repeat_speakers, 2);
-  assert.deepEqual(stats.episodes_by_domain, { ai_engineer: 1, cloud_computing: 0, open_source: 0, digital_skills: 0, unassigned: 2 });
+  assert.deepEqual(stats.episodes_by_domain, { ai_engineer: 1, cloud_computing: 0, open_source: 0, digital_skills: 0, unassigned: 3 });
   assert.equal(stats.next_episode.episode_number, 4);
   assert.ok(!('speaker_keys' in stats.next_episode));
   assert.equal(nameKey('Dr. Jayaprakash Natarajan, PhD'), 'jayaprakash natarajan');
