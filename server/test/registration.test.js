@@ -41,7 +41,7 @@ async function poolQuery(sql, values) {
   }
   if (sql.includes('INSERT INTO push_notification_history')) return { rows: [] };
   if (sql.includes('SELECT COUNT(*) FROM admins')) return { rows: [{ count: '1' }] };
-  if (/^\s*(CREATE|ALTER)/.test(sql)) return { rows: [] };
+  if (/^\s*(--[^\n]*\n\s*)*(CREATE|ALTER)/.test(sql)) return { rows: [] };
   if (sql.includes("WHERE status = 'registered' AND invitation_status <> 'zoom_managed'")) { if (zoomJobStatus === 'registered') invitationStatus = 'zoom_managed'; return { rows: [] }; }
   throw new Error('Registration must use a checked out client');
 }

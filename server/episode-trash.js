@@ -15,6 +15,9 @@ const tables = [
   ['attendance_overrides', 'registration_id IN (SELECT id FROM episode_registrations WHERE episode_id=$1)'],
   ['attendance_audit', 'episode_id=$1'],
   ['attendance_tasks', 'episode_id=$1'],
+  // v2.0 links; speakers themselves are never deleted, so restore can always re-link them.
+  ['episode_speakers', 'episode_id=$1'],
+  ['tips', 'episode_id=$1'],
 ];
 async function initEpisodeTrash(db) {
   await db.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`);

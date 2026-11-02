@@ -25,11 +25,15 @@ const { processInviteBatch } = require('./invite-service');
 const { createOutreachRouter } = require('./outreach-routes');
 const { syncRecentInviteReports, syncRecentAttendance } = require('./outreach-workers');
 const { runtimeFlags, guardZoom, guardSender, pushAllowed, dryRun } = require('./runtime-flags');
+const { initV2DB } = require('./v2-data');
+const { createV2PublicRouter, createV2AdminRouter } = require('./v2-routes');
 const flags = runtimeFlags();
 const sender = guardSender(createSenderClient(), flags);
 const zoom = guardZoom(createZoomClient(), flags);
 const app = express();
 app.set('json replacer', episodeJsonReplacer);
+// Render sits in front of the app; trust its one proxy hop so req.ip is the client for rate limits.
+app.set('trust proxy', 1);
 // Keep development and preview APIs out of search results.
 if (!flags.production) app.use((req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofollow'); next(); });
 app.use(cors());
@@ -117,6 +121,7 @@ async function initDB() {
     await initOutreachDB(pool);
     await initEpisodeTrash(pool);
     await initAdminEvents(pool);
+    await initV2DB(pool);
 
     // Seed initial admin
     const result = await pool.query('SELECT COUNT(*) FROM admins');
@@ -229,7 +234,8 @@ function getEpisodeNumber(timestampStr) {
 }
 
 // ─── reCAPTCHA Verifier ───────────────────────────────────────────────────────
-async function verifyRecaptchaToken(token) {
+// When an action is given, the token must have been issued for that action (v2.0 forms).
+async function verifyRecaptchaToken(token, action) {
   if (!token) return false;
   try {
     const formData = new URLSearchParams();
@@ -240,7 +246,7 @@ async function verifyRecaptchaToken(token) {
       body: formData
     });
     const outcome = await result.json();
-    return outcome.success && outcome.score >= 0.5;
+    return outcome.success && outcome.score >= Number(process.env.RECAPTCHA_MIN_SCORE || 0.5) && (!action || outcome.action === action);
   } catch (err) {
     console.error('reCAPTCHA verification error:', err);
     return false;
@@ -815,6 +821,8 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
   }
 });
 
+app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: verifyRecaptchaToken }));
+app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken }));
 app.use('/api/admin', createOutreachRouter({ pool, sender, zoom, authenticateToken }));
 app.use('/api/admin', createAdminEventsRouter({ pool, authenticateToken }));
 app.use('/api/admin', createEpisodeTrashRouter({ pool, authenticateToken }));

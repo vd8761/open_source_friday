@@ -17,6 +17,7 @@ test('sample Trash preserves related history and profiles and restores without r
       INSERT INTO episode_registrations VALUES(101,16,1),(102,18,1);
       INSERT INTO zoom_registration_jobs VALUES(101,'registered','https://zoom.example/private');`);
     await initOutreachDB(db); await initEpisodeTrash(db); await initEpisodeTrash(db);
+    await require('../v2-data').initV2DB(db); await require('../v2-data').initV2DB(db);
     await require('../whatsapp-consent').initWhatsAppConsent(db);
     await db.exec("UPDATE episode_registrations SET whatsapp_opt_in=TRUE,whatsapp_notice_version='event-whatsapp-2026-10-29',whatsapp_consent_number='+91 9000000000' WHERE id=101");
     await db.exec('UPDATE episodes SET is_test=TRUE WHERE id IN (16,17)');
@@ -31,6 +32,7 @@ test('sample Trash preserves related history and profiles and restores without r
       INSERT INTO attendance_audit(episode_id,registration_id,action,detail) VALUES(16,101,'override','Reviewed');
       INSERT INTO attendance_tasks(episode_id) VALUES(16);
       INSERT INTO invite_suppressions VALUES('optout@example.com','unsubscribed',NOW());`);
+    await db.exec(`INSERT INTO speakers(id,name) VALUES(1,'Guest');INSERT INTO episode_speakers VALUES(16,1,0);INSERT INTO tips(text,episode_id) VALUES('Tip',16);`);
     const app=express();app.use(express.json());app.use('/api/admin',createEpisodeTrashRouter({pool:{connect:async()=>({query:(...a)=>db.query(...a),release(){}})},
       authenticateToken:(req,res,next)=>{if(req.headers.authorization!=='Bearer test')return res.status(401).json({success:false});req.user={id:1};next();}}));
     server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
@@ -60,6 +62,7 @@ test('sample Trash preserves related history and profiles and restores without r
     const moved=await remove();assert.equal(moved.status,200);
     assert.equal((await db.query('SELECT * FROM episodes WHERE id=16')).rows.length,0);
     assert.equal((await db.query('SELECT * FROM students')).rows.length,1);
+    assert.equal((await db.query('SELECT * FROM episode_speakers')).rows.length,0);assert.equal((await db.query('SELECT * FROM speakers')).rows.length,1);
     assert.equal((await db.query('SELECT * FROM episode_registrations WHERE episode_id=18')).rows.length,1);
     assert.equal((await db.query('SELECT * FROM invite_suppressions')).rows.length,1);
     const listing=(await request('/episode-trash')).body;
@@ -71,6 +74,8 @@ test('sample Trash preserves related history and profiles and restores without r
     await db.exec('DELETE FROM episodes WHERE id=19');assert.equal((await restore()).status,200);
     const restoredConsent=(await db.query('SELECT * FROM episode_registrations WHERE id=101')).rows[0];
     assert.equal(restoredConsent.whatsapp_opt_in,true);assert.ok(restoredConsent.whatsapp_withdrawn_at);assert.equal(restoredConsent.whatsapp_withdrawal_source,'trash_restore_suppression');
+    assert.deepEqual((await db.query('SELECT episode_id,speaker_id FROM episode_speakers')).rows,[{episode_id:16,speaker_id:1}]);
+    assert.equal((await db.query('SELECT episode_id FROM tips')).rows[0].episode_id,16);
     const restored=(await db.query('SELECT * FROM episodes WHERE id=16')).rows[0];
     assert.equal(restored.is_test,true);assert.equal(restored.is_active,false);assert.equal(restored.is_registration_open,false);
     assert.equal((await db.query('SELECT * FROM invite_campaigns')).rows[0].status,'paused');
