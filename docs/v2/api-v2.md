@@ -51,3 +51,14 @@ This is a dry run that prints the plan. Add `--apply` only (owner approved both 
 - Run the API on **port 5050**: macOS AirPlay Receiver holds port 5000.
 - Point the client at it with `VITE_API_URL=http://localhost:5050`.
 - The dev copy has its own admin login, so production credentials do not work there.
+
+## Environments (set up 2 Nov 2026)
+
+| | Website (Vercel) | API (Render) | Database (Neon) |
+|---|---|---|---|
+| Production | `osf.descienceosclub.com` from `main` | `open-source-friday` (free) from `main` | project "Open Source Friday" |
+| v2 preview | `open-source-friday-git-v20-main-…vercel.app` (Vercel login required) | `osf-v2-dev-api.onrender.com` (free) from `v2.0-main` | project `opensourcefriday-v2-dev` (copy of production) |
+
+- **Preview variables in Vercel.** These are set for **Preview, branch `v2.0-main` only**: `VITE_API_URL`, `VITE_RECAPTCHA_SITE_KEY` (a separate test key for `localhost` and `vercel.app`) and `VITE_SHOW_TEST_EVENTS=true`. Production variables are unchanged.
+- **Dev API settings.** The dev API runs with `OSF_ENV=preview` and all `ENABLE_*` flags off, so Zoom, Sender, push and workers are dry-runs. It has its own admin login and secrets; none are shared with production.
+- **Render free hours.** Render's 750 free hours a month are counted **per workspace**. Before an external scheduler starts calling the production API every minute, move the dev API to its own workspace or delete it. Otherwise production can run out of hours near month end.
