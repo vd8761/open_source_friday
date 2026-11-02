@@ -34,7 +34,7 @@ ALTER TABLE episodes
   ADD COLUMN IF NOT EXISTS agenda JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(agenda) = 'array'),
   ADD COLUMN IF NOT EXISTS short_blurb TEXT CHECK (short_blurb IS NULL OR length(short_blurb) <= 200);
 
--- Editable values that are not computed from data (club-level marketing numbers, registration mode).
+-- Editable values that are not computed from data (club-level marketing numbers).
 CREATE TABLE IF NOT EXISTS site_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
@@ -42,7 +42,6 @@ CREATE TABLE IF NOT EXISTS site_settings (
   updated_by INTEGER
 );
 INSERT INTO site_settings (key, value) VALUES
-  ('registration_mode', '"open"'::jsonb),
   ('club_stats', '[]'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 

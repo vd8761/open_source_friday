@@ -13,7 +13,7 @@ v1.0 endpoints are unchanged. List responses never embed base64 images; photos h
 | GET | `/api/speakers/:id/photo` | Speaker photo (published speakers only). |
 | GET | `/api/stats` | Computed, cached 60 s: `episodes_shipped`, `upcoming_count`, `speakers_count`, `repeat_speakers`, `episodes_by_domain`, `next_episode`, plus editable `club_stats`. Test events are excluded. |
 | GET | `/api/tips` | Published tips; tip of the week first. |
-| GET | `/api/site-settings` | `club_stats`, `registration_mode`. |
+| GET | `/api/site-settings` | `club_stats`. |
 | POST | `/api/speaker-applications` | Speak at OSF pitch. reCAPTCHA v3 action `speaker_application`, 5 per hour per IP. Preferred dates must be upcoming Fridays (up to 4). No emails are sent. |
 
 ## Admin (`Authorization: Bearer <admin JWT>`)
@@ -28,7 +28,6 @@ v1.0 endpoints are unchanged. List responses never embed base64 images; photos h
 | GET / PATCH | `/api/admin/speaker-applications[/:id]` | Filter `?status=`; status is `new`, `contacted`, `scheduled` or `declined`. |
 | GET | `/api/admin/site-settings` | All settings. |
 | PUT | `/api/admin/site-settings/club_stats` | `{ value: [{ label, value }] }`, up to 8. |
-| PUT | `/api/admin/site-settings/registration_mode` | Only `open` is accepted in v2.0. |
 
 ## Domains
 

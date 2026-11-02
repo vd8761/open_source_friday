@@ -91,7 +91,7 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
     WHERE t.published_at IS NOT NULL AND t.published_at<=NOW() ORDER BY t.is_tip_of_week DESC,t.published_at DESC LIMIT 100`)).rows })));
 
   router.get('/site-settings', route(async () => {
-    const rows = (await pool.query("SELECT key,value FROM site_settings WHERE key IN ('club_stats','registration_mode')")).rows;
+    const rows = (await pool.query("SELECT key,value FROM site_settings WHERE key IN ('club_stats')")).rows;
     return { settings: Object.fromEntries(rows.map(r => [r.key, r.value])) };
   }));
 
@@ -235,11 +235,6 @@ function createV2AdminRouter({ pool, authenticateToken }) {
       throw new InputError('Club stats must be up to 8 label/value pairs.', 400);
     await pool.query(`UPDATE site_settings SET value=$1::jsonb,updated_at=NOW(),updated_by=$2 WHERE key='club_stats'`,
       [JSON.stringify(value.map(s => ({ label: s.label.trim(), value: s.value.trim() }))), req.user?.id ?? null]);
-    return {};
-  }));
-  // Members-only and invite-only modes are planned for Jan 2027; v2.0 keeps registration open.
-  router.put('/site-settings/registration_mode', route(async req => {
-    if (req.body?.value !== 'open') throw new InputError('Only open registration is available in v2.0.', 400);
     return {};
   }));
   return router;

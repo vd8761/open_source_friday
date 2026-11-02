@@ -48,7 +48,7 @@ test('migration is idempotent and the down script reverses it without touching v
     assert.equal((await db.query("SELECT COUNT(*)::int AS n FROM information_schema.columns WHERE table_name='episodes' AND column_name IN ('domain','agenda','short_blurb')")).rows[0].n, 0);
     assert.equal((await db.query('SELECT presenter_name FROM episodes WHERE episode_number=1')).rows[0].presenter_name, 'Ariyappan P');
     await initV2DB(db);
-    assert.equal((await db.query("SELECT value FROM site_settings WHERE key='registration_mode'")).rows[0].value, 'open');
+    assert.deepEqual((await db.query("SELECT value FROM site_settings WHERE key='club_stats'")).rows[0].value, []);
   } finally { await close(); }
 });
 
@@ -143,8 +143,7 @@ test('stats endpoint reads live data and editable club stats', async () => {
     assert.equal(stats.speakers_count, 4);
     assert.equal(stats.next_episode.episode_number, 4);
     assert.deepEqual(stats.club_stats, [{ label: 'Members', value: '6000+' }]);
-    assert.equal((await call('PUT', '/admin/site-settings/registration_mode', { value: 'members_only' }, true)).status, 400);
-    assert.equal((await call('GET', '/site-settings')).body.settings.registration_mode, 'open');
+    assert.deepEqual((await call('GET', '/site-settings')).body.settings, { club_stats: [{ label: 'Members', value: '6000+' }] });
   } finally { await close(); }
 });
 
