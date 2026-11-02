@@ -1,9 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
-import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
-import Home from './Home';
-import PolicyPage from './components/PolicyPage';
-import { policyLinks } from './utils/policyLinks';
+import SiteApp from './site/SiteApp';
 import Dashboard from './Dashboard';
 import ContactsPage from './components/ContactsPage';
 import StudentActivityPage from './components/StudentActivityPage';
@@ -15,7 +12,6 @@ import PastEventsPage from './components/PastEventsPage';
 import AttendeesPage from './components/AttendeesPage';
 import Login from './Login';
 import PwaInstallPrompt from './PwaInstallPrompt';
-import RegistrationForm from './components/RegistrationForm';
 import AdminEpisodeForm from './components/AdminEpisodeForm';
 import { subscribeToPush, getNotificationPermission } from './utils/pushNotifications';
 import './App.css';
@@ -53,10 +49,6 @@ function App() {
       <Router>
         <PwaInstallPrompt />
         <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<Home />} />
-          {policyLinks.map(([url])=><Route key={url} path={url} element={<PolicyPage slug={url.slice(1)}/>}/>)}
-          <Route path="/register/:episode_number" element={<GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}><RegistrationForm /></GoogleReCaptchaProvider>} />
           <Route path="/login" element={<Login />} />
           
           {/* Admin Routes */}
@@ -94,8 +86,8 @@ function App() {
             } 
           />
           
-          {/* Catch all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Public v2.0 site: home, episodes, speakers, who it's for, speak, register and policies. */}
+          <Route path="/*" element={<SiteApp />} />
         </Routes>
       </Router>
   );

@@ -4,7 +4,7 @@ import SiteFooter from './SiteFooter';
 import { policyLinks } from '../utils/policyLinks';
 
 const contact = <a href="mailto:info@descienceosclub.com">info@descienceosclub.com</a>;
-const sections = {
+export const sections = {
   'privacy-policy': {
     title: 'Privacy Policy', intro: 'How Descience Open Source Club, an initiative of Touchmark Descience Pvt Ltd, uses information in the Open Source Fridays registration and event application.',
     items: [

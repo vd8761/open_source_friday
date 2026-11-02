@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+/* OSF v2.0 design tokens (namespaced beside the v1.0 --color-dos theme). Static: site.css reads them as CSS variables. */
+@theme static {
+  --font-osf: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-osf-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-osf-ink: #10222B;
+  --color-osf-night: #0C3346;
+  --color-osf-mist: #F4F7F9;
+  --color-osf-line: #DCE3E7;
+  --color-osf-line-strong: #CFD9DE;
+  --color-osf-hairline: #E6ECEF;
+  --color-osf-dash: #B9C8CF;
+  --color-osf-muted: #5B6F79;
+  --color-osf-faint: #93AAB5;
+  --color-osf-leaf: #2F8A36;
+  --color-osf-leaf-dark: #236B29;
+  --color-osf-leaf-soft: #E7F3E8;
+  --color-osf-leaf-wash: #F1F8F2;
+  --color-osf-leaf-edge: #B7DDB9;
+  --color-osf-mint: #8BD08E;
+  --color-osf-sky: #1593C3;
+  --color-osf-sky-soft: #E3F1F8;
+  --color-osf-sky-dark: #0D6B90;
+  --color-osf-slate: #3A5562;
+  --color-osf-slate-2: #3A5F70;
+  --color-osf-rule: #24404D;
+  --color-osf-fog: #C9D8DF;
+  --color-osf-cloud: #DCE6EA;
+  --color-osf-danger: #B42318;
+  --shadow-osf-card: 0 24px 60px -32px rgba(16, 34, 43, 0.3);
+}
+
+
 @theme {
   --font-sans: 'Outfit', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --color-dos: #07a97b;

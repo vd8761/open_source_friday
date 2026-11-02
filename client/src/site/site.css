@@ -1,0 +1,92 @@
+html:has(.osf-site) { scroll-behavior: smooth; }
+
+body:has(.osf-site) {
+  margin: 0;
+  background: var(--color-osf-mist);
+  color: var(--color-osf-ink);
+  font-family: var(--font-osf);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.osf-link { color: var(--color-osf-leaf); }
+.osf-link:hover { color: var(--color-osf-leaf-dark); }
+
+/* Gradient headline text, with the -webkit- prefix Safari still needs. */
+.osf-gradient-text {
+  background-image: linear-gradient(90deg, #2F8A36, #1593C3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Blueprint grid backgrounds. */
+.osf-grid-light {
+  background-color: var(--color-osf-mist);
+  background-image: linear-gradient(rgba(16, 34, 43, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 34, 43, 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+.osf-grid-dark {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.osf-grid-dark-sm { background-size: 40px 40px; }
+
+/* Form fields share one look across register and speak forms. */
+.osf-field {
+  font: inherit;
+  font-size: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--color-osf-line-strong);
+  background: var(--color-osf-mist);
+  color: var(--color-osf-ink);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+select.osf-field {
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%235B6F79' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+}
+.osf-field::placeholder { color: #7A8D96; }
+.osf-field:focus-visible {
+  outline: 2px solid var(--color-osf-leaf);
+  outline-offset: 1px;
+  border-color: var(--color-osf-leaf);
+}
+
+.osf-site :where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--color-osf-leaf);
+  outline-offset: 2px;
+}
+
+/* Topic ticker under the home hero. */
+.osf-ticker {
+  display: flex;
+  gap: 40px;
+  width: max-content;
+  animation: osf-scroll 40s linear infinite;
+}
+@keyframes osf-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.osf-site) { scroll-behavior: auto; }
+  .osf-ticker { animation: none; }
+}
+
+/* Admin-authored episode descriptions (Quill HTML) inside the register panel. */
+.osf-prose { overflow-wrap: anywhere; }
+.osf-prose p { margin: 0 0 0.75em; }
+.osf-prose p:empty { display: none; }
+.osf-prose ul, .osf-prose ol { margin: 0 0 0.75em; padding-left: 1.25em; }
+.osf-prose a { color: var(--color-osf-leaf); }
