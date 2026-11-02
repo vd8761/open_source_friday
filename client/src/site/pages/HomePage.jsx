@@ -16,7 +16,7 @@ function Hero() {
       <Container className="flex flex-wrap items-center gap-14">
         <div className="flex min-w-0 flex-[999_1_540px] flex-col gap-7">
           {ep ? (
-            <Link to={ep.registerPath} className="flex max-w-full items-center gap-3.5 self-start rounded-2xl border border-osf-line bg-white/90 py-2 pl-2 pr-[18px] text-osf-ink no-underline hover:border-osf-leaf">
+            <Link to={ep.recapPath} className="flex max-w-full items-center gap-3.5 self-start rounded-2xl border border-osf-line bg-white/90 py-2 pl-2 pr-[18px] text-osf-ink no-underline hover:border-osf-leaf">
               <DateBadge day={ep.day} mon={ep.mon} size="sm" />
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="font-osf-mono text-[11px] font-bold tracking-[0.1em] text-osf-leaf">NEXT UP · EP {ep.num} · {ep.weekday.toUpperCase()} {ep.start} IST</span>

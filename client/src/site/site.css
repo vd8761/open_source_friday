@@ -11,6 +11,9 @@ body:has(.osf-site) {
 }
 
 .osf-link { color: var(--color-osf-leaf); }
+/* Links never underline on hover except titles. Underlines that are always on (inline text links) stay. */
+.osf-site a:not(.underline):hover { text-decoration-line: none; }
+.osf-site :is(h1, h2, h3) a:hover { text-decoration-line: underline; text-underline-offset: 4px; }
 .osf-link:hover { color: var(--color-osf-leaf-dark); }
 
 /* Gradient headline text, with the -webkit- prefix Safari still needs. */

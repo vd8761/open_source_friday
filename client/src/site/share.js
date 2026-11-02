@@ -1,6 +1,7 @@
 // Share and calendar links for one episode. All OSF times are IST (UTC+05:30).
+// Shared links open the episode's details page, which carries the same banner link preview.
 export function episodeUrl(ep) {
-  return `${window.location.origin}${ep.registerPath}`;
+  return `${window.location.origin}${ep.recapPath}`;
 }
 export const whatsappShareUrl = (ep) => `https://wa.me/?text=${encodeURIComponent(`Open Source Fridays · Episode ${ep.num}: ${ep.title} — ${episodeUrl(ep)}`)}`;
 export const linkedinShareUrl = (ep) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(episodeUrl(ep))}`;

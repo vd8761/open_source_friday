@@ -2,6 +2,10 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 
 // Precache all assets built by Vite
 cleanupOutdatedCaches();
+// Take over as soon as a new version is installed, so visitors never stay on an old copy until every
+// tab is closed. virtual:pwa-register (registerType 'autoUpdate') then reloads the page once.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 precacheAndRoute(self.__WB_MANIFEST || []);
 
 // ─── Push Notification Handler ────────────────────────────────────────────────
