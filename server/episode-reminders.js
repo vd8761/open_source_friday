@@ -1,13 +1,14 @@
 const { episodeDate, episodeStart } = require('./episode-time');
-async function processEpisodeReminders(pool, sendPush, now = Date.now()) {
+// graceMinutes widens the late edge for coarse external schedulers; claims still send each notice once.
+async function processEpisodeReminders(pool, sendPush, now = Date.now(), graceMinutes = 0) {
   const { rows } = await pool.query('SELECT * FROM episodes WHERE is_active = true AND is_silent = false');
   for (const episode of rows) {
     if (episode.is_silent) continue;
     const start = episodeStart(episode);
     if (start === null) continue;
     const minutesAway = (start - now) / 60000;
-    const kind = !episode.reminder_sent && minutesAway >= 29 && minutesAway <= 31 ? 'reminder'
-      : !episode.starting_now_sent && minutesAway >= -2 && minutesAway <= 2 ? 'starting' : null;
+    const kind = !episode.reminder_sent && minutesAway >= 29 - graceMinutes && minutesAway <= 31 ? 'reminder'
+      : !episode.starting_now_sent && minutesAway >= -2 - graceMinutes && minutesAway <= 2 ? 'starting' : null;
     if (!kind) continue;
     const flag = kind === 'reminder' ? 'reminder_sent' : 'starting_now_sent';
     // Claim this notification attempt atomically across overlapping cron runs/instances.

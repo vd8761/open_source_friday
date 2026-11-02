@@ -4,6 +4,7 @@ const { databaseTypes } = require('./database-types');
 const { episodeStart, validSchedule, registrationIsOpen, episodeJsonReplacer } = require('./episode-time');
 const { processEpisodeReminders } = require('./episode-reminders');
 const path = require('path');
+const crypto = require('crypto');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -23,10 +24,14 @@ const { initEpisodeTrash, createEpisodeTrashRouter } = require('./episode-trash'
 const { processInviteBatch } = require('./invite-service');
 const { createOutreachRouter } = require('./outreach-routes');
 const { syncRecentInviteReports, syncRecentAttendance } = require('./outreach-workers');
-const sender = createSenderClient();
-const zoom = createZoomClient();
+const { runtimeFlags, guardZoom, guardSender, pushAllowed, dryRun } = require('./runtime-flags');
+const flags = runtimeFlags();
+const sender = guardSender(createSenderClient(), flags);
+const zoom = guardZoom(createZoomClient(), flags);
 const app = express();
 app.set('json replacer', episodeJsonReplacer);
+// Keep development and preview APIs out of search results.
+if (!flags.production) app.use((req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofollow'); next(); });
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -145,7 +150,9 @@ async function sendPushToAll(payload, type = 'Automated') {
   let rows = [];
   try {
     const result = await pool.query('SELECT * FROM push_subscriptions');
-    rows = result.rows;
+    rows = result.rows.filter(row => pushAllowed(flags, row));
+    if (rows.length < result.rows.length) dryRun('Push', `"${payload.title}" skipped for ${result.rows.length - rows.length} subscription(s)`);
+    if (!flags.push) return;
   } catch (err) {
     console.error('[Push] Failed to fetch subscriptions:', err);
     return;
@@ -193,8 +200,8 @@ async function sendPushToAll(payload, type = 'Automated') {
 }
 
 // Reminder scheduling uses the same explicit IST clock as registration and attendance.
-async function sendEpisodeReminders() {
-  try { await processEpisodeReminders(pool, sendPushToAll); }
+async function sendEpisodeReminders(graceMinutes = 0) {
+  try { await processEpisodeReminders(pool, sendPushToAll, Date.now(), graceMinutes); }
   catch (error) { console.error('[Cron] Reminder job error:', error); }
 }
 
@@ -260,11 +267,12 @@ app.post('/api/push/subscribe', async (req, res) => {
       `INSERT INTO push_subscriptions (endpoint, p256dh, auth)
        VALUES ($1, $2, $3)
        ON CONFLICT (endpoint) DO UPDATE SET p256dh = $2, auth = $3
-       RETURNING welcome_sent`,
+       RETURNING id, welcome_sent`,
       [endpoint, keys.p256dh, keys.auth]
     );
 
-    if (isExplicitInteraction && result.rows[0] && !result.rows[0].welcome_sent) {
+    if (isExplicitInteraction && result.rows[0] && !result.rows[0].welcome_sent && !pushAllowed(flags, result.rows[0])) dryRun('Push', 'welcome notification skipped');
+    else if (isExplicitInteraction && result.rows[0] && !result.rows[0].welcome_sent) {
       try {
         const payload = {
           title: 'Welcome to Open Source Friday! 🎉',
@@ -720,7 +728,7 @@ app.get('/api/admin/episodes/:episode_id/registrations', authenticateToken, asyn
 
 // Only confirmed application registrations can be enrolled. Email resend is managed in Zoom.
 app.post('/api/admin/episodes/:episode_id/registrations/:student_id/zoom-invitation', authenticateToken, async (req, res) => {
-  if (!zoom.configured()) return res.status(503).json({ success: false, error: 'Zoom credentials are not configured on the server.' });
+  if (!zoom.configured()) return res.status(503).json({ success: false, error: zoom.disabledReason || 'Zoom credentials are not configured on the server.' });
   const db = await pool.connect();
   let registrationId;
   try {
@@ -818,21 +826,50 @@ async function runInviteWorker() {
   catch { console.error('[Invitations] Worker failed; campaigns retain their saved state.'); }
   finally { inviteWorkerRunning = false; }
 }
+async function runSyncJobs() {
+  await Promise.all([
+    syncRecentInviteReports(pool,sender).catch(() => console.error('[Invitations] Report sync will retry.')),
+    syncRecentAttendance(pool,zoom).catch(() => console.error('[Attendance] Sync will retry.')),
+  ]);
+}
+
+// External schedulers (Render Free sleeps, so in-process cron misses runs) call these with CRON_SECRET.
+const cronJobs = {
+  reminders: () => sendEpisodeReminders(Math.max(0, Number(process.env.CRON_GRACE_MINUTES ?? 10)) || 0),
+  'zoom-worker': runZoomWorker,
+  'invite-worker': runInviteWorker,
+  sync: runSyncJobs,
+};
+app.all('/api/cron/:job', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const given = Buffer.from(String(req.headers.authorization || ''));
+  const expected = Buffer.from(`Bearer ${secret}`);
+  if (!secret || given.length !== expected.length || !crypto.timingSafeEqual(given, expected))
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  const job = cronJobs[req.params.job];
+  if (!job) return res.status(404).json({ success: false, error: 'Unknown job' });
+  if (!flags.workers) {
+    dryRun('Cron', `${req.params.job} skipped because ENABLE_WORKERS is off`);
+    return res.json({ success: true, skipped: true });
+  }
+  await job();
+  res.json({ success: true, job: req.params.job });
+});
+
 const PORT = process.env.PORT || 5000;
 if (require.main === module) initDB().then(() => {
-  cron.schedule('* * * * *', sendEpisodeReminders);
-  cron.schedule('* * * * *', runZoomWorker);
-  cron.schedule('* * * * *', runInviteWorker);
-  void runInviteWorker();
-  cron.schedule('*/15 * * * *', () => {
-    void syncRecentInviteReports(pool,sender).catch(() => console.error('[Invitations] Report sync will retry.'));
-    void syncRecentAttendance(pool,zoom).catch(() => console.error('[Attendance] Sync will retry.'));
-  });
-  void runZoomWorker();
+  if (flags.workers) {
+    cron.schedule('* * * * *', () => sendEpisodeReminders());
+    cron.schedule('* * * * *', runZoomWorker);
+    cron.schedule('* * * * *', runInviteWorker);
+    void runInviteWorker();
+    cron.schedule('*/15 * * * *', () => void runSyncJobs());
+    void runZoomWorker();
+  } else dryRun('Workers', `background jobs are off in the ${flags.environment} environment`);
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`[Push] VAPID configured for ${process.env.VAPID_EMAIL}`);
   });
 }).catch(async () => { await pool.end(); process.exitCode = 1; });
 
-module.exports = { app, sendEpisodeReminders, initDB };
+module.exports = { app, sendEpisodeReminders, initDB, flags };

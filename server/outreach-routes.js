@@ -245,7 +245,7 @@ function createOutreachRouter({
       const c = await campaign(db, req.params.campaignId);
       if (!sender.configured())
         throw new InputError(
-          "Configure Sender and the public application URL on the backend before starting.",
+          sender.disabledReason || "Configure Sender and the public application URL on the backend before starting.",
           503,
         );
       if (!["draft", "paused"].includes(c.status))

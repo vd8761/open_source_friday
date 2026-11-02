@@ -10,6 +10,9 @@ let registered = true;
 let invitationStatus = 'pending';
 let zoomJobStatus = 'registered';
 process.env.JWT_SECRET = 'test-only-secret';
+// These tests cover v1.0 production behaviour; runtime-flags.test.js covers the non-production guards.
+process.env.OSF_ENV = 'production';
+process.env.CRON_SECRET = 'test-cron-secret';
 let closed = false;
 let queueFailure = false;
 let firstTimeStudent = false;
@@ -406,4 +409,20 @@ test('completion saves the selected mobile and consent before committing registr
     assert.equal(queries[registration].values[5], '+65 91234567');
     assert.ok(!queries.some(q => q.sql.includes('INSERT INTO students')));
   } finally { storedStudent = { ...completeStudent }; }
+});
+test('cron routes require CRON_SECRET and widen the reminder window for coarse schedulers', async () => {
+  const call = (job, secret) => nativeFetch(`${base}/api/cron/${job}`, { headers: secret ? { Authorization: `Bearer ${secret}` } : {} });
+  assert.equal((await call('reminders')).status, 401);
+  assert.equal((await call('reminders', 'wrong-secret')).status, 401);
+  assert.equal((await call('unknown', 'test-cron-secret')).status, 404);
+  // A 5-minute scheduler can land 24 minutes before start, outside the per-minute 29–31 window.
+  pushNotifications.length = 0;
+  reminderRows = [reminderEpisode(24, false)];
+  await sendEpisodeReminders();
+  assert.equal(pushNotifications.length, 0);
+  const response = await call('reminders', 'test-cron-secret');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true, job: 'reminders' });
+  assert.equal(pushNotifications.length, 1);
+  reminderRows = [];
 });
