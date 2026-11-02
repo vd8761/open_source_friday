@@ -3,15 +3,13 @@ import { NavLink, useLocation } from 'react-router-dom';
 import AdminAccount from './AdminAccount';
 
 // v2.0 look: mono uppercase links with a green underline for the active section, as on the public site.
+// Tips, Speaker pitches and Site settings live in the Account menu (AdminAccount).
 const links = [
   ['/dashboard', 'Dashboard', true],
   ['/admin/past-events', 'Past events'],
   ['/admin/speakers', 'Speakers'],
   ['/admin/invitations', 'Email invitations'],
   ['/admin/contacts', 'Attendee contacts'],
-  ['/admin/speaker-applications', 'Speaker pitches'],
-  ['/admin/tips', 'Tips'],
-  ['/admin/settings', 'Site settings'],
 ];
 
 export default function AdminNavigation(){
