@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App — Reserve your seat · Step 2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: {{w}}px; height: {{h}}px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background-color: #F4F7F9; background-image: linear-gradient(rgba(16,34,43,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(16,34,43,0.04) 1px, transparent 1px); background-size: 40px 40px">
+
+  <div style="padding: {{top}}px 12px 0; background: #FFFFFF; border-bottom: 1px solid #DCE3E7">
+    <div style="display: flex; align-items: center; height: {{barH}}px">
+      <a href="{{l.back}}" aria-label="Back" style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #10222B">
+        <sc-if value="{{isIOS}}" hint-placeholder-val="{{ true }}">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        </sc-if>
+        <sc-if value="{{isAnd}}" hint-placeholder-val="{{ false }}">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H4M10 18l-6-6 6-6"/></svg>
+        </sc-if>
+      </a>
+      <span style="flex: 1; font-weight: 600; font-size: 17px; text-align: {{titleAlign}}">Reserve your seat</span>
+      <span style="width: 48px"></span>
+    </div>
+  </div>
+
+  <form style="flex: 1; min-height: 0; padding: 20px; display: flex; flex-direction: column; gap: 22px">
+    <ol aria-label="Progress" style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+      <li style="display: flex; flex-direction: column; gap: 6px"><span style="height: 5px; border-radius: 999px; background: #2F8A36"></span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #2F8A36">01 · CHECK ✓</span></li>
+      <li aria-current="step" style="display: flex; flex-direction: column; gap: 6px"><span style="height: 5px; border-radius: 999px; background: #2F8A36"></span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #2F8A36">02 · DETAILS</span></li>
+      <li style="display: flex; flex-direction: column; gap: 6px"><span style="height: 5px; border-radius: 999px; background: #DCE3E7"></span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: #5B6F79">03 · DONE</span></li>
+    </ol>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h1 style="margin: 0; font-weight: 600; font-size: 30px; line-height: 1.05; letter-spacing: -0.02em">Tell us about yourself</h1>
+      <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #5B6F79">Takes about a minute. <span style="color: #B42318; font-weight: 700">*</span> required.</p>
+    </div>
+
+    <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 14px">
+      <legend style="padding: 0; margin-bottom: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #2F8A36">/ ABOUT YOU</legend>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="m-name" style="font-weight: 600; font-size: 14px">Full name <span style="color: #B42318">*</span></label>
+        <input id="m-name" type="text" autocomplete="name" placeholder="e.g. John Doe" style="font: inherit; font-size: 16px; padding: 14px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B">
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="m-email" style="font-weight: 600; font-size: 14px">Email <span style="color: #B42318">*</span></label>
+        <input id="m-email" type="email" autocomplete="email" value="you@example.com" style="font: inherit; font-size: 16px; padding: 14px; border-radius: 14px; border: 1px solid #2F8A36; background: #E7F3E8; color: #10222B">
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="m-wa" style="font-weight: 600; font-size: 14px">WhatsApp number <span style="color: #B42318">*</span></label>
+        <div style="display: flex; gap: 8px">
+          <label for="m-cc" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Country code</label>
+          <select id="m-cc" style="font: inherit; font-size: 16px; padding: 14px 10px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B; flex: none"><option>IN +91</option><option>+1</option><option>+44</option></select>
+          <input id="m-wa" type="tel" autocomplete="tel-national" placeholder="98765 43210" style="font: inherit; font-size: 16px; padding: 14px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B; flex: 1; min-width: 0">
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="m-gender" style="font-weight: 600; font-size: 14px">Gender <span style="color: #B42318">*</span></label>
+          <select id="m-gender" style="font: inherit; font-size: 16px; padding: 14px 10px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B"><option>Select…</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="m-member" style="font-weight: 600; font-size: 14px">DOS Club member? <span style="color: #B42318">*</span></label>
+          <select id="m-member" style="font: inherit; font-size: 16px; padding: 14px 10px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B"><option>Select…</option><option>Yes</option><option>Not yet</option></select>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 14px">
+      <legend style="padding: 0; margin-bottom: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #2F8A36">/ WHERE YOU STUDY</legend>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="m-college" style="font-weight: 600; font-size: 14px">College name <span style="color: #B42318">*</span></label>
+        <input id="m-college" type="text" placeholder="e.g. Descience Institute of Technology" style="font: inherit; font-size: 16px; padding: 14px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B">
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="m-degree" style="font-weight: 600; font-size: 14px">Degree <span style="color: #B42318">*</span></label>
+          <input id="m-degree" type="text" placeholder="e.g. B.Tech" style="font: inherit; font-size: 16px; padding: 14px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B; min-width: 0">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="m-year" style="font-weight: 600; font-size: 14px">Year of study <span style="color: #B42318">*</span></label>
+          <select id="m-year" style="font: inherit; font-size: 16px; padding: 14px 10px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B"><option>Select…</option><option>1st year</option><option>2nd year</option><option>3rd year</option><option>4th year</option><option>Graduated</option></select>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="m-dept" style="font-weight: 600; font-size: 14px">Department / branch <span style="color: #B42318">*</span></label>
+        <input id="m-dept" type="text" placeholder="e.g. Computer Science" style="font: inherit; font-size: 16px; padding: 14px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B">
+      </div>
+    </fieldset>
+
+    <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px">
+      <legend style="padding: 0; margin-bottom: 10px; font-weight: 600; font-size: 14px">What tech stack or topic excites you most? <span style="color: #B42318">*</span></legend>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{chips}}" as="c" hint-placeholder-count="8">
+          <button type="button" aria-pressed="{{c.pressed}}" onClick="{{c.toggle}}" style="height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 14px; cursor: pointer">{{c.label}}</button>
+        </sc-for>
+      </div>
+      <label for="m-other" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Anything else</label>
+      <input id="m-other" type="text" placeholder="Anything else? e.g. Rust, Web3" style="font: inherit; font-size: 16px; padding: 14px; border-radius: 14px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B">
+    </fieldset>
+
+    <fieldset style="margin: 0; border: 1px solid #B7DDB9; background: #F1F8F2; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+      <legend style="padding: 0 6px; font-weight: 600; font-size: 14px">Event updates on WhatsApp <span style="font-weight: 400; color: #5B6F79">(optional)</span></legend>
+      <div style="display: flex; gap: 10px; align-items: flex-start">
+        <input id="m-wa-ok" type="checkbox" style="width: 22px; height: 22px; margin: 1px 0 0; accent-color: #2F8A36; flex: none">
+        <label for="m-wa-ok" style="font-size: 14px; line-height: 1.5">I agree to receive WhatsApp updates from Descience Open Source Club about this event, including reminders and schedule changes.</label>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 1.55; color: #5B6F79">You can register without opting in. This choice does not include future event promotions, calls, or adding you to groups. To stop updates, ask the event team on WhatsApp or email info@descienceosclub.com.</p>
+    </fieldset>
+
+    <p style="margin: 0; font-size: 12px; line-height: 1.55; color: #5B6F79">We use your details to manage registration, Zoom access and attendance. Please read our <span style="color: #2F8A36; text-decoration: underline">Privacy Policy</span>, <span style="color: #2F8A36; text-decoration: underline">Terms of Service</span> and <span style="color: #2F8A36; text-decoration: underline">Code of Conduct</span>.</p>
+
+    <div style="display: flex; gap: 10px; padding-bottom: {{bottomPad}}px">
+      <a href="{{l.back}}" style="flex: 1; height: 54px; border-radius: 999px; border: 1px solid #CFD9DE; background: #FFFFFF; color: #10222B; text-decoration: none; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.06em">GO BACK</a>
+      <a href="{{l.next}}" style="flex: 2; height: 54px; border-radius: 999px; background: #2F8A36; color: #FFFFFF; text-decoration: none; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.06em">COMPLETE REGISTRATION -&gt;</a>
+    </div>
+  </form>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"platform":{"editor":"enum","options":["ios","android"],"default":"ios"},"$preview":{"width":390,"height":1640}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: { 'AI / ML': true, 'Web dev': true } };
+  }
+  renderVals() {
+    const and = this.props.platform === 'android';
+    const P = and ? 'App-And-' : 'App-iOS-';
+    const picked = this.state.picked || {};
+    const chips = ['AI / ML', 'Web dev', 'App dev', 'Cloud & DevOps', 'Cybersecurity', 'Data science', 'Open source', 'Interview prep'].map((label) => {
+      const on = !!picked[label];
+      return { label, pressed: on ? 'true' : 'false', bg: on ? '#2F8A36' : '#FFFFFF', fg: on ? '#FFFFFF' : '#10222B', border: on ? '#2F8A36' : '#CFD9DE', toggle: () => this.setState({ picked: { ...picked, [label]: !on } }) };
+    });
+    return {
+      w: and ? 412 : 390, h: and ? 1700 : 1640, top: and ? 32 : 50, barH: and ? 64 : 48, bottomPad: and ? 24 : 30,
+      isAnd: and, isIOS: !and, titleAlign: and ? 'left' : 'center', chips,
+      l: { back: P + '15-Reserve-1.dc.html', next: P + '17-Reserve-3.dc.html' }
+    };
+  }
+}
+</script>
+</body>
+</html>

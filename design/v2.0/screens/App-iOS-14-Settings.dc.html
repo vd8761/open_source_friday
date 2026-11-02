@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App — Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: {{w}}px; height: {{h}}px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background: #F4F7F9">
+
+  <div style="padding: {{top}}px 12px 0; background: #FFFFFF; border-bottom: 1px solid #DCE3E7">
+    <div style="display: flex; align-items: center; height: {{barH}}px">
+      <a href="{{l.back}}" aria-label="Back" style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #10222B">
+        <sc-if value="{{isIOS}}" hint-placeholder-val="{{ true }}">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+        </sc-if>
+        <sc-if value="{{isAnd}}" hint-placeholder-val="{{ false }}">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H4M10 18l-6-6 6-6"></path></svg>
+        </sc-if>
+      </a>
+      <span style="flex: 1; font-weight: 600; font-size: 17px; text-align: {{titleAlign}}">Settings</span>
+      <span style="width: 48px"></span>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px">
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #5B6F79; padding-left: 4px">REMINDERS</span>
+      <div style="background: #FFFFFF; border: 1px solid #DCE3E7; border-radius: 20px; overflow: hidden">
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; min-height: 54px; box-sizing: border-box; border-bottom: 1px solid #EEF2F5">
+            <span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 600; font-size: 15px">{{r.label}}</span><span style="font-size: 12px; color: #5B6F79">{{r.hint}}</span></span>
+            <button type="button" role="switch" aria-checked="{{r.checked}}" aria-label="{{r.label}}" onClick="{{r.toggle}}" style="flex: none; width: {{sw.w}}; height: {{sw.h}}; box-sizing: border-box; border-radius: 999px; border: {{r.border}}; padding: 0 {{r.pad}}; background: {{r.track}}; display: flex; align-items: center; justify-content: {{r.justify}}; cursor: pointer">
+              <span style="width: {{r.thumb}}; height: {{r.thumb}}; border-radius: 50%; background: {{r.thumbBg}}; box-shadow: {{sw.shadow}}"></span>
+            </button>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #5B6F79; padding-left: 4px">TOPICS I CARE ABOUT</span>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{topics}}" as="t" hint-placeholder-count="4">
+          <button type="button" aria-pressed="{{t.pressed}}" onClick="{{t.toggle}}" style="height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{t.border}}; background: {{t.bg}}; color: {{t.fg}}; font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 14px; cursor: pointer">{{t.label}}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #5B6F79; padding-left: 4px">ABOUT</span>
+      <div style="background: #FFFFFF; border: 1px solid #DCE3E7; border-radius: 20px; overflow: hidden; font-size: 15px">
+        <a href="#" style="display: flex; justify-content: space-between; align-items: center; padding: 0 16px; height: 48px; border-bottom: 1px solid #EEF2F5; color: #10222B; text-decoration: none"><span>Time zone</span><span style="color: #5B6F79">IST · India</span></a>
+        <a href="#" style="display: flex; justify-content: space-between; align-items: center; padding: 0 16px; height: 48px; border-bottom: 1px solid #EEF2F5; color: #10222B; text-decoration: none"><span>Speak at OSF</span><span style="color: #5B6F79">↗</span></a>
+        <a href="#" style="display: flex; justify-content: space-between; align-items: center; padding: 0 16px; height: 48px; border-bottom: 1px solid #EEF2F5; color: #10222B; text-decoration: none"><span>Privacy · Terms · Code of Conduct</span><span style="color: #5B6F79">↗</span></a>
+        <a href="#" style="display: flex; justify-content: space-between; align-items: center; padding: 0 16px; height: 48px; color: #10222B; text-decoration: none"><span>DOS Club website</span><span style="color: #5B6F79">↗</span></a>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; border-radius: 18px; background: #E7F3E8; color: #1F5E25">
+      <img src="../assets/dos_mark.png" alt="" style="width: 32px; height: 32px; flex: none">
+      <span style="font-size: 13px; line-height: 1.45">No account. Your reminders and saved episodes live on this phone. <span style="font-family: 'JetBrains Mono', monospace">v1.0</span></span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"platform":{"editor":"enum","options":["ios","android"],"default":"ios"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { day: true, hour: true, live: true, tip: false, topics: { 'Careers': true, 'AI Engineer': true } };
+  }
+  renderVals() {
+    const and = this.props.platform === 'android';
+    const P = and ? 'App-And-' : 'App-iOS-';
+    const defs = [
+      { id: 'day', label: 'Day before', hint: 'Thursday, 7 PM' },
+      { id: 'hour', label: '1 hour before', hint: 'Friday, 6 PM' },
+      { id: 'live', label: "We're live", hint: 'One tap to join on Zoom' },
+      { id: 'tip', label: 'Tip of the week', hint: 'One short tip, once a week' }
+    ];
+    const rows = defs.map((d) => {
+      const on = !!this.state[d.id];
+      const r = { ...d, checked: on ? 'true' : 'false', toggle: () => this.setState({ [d.id]: !on }), justify: on ? 'flex-end' : 'flex-start' };
+      if (and) {
+        Object.assign(r, { track: on ? '#2F8A36' : '#EEF2F5', border: on ? '2px solid #2F8A36' : '2px solid #5B6F79', pad: on ? '2px' : '6px', thumb: on ? '24px' : '16px', thumbBg: on ? '#FFFFFF' : '#5B6F79' });
+      } else {
+        Object.assign(r, { track: on ? '#2F8A36' : '#DCE3E7', border: '0', pad: '2px', thumb: '27px', thumbBg: '#FFFFFF' });
+      }
+      return r;
+    });
+    const sw = and ? { w: '52px', h: '32px', shadow: 'none' } : { w: '51px', h: '31px', shadow: '0 2px 4px rgba(0,0,0,0.2)' };
+    const tp = this.state.topics || {};
+    const topics = ['Careers', 'AI Engineer', 'Cloud', 'Open Source'].map((label) => {
+      const on = !!tp[label];
+      return { label, pressed: on ? 'true' : 'false', bg: on ? '#10222B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#10222B', border: on ? '#10222B' : '#CFD9DE', toggle: () => this.setState({ topics: { ...tp, [label]: !on } }) };
+    });
+    return {
+      w: and ? 412 : 390, h: and ? 915 : 844, top: and ? 32 : 50, barH: and ? 64 : 48,
+      isAnd: and, isIOS: !and, titleAlign: and ? 'left' : 'center',
+      l: { back: P + '7-Home.dc.html' }, rows, sw, topics
+    };
+  }
+}
+</script>
+</body>
+</html>

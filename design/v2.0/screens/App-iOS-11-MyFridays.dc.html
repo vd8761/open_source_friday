@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App — My Fridays</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: {{w}}px; height: {{h}}px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background-color: #F4F7F9; background-image: linear-gradient(rgba(16,34,43,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(16,34,43,0.04) 1px, transparent 1px); background-size: 40px 40px">
+
+  <div style="flex: 1; min-height: 0; overflow: hidden; padding: {{top}}px 20px 16px; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 8px">
+      <h1 style="margin: 0; font-weight: 600; font-size: 32px; letter-spacing: -0.02em">My Fridays</h1>
+      <span style="font-size: 14px; color: #5B6F79">Saved on this phone — no account needed.</span>
+    </div>
+
+    <div role="tablist" aria-label="My Fridays" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 4px; border-radius: 999px; background: #FFFFFF; border: 1px solid #DCE3E7">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="2">
+        <button type="button" role="tab" aria-selected="{{t.sel}}" onClick="{{t.pick}}" style="height: 40px; border-radius: 999px; border: 0; background: {{t.bg}}; color: {{t.fg}}; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; cursor: pointer">{{t.label}}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{showUp}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <a href="{{l.event}}" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 24px; background: #FFFFFF; border: 1px solid #DCE3E7; text-decoration: none; color: #10222B">
+          <div style="display: flex; gap: 12px; align-items: center">
+            <span style="flex: none; width: 54px; height: 58px; border-radius: 12px; background: #2F8A36; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05"><span style="font-weight: 600; font-size: 23px">30</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px">OCT</span></span>
+            <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: #2F8A36">EP 16 · TOMORROW</span><span style="font-weight: 600; font-size: 16px; line-height: 1.25">Resume Masterclass: Bypass HR Rejections</span></span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #EEF2F5">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #5B6F79">YOUR REMINDERS</span>
+            <span style="display: flex; justify-content: space-between; font-size: 14px"><span>Day before · Thu 7:00 PM</span><span style="color: #2F8A36; font-weight: 600">Sent ✓</span></span>
+            <span style="display: flex; justify-content: space-between; font-size: 14px"><span>1 hour before · Fri 6:00 PM</span><span style="color: #5B6F79">Scheduled</span></span>
+            <span style="display: flex; justify-content: space-between; font-size: 14px"><span>We're live · Fri 7:00 PM</span><span style="color: #5B6F79">Scheduled</span></span>
+          </div>
+        </a>
+        <div style="display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 20px; border: 1px dashed #B9C8CF">
+          <span style="flex: none; width: 54px; height: 58px; border-radius: 12px; background: #E7F3E8; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05"><span style="font-weight: 600; font-size: 23px">06</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #2F8A36">NOV</span></span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #5B6F79">EP 17</span><span style="font-weight: 600; font-size: 15px">We'll ping you when it's announced</span></span>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{showPast}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <a href="{{l.event}}" style="display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 20px; background: #FFFFFF; border: 1px solid #DCE3E7; text-decoration: none; color: #10222B">
+          <span style="flex: none; width: 54px; height: 58px; border-radius: 12px; background: #6E5BC7; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05"><span style="font-weight: 600; font-size: 23px">02</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px">OCT</span></span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #5B6F79">EP 12 · AI ENGINEER</span><span style="font-weight: 600; font-size: 15px; line-height: 1.25">Autonomous AI Agents &amp; Breaking LLMs</span></span>
+        </a>
+        <a href="{{l.event}}" style="display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 20px; background: #FFFFFF; border: 1px solid #DCE3E7; text-decoration: none; color: #10222B">
+          <span style="flex: none; width: 54px; height: 58px; border-radius: 12px; background: #1593C3; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05"><span style="font-weight: 600; font-size: 23px">09</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px">OCT</span></span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #5B6F79">EP 13 · CLOUD</span><span style="font-weight: 600; font-size: 15px; line-height: 1.25">How Code Actually Reaches Production</span></span>
+        </a>
+        <div style="padding: 16px; border-radius: 20px; background: #E3F1F8; color: #0D5A78; font-size: 14px; line-height: 1.5">Recordings and recaps of past episodes will appear here when Videos launch.</div>
+      </div>
+    </sc-if>
+  </div>
+
+  <dc-import name="App-TabBar" platform="{{platform}}" active="mine" hint-size="100%,84px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"platform":{"editor":"enum","options":["ios","android"],"default":"ios"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'up' };
+  }
+  renderVals() {
+    const and = this.props.platform === 'android';
+    const P = and ? 'App-And-' : 'App-iOS-';
+    const tabs = [['up', 'UPCOMING · 2'], ['past', 'SAVED · 2']].map(([id, label]) => {
+      const on = this.state.tab === id;
+      return { label, sel: on ? 'true' : 'false', bg: on ? '#10222B' : 'transparent', fg: on ? '#FFFFFF' : '#5B6F79', pick: () => this.setState({ tab: id }) };
+    });
+    return {
+      platform: and ? 'android' : 'ios', w: and ? 412 : 390, h: and ? 915 : 844, top: and ? 32 : 54,
+      l: { event: P + '10-Event.dc.html' }, tabs,
+      showUp: this.state.tab === 'up', showPast: this.state.tab === 'past'
+    };
+  }
+}
+</script>
+</body>
+</html>

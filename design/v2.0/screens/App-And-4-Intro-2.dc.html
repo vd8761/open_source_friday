@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Android — Intro 2: Reminders</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F8A36}
+</style>
+</helmet>
+<div style="width: 412px; height: 915px; box-sizing: border-box; display: flex; flex-direction: column; padding: 32px 24px 32px; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background-color: #F4F7F9; background-image: radial-gradient(circle at 50% 28%, rgba(21,147,195,0.14), transparent 40%), linear-gradient(rgba(16,34,43,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(16,34,43,0.045) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px">
+
+  <div style="display: flex; justify-content: space-between; align-items: center; height: 64px">
+    <a href="App-And-3-Intro-1.dc.html" aria-label="Back" style="width: 48px; height: 48px; margin-left: -12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #10222B">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H4M10 18l-6-6 6-6"></path></svg>
+    </a>
+    <a href="App-And-6-Notify.dc.html" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #5B6F79; text-decoration: none; padding: 12px">SKIP</a>
+  </div>
+
+  <!-- Android-style notifications (with action buttons) -->
+  <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px">
+    <div style="padding: 14px 16px; border-radius: 24px; background: #FFFFFF; border: 1px solid #DCE3E7; box-shadow: 0 16px 36px -24px rgba(16,34,43,0.45); display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5B6F79"><img src="../assets/dos_mark.png" alt="" style="width: 18px; height: 18px"><span>OSF · Thu 7:00 PM</span></div>
+      <span style="font-weight: 600; font-size: 15px">Tomorrow, 7 PM · EP 16</span>
+      <span style="font-size: 14px; line-height: 1.4; color: #5B6F79">Resume Masterclass with Selvaganapathi R. Your seat is saved.</span>
+      <div style="display: flex; gap: 18px; margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: #2F8A36"><span>ADD TO CALENDAR</span><span>DETAILS</span></div>
+    </div>
+    <div style="padding: 14px 16px; border-radius: 24px; background: #FFFFFF; border: 1px solid #DCE3E7; box-shadow: 0 16px 36px -24px rgba(16,34,43,0.45); display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5B6F79"><img src="../assets/dos_mark.png" alt="" style="width: 18px; height: 18px"><span>OSF · Fri 6:00 PM</span></div>
+      <span style="font-weight: 600; font-size: 15px">Starts in 1 hour</span>
+      <span style="font-size: 14px; line-height: 1.4; color: #5B6F79">Keep your resume open — the profile review is where the fixes happen.</span>
+    </div>
+    <div style="padding: 14px 16px; border-radius: 24px; background: #0C3346; color: #FFFFFF; box-shadow: 0 20px 40px -20px rgba(12,51,70,0.6); display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #93AAB5"><img src="../assets/dos_mark.png" alt="" style="width: 18px; height: 18px"><span>OSF · <span style="color: #8BD08E">now</span></span></div>
+      <span style="font-weight: 600; font-size: 15px">We're live!</span>
+      <span style="font-size: 14px; line-height: 1.4; color: #C9D8DF">EP 16 has started. Jump in.</span>
+      <div style="display: flex; gap: 18px; margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: #8BD08E"><span>JOIN ON ZOOM</span><span>LATER</span></div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px; margin-top: auto">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #2F8A36">/ 02 — REMINDERS</span>
+    <h1 style="margin: 0; font-weight: 600; font-size: 40px; line-height: 1.04; letter-spacing: -0.03em">Reminders that <span style="background: linear-gradient(90deg, #2F8A36, #1593C3); -webkit-background-clip: text; background-clip: text; color: transparent">actually reach you.</span></h1>
+    <p style="margin: 0; font-size: 16px; line-height: 1.55; color: #5B6F79">Tap <strong style="color: #10222B">Remind me</strong> on any episode. We nudge you the day before, an hour before, and the moment we go live. No SMS. No inbox pile-up.</p>
+  </div>
+
+  <div aria-hidden="true" style="display: flex; gap: 6px; margin: 24px 0 20px">
+    <span style="width: 12px; height: 6px; border-radius: 999px; background: #CFD9DE"></span>
+    <span style="width: 24px; height: 6px; border-radius: 999px; background: #2F8A36"></span>
+    <span style="width: 12px; height: 6px; border-radius: 999px; background: #CFD9DE"></span>
+  </div>
+
+  <a href="App-And-5-Intro-3.dc.html" style="display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 999px; background: #2F8A36; color: #FFFFFF; text-decoration: none; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em">NEXT -&gt;</a>
+  <p style="margin: 14px 0 0; text-align: center; font-size: 14px; color: #5B6F79">No account needed. Ever.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":412,"height":915}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

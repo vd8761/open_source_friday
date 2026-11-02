@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>iOS — Turn on reminders</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F8A36}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; padding: 59px 24px 34px; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background-color: #F4F7F9; background-image: radial-gradient(circle at 50% 22%, rgba(76,175,80,0.2), transparent 34%), linear-gradient(rgba(16,34,43,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(16,34,43,0.045) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px">
+
+  <div style="display: flex; align-items: center; height: 44px">
+    <a href="App-iOS-5-Intro-3.dc.html" aria-label="Back" style="width: 44px; height: 44px; display: flex; align-items: center; color: #10222B">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+  </div>
+
+  <div aria-hidden="true" style="align-self: center; margin-top: 8px; width: 132px; height: 132px; border-radius: 50%; background: rgba(47,138,54,0.10); display: flex; align-items: center; justify-content: center">
+    <div style="width: 96px; height: 96px; border-radius: 50%; background: rgba(47,138,54,0.16); display: flex; align-items: center; justify-content: center">
+      <div style="width: 64px; height: 64px; border-radius: 50%; background: #2F8A36; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 22px; text-align: center; align-items: center">
+    <h1 style="margin: 0; font-weight: 600; font-size: 32px; line-height: 1.08; letter-spacing: -0.03em">Want a nudge before every Friday?</h1>
+    <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #5B6F79; max-width: 310px">Pick what you'd like. Only for episodes you tap <strong style="color: #10222B">Remind me</strong> on.</p>
+  </div>
+
+  <div role="group" aria-label="Reminder types" style="margin-top: 22px; background: #FFFFFF; border: 1px solid #DCE3E7; border-radius: 20px; overflow: hidden">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #EEF2F5; min-height: 52px; box-sizing: border-box">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+          <span style="font-weight: 600; font-size: 16px">{{r.label}}</span>
+          <span style="font-size: 13px; color: #5B6F79">{{r.hint}}</span>
+        </div>
+        <sc-if value="{{r.on}}" hint-placeholder-val="{{ true }}">
+          <button type="button" role="switch" aria-checked="true" aria-label="{{r.label}}" onClick="{{r.toggle}}" style="flex: none; width: 51px; height: 31px; border-radius: 999px; border: 0; padding: 2px; background: #2F8A36; display: flex; justify-content: flex-end; cursor: pointer">
+            <span style="width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 2px 4px rgba(0,0,0,0.2)"></span>
+          </button>
+        </sc-if>
+        <sc-if value="{{r.off}}" hint-placeholder-val="{{ false }}">
+          <button type="button" role="switch" aria-checked="false" aria-label="{{r.label}}" onClick="{{r.toggle}}" style="flex: none; width: 51px; height: 31px; border-radius: 999px; border: 0; padding: 2px; background: #DCE3E7; display: flex; justify-content: flex-start; cursor: pointer">
+            <span style="width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 2px 4px rgba(0,0,0,0.2)"></span>
+          </button>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px">
+    <a href="App-iOS-7-Home.dc.html" style="height: 56px; border-radius: 999px; background: #2F8A36; color: #FFFFFF; text-decoration: none; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em">ALLOW NOTIFICATIONS</a>
+    <a href="App-iOS-7-Home.dc.html" style="height: 48px; border-radius: 999px; color: #10222B; text-decoration: none; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 16px">Not now</a>
+    <p style="margin: 2px 0 0; text-align: center; font-size: 13px; line-height: 1.5; color: #5B6F79">iPhone will ask you to confirm next. Change this anytime in Settings.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { day: true, hour: true, live: true, tip: false };
+  }
+  renderVals() {
+    const defs = [
+      { id: 'day', label: 'Day before', hint: 'Thursday, 7 PM' },
+      { id: 'hour', label: '1 hour before', hint: 'Friday, 6 PM' },
+      { id: 'live', label: "We're live", hint: 'One tap to join on Zoom' },
+      { id: 'tip', label: 'Tip of the week', hint: 'One short tip, once a week' }
+    ];
+    const rows = defs.map((d) => ({ ...d, on: !!this.state[d.id], off: !this.state[d.id], toggle: () => this.setState({ [d.id]: !this.state[d.id] }) }));
+    return { rows };
+  }
+}
+</script>
+</body>
+</html>

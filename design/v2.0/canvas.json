@@ -1,0 +1,622 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "App-And-1-Splash.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 1 Splash",
+      "w": 412,
+      "x": 0,
+      "y": 2300
+    },
+    "App-And-10-Event.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 10 Episode details",
+      "w": 412,
+      "x": 4428,
+      "y": 2300
+    },
+    "App-And-11-MyFridays.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 11 My Fridays",
+      "w": 412,
+      "x": 4920,
+      "y": 2300
+    },
+    "App-And-12-Tips.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 12 Tips",
+      "w": 412,
+      "x": 5412,
+      "y": 2300
+    },
+    "App-And-13-Inbox.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 13 Notifications",
+      "w": 412,
+      "x": 5904,
+      "y": 2300
+    },
+    "App-And-14-Settings.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 14 Settings",
+      "w": 412,
+      "x": 6396,
+      "y": 2300
+    },
+    "App-And-15-Reserve-1.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 15 Reserve · Step 1 — Check email/number",
+      "w": 412,
+      "x": 0,
+      "y": 6080
+    },
+    "App-And-15b-Registered.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 15b Already registered",
+      "w": 412,
+      "x": 492,
+      "y": 6080
+    },
+    "App-And-16-Reserve-2.dc.html": {
+      "h": 1700,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 16 Reserve · Step 2 — Details (full scroll)",
+      "w": 412,
+      "x": 984,
+      "y": 6080
+    },
+    "App-And-17-Reserve-3.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 17 Reserve · Step 3 — You're in",
+      "w": 412,
+      "x": 1476,
+      "y": 6080
+    },
+    "App-And-2-Loader.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 2 Loader",
+      "w": 412,
+      "x": 492,
+      "y": 2300
+    },
+    "App-And-3-Intro-1.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 3 Intro — Never miss a Friday",
+      "w": 412,
+      "x": 984,
+      "y": 2300
+    },
+    "App-And-4-Intro-2.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 4 Intro — Reminders",
+      "w": 412,
+      "x": 1476,
+      "y": 2300
+    },
+    "App-And-5-Intro-3.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 5 Intro — Tips",
+      "w": 412,
+      "x": 1968,
+      "y": 2300
+    },
+    "App-And-6-Notify.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 6 Turn on reminders",
+      "w": 412,
+      "x": 2460,
+      "y": 2300
+    },
+    "App-And-7-Home.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 7 Home",
+      "w": 412,
+      "x": 2952,
+      "y": 2300
+    },
+    "App-And-8-Calendar.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 8 Calendar — month",
+      "w": 412,
+      "x": 3444,
+      "y": 2300
+    },
+    "App-And-9-Agenda.dc.html": {
+      "h": 915,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 28,
+      "title": "Android · 9 Calendar — week & day",
+      "w": 412,
+      "x": 3936,
+      "y": 2300
+    },
+    "App-TabBar.dc.html": {
+      "h": 84,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "title": "Bottom tab bar (shared component)",
+      "w": 390,
+      "x": 0,
+      "y": 3600
+    },
+    "App-iOS-1-Splash.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 1 Splash",
+      "w": 390,
+      "x": 0,
+      "y": 1000
+    },
+    "App-iOS-10-Event.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 10 Episode details",
+      "w": 390,
+      "x": 4230,
+      "y": 1000
+    },
+    "App-iOS-11-MyFridays.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 11 My Fridays",
+      "w": 390,
+      "x": 4700,
+      "y": 1000
+    },
+    "App-iOS-12-Tips.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 12 Tips",
+      "w": 390,
+      "x": 5170,
+      "y": 1000
+    },
+    "App-iOS-13-Inbox.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 13 Notifications",
+      "w": 390,
+      "x": 5640,
+      "y": 1000
+    },
+    "App-iOS-14-Settings.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 14 Settings",
+      "w": 390,
+      "x": 6110,
+      "y": 1000
+    },
+    "App-iOS-15-Reserve-1.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 15 Reserve · Step 1 — Check email/number",
+      "w": 390,
+      "x": 0,
+      "y": 4040
+    },
+    "App-iOS-15b-Registered.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 15b Already registered",
+      "w": 390,
+      "x": 470,
+      "y": 4040
+    },
+    "App-iOS-16-Reserve-2.dc.html": {
+      "h": 1640,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 16 Reserve · Step 2 — Details (full scroll)",
+      "w": 390,
+      "x": 940,
+      "y": 4040
+    },
+    "App-iOS-17-Reserve-3.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 17 Reserve · Step 3 — You're in",
+      "w": 390,
+      "x": 1410,
+      "y": 4040
+    },
+    "App-iOS-2-Loader.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 2 Loader",
+      "w": 390,
+      "x": 470,
+      "y": 1000
+    },
+    "App-iOS-3-Intro-1.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 3 Intro — Never miss a Friday",
+      "w": 390,
+      "x": 940,
+      "y": 1000
+    },
+    "App-iOS-4-Intro-2.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 4 Intro — Reminders",
+      "w": 390,
+      "x": 1410,
+      "y": 1000
+    },
+    "App-iOS-5-Intro-3.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 5 Intro — Tips",
+      "w": 390,
+      "x": 1880,
+      "y": 1000
+    },
+    "App-iOS-6-Notify.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 6 Turn on reminders",
+      "w": 390,
+      "x": 2350,
+      "y": 1000
+    },
+    "App-iOS-7-Home.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 7 Home",
+      "w": 390,
+      "x": 2820,
+      "y": 1000
+    },
+    "App-iOS-8-Calendar.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 8 Calendar — month",
+      "w": 390,
+      "x": 3290,
+      "y": 1000
+    },
+    "App-iOS-9-Agenda.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "page-lm6tf9",
+      "radius": 48,
+      "title": "iOS · 9 Calendar — week & day",
+      "w": 390,
+      "x": 3760,
+      "y": 1000
+    },
+    "Episodes.dc.html": {
+      "expand": "fill",
+      "h": 3300,
+      "is_interactive": true,
+      "title": "Episodes — full timeline",
+      "w": 1440,
+      "x": 1424,
+      "y": 0
+    },
+    "Footer.dc.html": {
+      "h": 600,
+      "is_interactive": true,
+      "title": "Footer menu (shared component)",
+      "w": 1440,
+      "x": 1344,
+      "y": 8000
+    },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 4700,
+      "is_interactive": true,
+      "title": "Home — OSF event page",
+      "w": 1520,
+      "x": -176,
+      "y": 0
+    },
+    "Nav.dc.html": {
+      "h": 80,
+      "is_interactive": true,
+      "title": "Top navigation (shared component)",
+      "w": 1440,
+      "x": -176,
+      "y": 8000
+    },
+    "Policies.dc.html": {
+      "expand": "fill",
+      "h": 2400,
+      "is_interactive": true,
+      "title": "Policies — Privacy, Terms, Code of Conduct…",
+      "w": 1440,
+      "x": 4384,
+      "y": 5200
+    },
+    "Register-1.dc.html": {
+      "expand": "fill",
+      "h": 2132,
+      "is_interactive": true,
+      "title": "Register · Step 1 — Identify",
+      "w": 1440,
+      "x": -176,
+      "y": 5200
+    },
+    "Register-2.dc.html": {
+      "expand": "fill",
+      "h": 2200,
+      "is_interactive": true,
+      "title": "Register · Step 2 — Details",
+      "w": 1440,
+      "x": 1344,
+      "y": 5200
+    },
+    "Register-3.dc.html": {
+      "expand": "fill",
+      "h": 1900,
+      "is_interactive": true,
+      "title": "Register · Step 3 — You're in",
+      "w": 1440,
+      "x": 2864,
+      "y": 5200
+    },
+    "Speak.dc.html": {
+      "expand": "fill",
+      "h": 3600,
+      "is_interactive": true,
+      "title": "Speak at OSF",
+      "w": 1440,
+      "x": 5984,
+      "y": 0
+    },
+    "Speakers.dc.html": {
+      "expand": "fill",
+      "h": 3000,
+      "is_interactive": true,
+      "title": "Speakers",
+      "w": 1440,
+      "x": 2944,
+      "y": 0
+    },
+    "Who.dc.html": {
+      "expand": "fill",
+      "h": 3600,
+      "is_interactive": true,
+      "title": "Who it's for",
+      "w": 1440,
+      "x": 4464,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-29T10:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "noteOrder": [
+    "rowSite",
+    "rowReg",
+    "rowComp",
+    "rowIOS",
+    "rowAnd",
+    "rowAppComp",
+    "rowResIOS",
+    "rowResAnd"
+  ],
+  "notes": {
+    "rowAnd": {
+      "kind": "title1",
+      "maxW": 6800,
+      "page": "page-lm6tf9",
+      "text": "Android · onboarding → Home · Calendar · Tips · My Fridays",
+      "w": 240,
+      "x": 0,
+      "y": 2000
+    },
+    "rowAppComp": {
+      "kind": "title1",
+      "maxW": 2000,
+      "page": "page-lm6tf9",
+      "text": "App components",
+      "w": 240,
+      "x": 0,
+      "y": 3320
+    },
+    "rowComp": {
+      "kind": "title1",
+      "maxW": 3000,
+      "text": "Shared components",
+      "w": 240,
+      "x": -176,
+      "y": 7680
+    },
+    "rowIOS": {
+      "kind": "title1",
+      "maxW": 6500,
+      "page": "page-lm6tf9",
+      "text": "iPhone · onboarding → Home · Calendar · Tips · My Fridays",
+      "w": 240,
+      "x": 0,
+      "y": 700
+    },
+    "rowReg": {
+      "kind": "title1",
+      "maxW": 6000,
+      "text": "Registration flow & policies",
+      "w": 240,
+      "x": -176,
+      "y": 4880
+    },
+    "rowResAnd": {
+      "kind": "title1",
+      "maxW": 1890,
+      "page": "page-lm6tf9",
+      "text": "Android · Reserve your seat",
+      "w": 240,
+      "x": 0,
+      "y": 5800
+    },
+    "rowResIOS": {
+      "kind": "title1",
+      "maxW": 1800,
+      "page": "page-lm6tf9",
+      "text": "iPhone · Reserve your seat",
+      "w": 240,
+      "x": 0,
+      "y": 3760
+    },
+    "rowSite": {
+      "kind": "title1",
+      "maxW": 7600,
+      "text": "Site pages",
+      "w": 240,
+      "x": -176,
+      "y": -320
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Episodes.dc.html",
+    "Speakers.dc.html",
+    "Who.dc.html",
+    "Speak.dc.html",
+    "Register-1.dc.html",
+    "Register-2.dc.html",
+    "Register-3.dc.html",
+    "Policies.dc.html",
+    "Nav.dc.html",
+    "Footer.dc.html",
+    "App-iOS-1-Splash.dc.html",
+    "App-iOS-2-Loader.dc.html",
+    "App-iOS-3-Intro-1.dc.html",
+    "App-iOS-4-Intro-2.dc.html",
+    "App-iOS-5-Intro-3.dc.html",
+    "App-iOS-6-Notify.dc.html",
+    "App-And-1-Splash.dc.html",
+    "App-And-2-Loader.dc.html",
+    "App-And-3-Intro-1.dc.html",
+    "App-And-4-Intro-2.dc.html",
+    "App-And-5-Intro-3.dc.html",
+    "App-And-6-Notify.dc.html",
+    "App-iOS-7-Home.dc.html",
+    "App-iOS-8-Calendar.dc.html",
+    "App-iOS-9-Agenda.dc.html",
+    "App-iOS-10-Event.dc.html",
+    "App-iOS-11-MyFridays.dc.html",
+    "App-iOS-12-Tips.dc.html",
+    "App-iOS-13-Inbox.dc.html",
+    "App-iOS-14-Settings.dc.html",
+    "App-And-7-Home.dc.html",
+    "App-And-8-Calendar.dc.html",
+    "App-And-9-Agenda.dc.html",
+    "App-And-10-Event.dc.html",
+    "App-And-11-MyFridays.dc.html",
+    "App-And-12-Tips.dc.html",
+    "App-And-13-Inbox.dc.html",
+    "App-And-14-Settings.dc.html",
+    "App-TabBar.dc.html",
+    "App-iOS-15-Reserve-1.dc.html",
+    "App-iOS-15b-Registered.dc.html",
+    "App-iOS-16-Reserve-2.dc.html",
+    "App-iOS-17-Reserve-3.dc.html",
+    "App-And-15-Reserve-1.dc.html",
+    "App-And-15b-Registered.dc.html",
+    "App-And-16-Reserve-2.dc.html",
+    "App-And-17-Reserve-3.dc.html"
+  ],
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Website"
+    },
+    {
+      "id": "page-lm6tf9",
+      "name": "Mobile app"
+    }
+  ],
+  "title": "Open Source Fridays — Event Page"
+}

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>iOS — Intro 2: Reminders</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F8A36}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; padding: 59px 24px 34px; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background-color: #F4F7F9; background-image: radial-gradient(circle at 50% 28%, rgba(21,147,195,0.14), transparent 40%), linear-gradient(rgba(16,34,43,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(16,34,43,0.045) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px">
+
+  <div style="display: flex; justify-content: space-between; align-items: center; height: 44px">
+    <a href="App-iOS-3-Intro-1.dc.html" aria-label="Back" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: flex-start; color: #10222B">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <a href="App-iOS-6-Notify.dc.html" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #5B6F79; text-decoration: none; padding: 12px 4px">SKIP</a>
+  </div>
+
+  <!-- Notification stack -->
+  <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px">
+    <div style="display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 22px; background: rgba(255,255,255,0.92); border: 1px solid #DCE3E7; box-shadow: 0 16px 36px -22px rgba(16,34,43,0.45)">
+      <img src="../assets/dos_mark.png" alt="" style="width: 38px; height: 38px; border-radius: 10px; flex: none">
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 600">OSF</span><span style="color: #5B6F79">Thu 7:00 PM</span></div>
+        <span style="font-weight: 600; font-size: 15px">Tomorrow, 7 PM · EP 16</span>
+        <span style="font-size: 14px; line-height: 1.4; color: #5B6F79">Resume Masterclass with Selvaganapathi R. Your seat is saved.</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 22px; background: rgba(255,255,255,0.92); border: 1px solid #DCE3E7; box-shadow: 0 16px 36px -22px rgba(16,34,43,0.45)">
+      <img src="../assets/dos_mark.png" alt="" style="width: 38px; height: 38px; border-radius: 10px; flex: none">
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 600">OSF</span><span style="color: #5B6F79">Fri 6:00 PM</span></div>
+        <span style="font-weight: 600; font-size: 15px">Starts in 1 hour</span>
+        <span style="font-size: 14px; line-height: 1.4; color: #5B6F79">Keep your resume open — the profile review is where the fixes happen.</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 22px; background: #0C3346; color: #FFFFFF; box-shadow: 0 20px 40px -20px rgba(12,51,70,0.6)">
+      <img src="../assets/dos_mark.png" alt="" style="width: 38px; height: 38px; border-radius: 10px; flex: none">
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 600">OSF</span><span style="color: #8BD08E">now</span></div>
+        <span style="font-weight: 600; font-size: 15px">We're live!</span>
+        <span style="font-size: 14px; line-height: 1.4; color: #C9D8DF">Tap to join EP 16 on Zoom.</span>
+      </div>
+    </div>
+    <div style="align-self: center; display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 12px 18px; border-radius: 999px; background: #E7F3E8; color: #2F8A36; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+      REMINDER SET ✓
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px; margin-top: auto">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #2F8A36">/ 02 — REMINDERS</span>
+    <h1 style="margin: 0; font-weight: 600; font-size: 38px; line-height: 1.04; letter-spacing: -0.03em">Reminders that <span style="background: linear-gradient(90deg, #2F8A36, #1593C3); -webkit-background-clip: text; background-clip: text; color: transparent">actually reach you.</span></h1>
+    <p style="margin: 0; font-size: 16px; line-height: 1.55; color: #5B6F79">Tap <strong style="color: #10222B">Remind me</strong> on any episode. We nudge you the day before, an hour before, and the moment we go live. No SMS. No inbox pile-up.</p>
+  </div>
+
+  <div aria-hidden="true" style="display: flex; gap: 6px; margin: 24px 0 20px">
+    <span style="width: 12px; height: 6px; border-radius: 999px; background: #CFD9DE"></span>
+    <span style="width: 24px; height: 6px; border-radius: 999px; background: #2F8A36"></span>
+    <span style="width: 12px; height: 6px; border-radius: 999px; background: #CFD9DE"></span>
+  </div>
+
+  <a href="App-iOS-5-Intro-3.dc.html" style="display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 999px; background: #2F8A36; color: #FFFFFF; text-decoration: none; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em">NEXT -&gt;</a>
+  <p style="margin: 14px 0 0; text-align: center; font-size: 14px; color: #5B6F79">No account needed. Ever.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

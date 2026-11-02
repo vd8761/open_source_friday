@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Register · Step 3 — You're in</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#F4F7F9}
+a{color:#2F8A36}a:hover{color:#236B29}
+</style>
+</helmet>
+<div style="font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background-color: #F4F7F9; background-image: radial-gradient(circle at 50% 12%, rgba(76,175,80,0.18), transparent 28%), linear-gradient(rgba(16,34,43,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(16,34,43,0.04) 1px, transparent 1px); background-size: 100% 100%, 64px 64px, 64px 64px; min-width: 0">
+
+  <dc-import name="Nav" active="episodes" hint-size="100%,72px"></dc-import>
+
+  <main style="max-width: 1040px; margin: 0 auto; padding: 56px 24px 96px; display: flex; flex-direction: column; gap: 40px">
+
+    <ol aria-label="Registration progress" style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 560px; width: 100%; align-self: center">
+      <li style="display: flex; flex-direction: column; gap: 8px">
+        <span style="height: 6px; border-radius: 999px; background: #2F8A36"></span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #2F8A36">01 · IDENTIFY ✓</span>
+      </li>
+      <li style="display: flex; flex-direction: column; gap: 8px">
+        <span style="height: 6px; border-radius: 999px; background: #2F8A36"></span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #2F8A36">02 · DETAILS ✓</span>
+      </li>
+      <li aria-current="step" style="display: flex; flex-direction: column; gap: 8px">
+        <span style="height: 6px; border-radius: 999px; background: #2F8A36"></span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #2F8A36">03 · DONE</span>
+      </li>
+    </ol>
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #5B6F79"><span style="color: #2F8A36">~/osf ❯</span> ./register --ep 16 <span style="color: #2F8A36">✓ success</span></span>
+      <h1 style="margin: 0; font-weight: 600; font-size: clamp(48px, 6.4vw, 88px); line-height: 1; letter-spacing: -0.03em">You're in.<br><span style="background: linear-gradient(90deg, #2F8A36, #1593C3); -webkit-background-clip: text; background-clip: text; color: transparent">See you Friday.</span></h1>
+      <p style="margin: 0; font-size: 19px; line-height: 1.55; color: #5B6F79; max-width: 600px">Your seat for Episode 16 is saved. Zoom will email your personal meeting link — keep it private, it's yours.</p>
+    </div>
+
+    <!-- Ticket -->
+    <div style="display: flex; flex-wrap: wrap; background-color: #10222B; background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px; color: #FFFFFF; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 70px -30px rgba(16,34,43,0.5)">
+      <div style="flex: 999 1 420px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 18px">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 5px 9px; border-radius: 999px; background: #8BD08E; color: #10222B">#OSF-EP16 · CONFIRMED</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 5px 9px; border-radius: 999px; border: 1px solid #3A5562; color: #C9D8DF">ONLINE · ZOOM</span>
+        </div>
+        <h2 style="margin: 0; font-weight: 600; font-size: 30px; line-height: 1.1">Resume Masterclass: How to Make Your Resume Bypass HR Rejections</h2>
+        <span style="font-size: 16px; color: #C9D8DF">with <strong style="color: #FFFFFF">Selvaganapathi Ramachandran</strong> · Delivery Lead, HCLTech</span>
+      </div>
+      <div style="flex: 1 1 260px; padding: 32px; border-left: 2px dashed #3A5562; display: flex; flex-direction: column; justify-content: center; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: #93AAB5">DATE</span>
+          <span style="font-weight: 600; font-size: 24px">Fri, 30 Oct 2026</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: #93AAB5">TIME</span>
+          <span style="font-weight: 600; font-size: 24px">7:00 – 8:00 PM IST</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px">
+      <a href="#" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; background: #2F8A36; color: #FFFFFF; text-decoration: none; padding: 16px 24px; border-radius: 999px">ADD TO GOOGLE CALENDAR</a>
+      <a href="#" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #10222B; background: #FFFFFF; text-decoration: none; padding: 15px 22px; border-radius: 999px; border: 1px solid #CFD9DE">DOWNLOAD .ICS</a>
+    </div>
+
+    <section aria-labelledby="next-h" style="display: flex; flex-direction: column; gap: 20px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; color: #2F8A36">/ BEFORE FRIDAY</span>
+      <h2 id="next-h" style="margin: 0; font-weight: 600; font-size: 32px; line-height: 1">Three quick things.</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px">
+        <div style="background: #FFFFFF; border: 1px solid #DCE3E7; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #2F8A36">01</span>
+          <span style="font-weight: 600; font-size: 19px">Watch your inbox</span>
+          <span style="font-size: 15px; line-height: 1.55; color: #5B6F79">Zoom sends the meeting email. Not there? Check spam, then write to <a href="mailto:info@descienceosclub.com">info@descienceosclub.com</a>.</span>
+        </div>
+        <div style="background: #FFFFFF; border: 1px solid #DCE3E7; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #2F8A36">02</span>
+          <span style="font-weight: 600; font-size: 19px">Bring your resume</span>
+          <span style="font-size: 15px; line-height: 1.55; color: #5B6F79">Have it open — the Q&amp;A and profile review are where the real fixes happen.</span>
+        </div>
+        <div style="background: #FFFFFF; border: 1px solid #DCE3E7; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #2F8A36">03</span>
+          <span style="font-weight: 600; font-size: 19px">Stay 30+ minutes</span>
+          <span style="font-size: 15px; line-height: 1.55; color: #5B6F79">Attendance comes from the Zoom report — 30 minutes is the default threshold to be marked present.</span>
+        </div>
+      </div>
+    </section>
+
+    <div style="background: #0C3346; color: #FFFFFF; border-radius: 28px; padding: 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px">
+      <div style="flex: 999 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-weight: 600; font-size: 28px; line-height: 1.1">Don't job-hunt alone.</span>
+        <span style="font-size: 16px; color: #C9D8DF">Send this episode to a friend who's been getting ghosted by HR.</span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <a href="#" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; background: #FFFFFF; color: #10222B; text-decoration: none; padding: 14px 20px; border-radius: 999px">WHATSAPP</a>
+        <a href="#" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #FFFFFF; text-decoration: none; padding: 13px 20px; border-radius: 999px; border: 1px solid #3A5F70">LINKEDIN</a>
+        <button type="button" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; padding: 13px 20px; min-height: 44px; border-radius: 999px; border: 1px solid #3A5F70; background: transparent; color: #FFFFFF; cursor: pointer">COPY LINK</button>
+      </div>
+    </div>
+
+    <a href="Episodes.dc.html" style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding: 24px 28px; border-radius: 24px; border: 1px dashed #B9C8CF; background: rgba(255,255,255,0.7); color: #10222B; text-decoration: none">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #2F8A36">UP NEXT · EP 17 · FRI 6 NOV</span>
+      <span style="flex: 999 1 240px; font-weight: 600; font-size: 18px">[Session title] — [Speaker name]</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #2F8A36">ALL EPISODES -&gt;</span>
+    </a>
+  </main>
+
+  <dc-import name="Footer" hint-size="100%,600px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App — Notifications</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: {{w}}px; height: {{h}}px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background: #F4F7F9">
+
+  <div style="padding: {{top}}px 12px 0; background: #FFFFFF; border-bottom: 1px solid #DCE3E7">
+    <div style="display: flex; align-items: center; justify-content: space-between; height: {{barH}}px">
+      <a href="{{l.back}}" aria-label="Back" style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #10222B">
+        <sc-if value="{{isIOS}}" hint-placeholder-val="{{ true }}">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+        </sc-if>
+        <sc-if value="{{isAnd}}" hint-placeholder-val="{{ false }}">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H4M10 18l-6-6 6-6"></path></svg>
+        </sc-if>
+      </a>
+      <span style="flex: 1; font-weight: 600; font-size: 17px; text-align: {{titleAlign}}">Notifications</span>
+      <button type="button" onClick="{{readAll}}" style="height: 44px; padding: 0 10px; border: 0; background: transparent; color: #2F8A36; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer">READ ALL</button>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px">
+    <sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #5B6F79; margin-top: 6px">{{g.label}}</span>
+      <sc-for list="{{g.items}}" as="n" hint-placeholder-count="2">
+        <a href="{{n.href}}" style="display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 18px; background: {{n.bg}}; border: 1px solid #DCE3E7; text-decoration: none; color: #10222B">
+          <span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: {{n.iconBg}}; color: {{n.iconFg}}; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 13px">{{n.glyph}}</span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+            <span style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 600; font-size: 15px">{{n.title}}</span><span style="flex: none; font-size: 12px; color: #5B6F79">{{n.time}}</span></span>
+            <span style="font-size: 14px; line-height: 1.4; color: #5B6F79">{{n.body}}</span>
+          </span>
+          <sc-if value="{{n.unread}}" hint-placeholder-val="{{ false }}">
+            <span aria-label="Unread" style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #2F8A36; margin-top: 6px"></span>
+          </sc-if>
+        </a>
+      </sc-for>
+    </sc-for>
+    <p style="margin: 8px 0 0; text-align: center; font-size: 13px; color: #5B6F79">That's everything — you're all caught up.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"platform":{"editor":"enum","options":["ios","android"],"default":"ios"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { read: false };
+  }
+  renderVals() {
+    const and = this.props.platform === 'android';
+    const P = and ? 'App-And-' : 'App-iOS-';
+    const ev = P + '10-Event.dc.html', tips = P + '12-Tips.dc.html';
+    const u = !this.state.read;
+    const mk = (o) => ({ ...o, unread: o.unread && u, bg: o.unread && u ? '#FFFFFF' : 'rgba(255,255,255,0.55)' });
+    const groups = [
+      { label: 'TODAY', items: [
+        mk({ glyph: '1D', iconBg: '#2F8A36', iconFg: '#FFFFFF', title: 'Tomorrow, 7 PM · EP 16', time: '7:00 PM', body: 'Resume Masterclass with Selvaganapathi R. Your seat is saved.', href: ev, unread: true }),
+        mk({ glyph: '“', iconBg: '#0C3346', iconFg: '#8BD08E', title: 'Tip of the week', time: '9:00 AM', body: "Map your actual skills and projects — don't lean on a placement template.", href: tips, unread: true })
+      ] },
+      { label: 'EARLIER', items: [
+        mk({ glyph: 'NEW', iconBg: '#E7F3E8', iconFg: '#2F8A36', title: 'EP 16 is announced', time: 'Mon', body: 'Resume Masterclass — tap Remind me to get nudged.', href: ev, unread: false }),
+        mk({ glyph: 'LIVE', iconBg: '#E3F1F8', iconFg: '#0D6B90', title: "We're live! · EP 15", time: '23 Oct', body: 'Niche & High-Growth Technical Domains started.', href: ev, unread: false })
+      ] }
+    ];
+    return {
+      w: and ? 412 : 390, h: and ? 915 : 844, top: and ? 32 : 50, barH: and ? 64 : 48,
+      isAnd: and, isIOS: !and, titleAlign: and ? 'left' : 'center',
+      l: { back: P + '7-Home.dc.html' }, groups,
+      readAll: () => this.setState({ read: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

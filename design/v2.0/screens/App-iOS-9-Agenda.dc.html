@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App — Calendar (week and day)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: {{w}}px; height: {{h}}px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; font-family: 'Space Grotesk', system-ui, sans-serif; color: #10222B; background-color: #F4F7F9; background-image: linear-gradient(rgba(16,34,43,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(16,34,43,0.04) 1px, transparent 1px); background-size: 40px 40px">
+
+  <div style="flex: 1; min-height: 0; overflow: hidden; padding: {{top}}px 20px 16px; display: flex; flex-direction: column; gap: 18px">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 8px">
+      <h1 style="margin: 0; font-weight: 600; font-size: 32px; letter-spacing: -0.02em">Calendar</h1>
+      <div role="group" aria-label="View" style="display: flex; padding: 4px; border-radius: 999px; background: #FFFFFF; border: 1px solid #DCE3E7">
+        <a href="{{l.cal}}" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 10px 14px; border-radius: 999px; color: #5B6F79; text-decoration: none">MONTH</a>
+        <span aria-current="page" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 10px 14px; border-radius: 999px; background: #10222B; color: #FFFFFF">WEEK</span>
+      </div>
+    </div>
+
+    <!-- Week strip -->
+    <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center">
+      <sc-for list="{{week}}" as="d" hint-placeholder-count="7">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: {{d.labelFg}}">{{d.label}}</span>
+          <span style="width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; background: {{d.bg}}; color: {{d.fg}}; border: {{d.border}}; box-sizing: border-box">{{d.n}}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: flex-end">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-weight: 600; font-size: 22px">Friday, 30 October</span>
+        <span style="font-size: 14px; color: #5B6F79">1 episode · 3 reminders</span>
+      </div>
+      <div style="display: flex; gap: 6px">
+        <button type="button" aria-label="Previous day" style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid #DCE3E7; background: #FFFFFF; color: #10222B; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></button>
+        <button type="button" aria-label="Next day" style="width: 40px; height: 40px; border-radius: 50%; border: 0; background: #10222B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg></button>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <span style="width: 64px; flex: none; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5B6F79">6:00 PM</span>
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #1593C3; flex: none"></span>
+        <span style="flex: 1; height: 1px; background: #CFD9DE"></span>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <span style="width: 64px; flex: none"></span>
+        <div style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: #E3F1F8; color: #0D5A78; font-size: 14px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+          <span><strong>Reminder</strong> · 1 hour before</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <span style="width: 64px; flex: none; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #10222B; font-weight: 700">7:00 PM</span>
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #2F8A36; flex: none"></span>
+        <span style="flex: 1; height: 1px; background: #2F8A36"></span>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <span style="width: 64px; flex: none"></span>
+        <a href="{{l.event}}" style="flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 18px; background: #2F8A36; color: #FFFFFF; text-decoration: none; min-height: 132px; box-sizing: border-box">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: #DDF0DE">EP 16 · LIVE ON ZOOM</span>
+            <span style="width: 32px; height: 32px; border-radius: 50%; background: #FFFFFF; color: #2F8A36; display: flex; align-items: center; justify-content: center; flex: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>
+          </div>
+          <span style="font-weight: 600; font-size: 17px; line-height: 1.25">Resume Masterclass: Bypass HR Rejections</span>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: auto">
+            <span style="width: 26px; height: 26px; border-radius: 50%; background: #FFFFFF; color: #2F8A36; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 10px">SR</span>
+            <span style="font-size: 13px; color: #DDF0DE">7:00 – 8:00 PM · Selvaganapathi R.</span>
+          </div>
+        </a>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <span style="width: 64px; flex: none; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5B6F79">8:00 PM</span>
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #CFD9DE; flex: none"></span>
+        <span style="flex: 1; height: 1px; background: #CFD9DE"></span>
+      </div>
+    </div>
+
+    <!-- Next Fridays -->
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #5B6F79">NEXT FRIDAYS</span>
+      <div style="display: flex; gap: 8px">
+        <div style="flex: 1; padding: 12px; border-radius: 16px; border: 1px dashed #B9C8CF; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5B6F79">FRI 6 NOV · EP 17</span><span style="font-weight: 600; font-size: 14px">Announcing soon</span></div>
+        <div style="flex: 1; padding: 12px; border-radius: 16px; border: 1px dashed #B9C8CF; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5B6F79">FRI 13 NOV · EP 18</span><span style="font-weight: 600; font-size: 14px">Announcing soon</span></div>
+      </div>
+    </div>
+  </div>
+
+  <dc-import name="App-TabBar" platform="{{platform}}" active="cal" hint-size="100%,84px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"platform":{"editor":"enum","options":["ios","android"],"default":"ios"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const and = this.props.platform === 'android';
+    const P = and ? 'App-And-' : 'App-iOS-';
+    const l = { cal: P + '8-Calendar.dc.html', event: P + '10-Event.dc.html' };
+    const days = [['SUN', 25], ['MON', 26], ['TUE', 27], ['WED', 28], ['THU', 29], ['FRI', 30], ['SAT', 31]];
+    const week = days.map(([label, n]) => {
+      const fri = n === 30, today = n === 29;
+      return { label, n, bg: fri ? '#2F8A36' : '#FFFFFF', fg: fri ? '#FFFFFF' : '#10222B', border: today ? '2px solid #10222B' : (fri ? '0' : '1px solid #DCE3E7'), labelFg: fri ? '#2F8A36' : '#5B6F79' };
+    });
+    return { platform: and ? 'android' : 'ios', w: and ? 412 : 390, h: and ? 915 : 844, top: and ? 32 : 54, l, week };
+  }
+}
+</script>
+</body>
+</html>
