@@ -80,6 +80,14 @@ export const tickerItems = [
   ['Live Q&A', '[ ]'], ['Build in public', '::'], ['Get hired', '/*']
 ];
 
+// How OSF promotes every speaker (event details page). Audience figures are left out until real numbers are available.
+export const promoRunway = [
+  { when: 'T – 7 DAYS', title: 'Announcement', body: 'Your banner goes out across our WhatsApp communities, LinkedIn page and the OSF site.' },
+  { when: 'T – 3 DAYS', title: 'Speaker spotlight', body: 'A dedicated post about you: photo, role, expertise and why students should hear from you.' },
+  { when: 'FRIDAY', title: 'Live session', body: 'Morning reminder to every registrant, countdown story, and a host who introduces you properly.' },
+  { when: 'T + 1 DAY', title: 'Afterglow', body: 'Recording and highlights published with your name on them, plus a thank-you post and speaker certificate.' }
+];
+
 export const socialLinks = [
   ['https://www.instagram.com/descienceopensourceclub/', 'Instagram'],
   ['https://www.linkedin.com/company/descience-open-source-club/', 'LinkedIn'],

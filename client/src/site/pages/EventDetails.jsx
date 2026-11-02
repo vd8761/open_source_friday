@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarPlus, Check, Link2, MessageCircle, UserPlus } from 'lucide-react';
+import { CalendarPlus, Check, Download, Link2, MessageCircle, UserPlus } from 'lucide-react';
 import { Button, Card, Container, DateBadge, Eyebrow, GradientText, SpeakerAvatar, Tag } from '../ui';
-import { heroBackground } from '../utils';
+import { asset, heroBackground } from '../utils';
+import { promoRunway } from '../data';
 import { copyEpisodeLink, googleCalendarUrl, linkedinShareUrl, whatsappShareUrl } from '../share';
 import { sitePaths } from '../paths';
 
@@ -14,7 +15,106 @@ function ShareRow({ ep }) {
       <Button href={whatsappShareUrl(ep)} target="_blank" rel="noopener noreferrer" size="sm" variant="outline"><MessageCircle aria-hidden="true" className="h-4 w-4" />WHATSAPP</Button>
       <Button href={linkedinShareUrl(ep)} target="_blank" rel="noopener noreferrer" size="sm" variant="outline">LINKEDIN</Button>
       <Button onClick={copy} size="sm" variant="outline" aria-live="polite"><Link2 aria-hidden="true" className="h-4 w-4" />{copied ? 'COPIED ✓' : 'COPY LINK'}</Button>
+      {ep.cover && <Button href={ep.cover} download={`osf-ep${ep.num}-banner.jpg`} target="_blank" rel="noopener noreferrer" size="sm" variant="outline"><Download aria-hidden="true" className="h-4 w-4" />POSTER</Button>}
     </div>
+  );
+}
+
+// Mock of how the episode link unfurls in WhatsApp (same banner, title and description the real link preview uses).
+function WhatsAppPreview({ ep, lead }) {
+  return (
+    <div className="rounded-[18px] bg-[#E8F0E4] p-3">
+      <div className="ml-auto max-w-[340px] rounded-xl rounded-tr-sm bg-[#D9FDD3] p-1.5 shadow-sm">
+        <div className="overflow-hidden rounded-lg bg-[#CDEBC6]">
+          <img src={ep.cover} alt="" className="block aspect-video w-full object-cover" />
+          <div className="flex flex-col gap-0.5 px-2.5 py-2">
+            <span className="line-clamp-2 text-[13px] font-semibold leading-snug">Episode {ep.num}: {ep.title} | Open Source Fridays</span>
+            {ep.blurb && <span className="line-clamp-2 text-xs leading-snug text-osf-muted">{ep.blurb}</span>}
+            <span className="text-[11px] text-osf-muted">osf.descienceosclub.com</span>
+          </div>
+        </div>
+        <p className="m-0 px-1.5 pb-1 pt-2 text-[13px] leading-snug">Hey everyone! This {ep.weekday === 'Fri' ? 'Friday' : ep.weekday}{lead ? `, ${lead.name} breaks down…` : '…'}</p>
+      </div>
+    </div>
+  );
+}
+
+// Mock LinkedIn post: the club posts, the speaker is named and tagged.
+function LinkedInPreview({ ep, lead }) {
+  return (
+    <div className="overflow-hidden rounded-[18px] border border-osf-line bg-white">
+      <div className="flex items-center gap-2.5 p-3">
+        <img src={asset('dos_logo.png')} alt="" className="h-9 w-9 flex-none object-contain" />
+        <span className="flex flex-col leading-tight"><span className="text-[13px] font-semibold">Descience Open Source Club</span><span className="text-[11px] text-osf-muted">Promoted to followers</span></span>
+      </div>
+      <p className="m-0 px-3 pb-2.5 text-[13px] leading-snug">Proud to host {lead ? <><span className="font-semibold text-osf-sky-dark">{lead.name}</span>{lead.role && `, ${lead.role},`} </> : ''}on OSF Ep {ep.num}.</p>
+      {ep.cover && <img src={ep.cover} alt="" className="block aspect-video w-full object-cover" />}
+      <div className="flex gap-4 border-t border-osf-hairline px-3 py-2 font-osf-mono text-[10px] tracking-[0.06em] text-osf-muted"><span>LIKE</span><span>COMMENT</span><span>REPOST</span></div>
+    </div>
+  );
+}
+
+// 1:1 square for Instagram and WhatsApp status: speaker first, from the same records.
+function SquarePreview({ ep, lead }) {
+  return (
+    <div className="osf-grid-dark flex aspect-square flex-col justify-between rounded-[18px] bg-osf-ink p-5 text-white">
+      <div className="flex items-center justify-between font-osf-mono text-[10px] tracking-[0.1em] text-osf-mint"><span>OSF · EP {ep.num}</span><span>{Number(ep.day)} {ep.mon}{ep.start ? ` · ${ep.start}` : ''}</span></div>
+      {lead && (
+        <div className="flex items-end gap-4">
+          <span className="block w-[42%] flex-none rounded-[28%] bg-linear-135 from-osf-sky to-osf-mint p-[5px]"><SpeakerAvatar speaker={lead} tone="gradient" className="aspect-square h-auto w-full !rounded-[26%] text-3xl" /></span>
+          <span className="flex min-w-0 flex-col gap-1 pb-1">
+            <span className="font-osf-mono text-[10px] tracking-[0.1em] text-osf-fog">SPEAKER</span>
+            <span className="text-lg font-semibold leading-tight">{lead.name}</span>
+            {lead.role && <span className="text-xs text-osf-fog">{lead.role}</span>}
+          </span>
+        </div>
+      )}
+      <span className="line-clamp-3 text-[15px] font-semibold leading-snug"><GradientText>{ep.title}</GradientText></span>
+    </div>
+  );
+}
+
+// How OSF features its speakers, shown with this episode's own banner, title and speaker.
+function SpeakerPromise({ ep, lead }) {
+  const kit = [
+    ep.cover && { label: 'EVENT BANNER · 16:9', use: 'Site hero, YouTube thumbnail, LinkedIn event cover', el: <img src={ep.cover} alt={`Episode ${ep.num} banner`} className="block aspect-video w-full rounded-[18px] border border-osf-line object-cover" /> },
+    ep.cover && { label: 'WHATSAPP LINK PREVIEW', use: 'Shared into every OSF community group', el: <WhatsAppPreview ep={ep} lead={lead} /> },
+    { label: 'LINKEDIN POST', use: 'Club page post with you named and tagged', el: <LinkedInPreview ep={ep} lead={lead} /> },
+    lead && { label: 'SPEAKER SQUARE · 1:1', use: 'Instagram, WhatsApp status — for you to repost', el: <SquarePreview ep={ep} lead={lead} /> },
+  ].filter(Boolean);
+  return (
+    <section className="border-t border-osf-line bg-white px-4 py-16 sm:px-6 sm:py-24">
+      <Container className="flex flex-col gap-12">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div className="flex max-w-[760px] flex-col gap-3.5">
+            <Eyebrow>/ HOW WE FEATURE OUR SPEAKERS</Eyebrow>
+            <h2 className="m-0 text-[clamp(32px,4vw,52px)] font-semibold leading-[1.05] tracking-[-0.02em]">You bring the insight. <GradientText>We put your name everywhere.</GradientText></h2>
+            <p className="m-0 text-lg leading-[1.55] text-osf-muted">Every OSF speaker gets a designed launch kit and a week-long promotion run.{lead ? ` This is what goes out for ${lead.name}.` : ''}</p>
+          </div>
+          <Button to={sitePaths.speak} variant="outline">PITCH A SESSION -&gt;</Button>
+        </div>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] items-start gap-6">
+          {kit.map((k) => (
+            <figure key={k.label} className="m-0 flex min-w-0 flex-col gap-3">
+              {k.el}
+              <figcaption className="flex flex-col gap-0.5">
+                <span className="font-osf-mono text-[11px] font-bold tracking-[0.1em] text-osf-leaf">{k.label}</span>
+                <span className="text-sm text-osf-muted">{k.use}</span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+        <ol className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] gap-3 p-0">
+          {promoRunway.map((s) => (
+            <li key={s.when} className="flex flex-col gap-2 rounded-[20px] border border-osf-line bg-osf-mist p-6">
+              <span className="font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-sky-dark">{s.when}</span>
+              <span className="text-xl font-semibold">{s.title}</span>
+              <span className="text-[15px] leading-relaxed text-osf-muted">{s.body}</span>
+            </li>
+          ))}
+        </ol>
+      </Container>
+    </section>
   );
 }
 
@@ -124,8 +224,10 @@ export default function EventDetails({ ep }) {
         </Container>
       </section>
 
+      <SpeakerPromise ep={ep} lead={lead} />
+
       {ep.registrationOpen && (
-        <section className="px-4 pb-20 sm:px-6">
+        <section className="px-4 py-20 sm:px-6">
           <Container className="osf-grid-dark flex flex-wrap items-center justify-between gap-6 rounded-[28px] bg-osf-ink p-8 text-white sm:p-12">
             <div className="flex min-w-0 items-center gap-5">
               {lead && <SpeakerAvatar speaker={lead} tone="gradient" className="hidden h-20 w-20 text-2xl sm:flex" />}
