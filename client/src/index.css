@@ -33,17 +33,29 @@
 
 
 @theme {
-  --font-sans: 'Outfit', 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --color-dos: #07a97b;
-  --color-dos-light: #20dbad;
-  --color-dos-dark: #047554;
+  /* v2.0: admin screens use the same type and colours as the public site. */
+  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-dos: #2F8A36;
+  --color-dos-light: #8BD08E;
+  --color-dos-dark: #236B29;
+  /* Slate is remapped onto the v2 ink/muted/line palette so every admin table and form follows it. */
+  --color-slate-50: #F4F7F9;
+  --color-slate-100: #EDF2F4;
+  --color-slate-200: #DCE3E7;
+  --color-slate-300: #CFD9DE;
+  --color-slate-400: #93AAB5;
+  --color-slate-500: #5B6F79;
+  --color-slate-600: #4A5E68;
+  --color-slate-700: #3A5562;
+  --color-slate-800: #24404D;
+  --color-slate-900: #10222B;
+  --color-slate-950: #0C1A21;
 }
 
 body {
   margin: 0;
-  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -128,7 +140,8 @@ code {
 /* Make interactive controls distinguishable throughout the application. */
 a[href], button:not(:disabled), summary, select:not(:disabled), input[type="checkbox"]:not(:disabled) { cursor: pointer; }
 button:disabled, select:disabled { cursor: not-allowed; }
-a[href]:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* The public v2 site styles its own links; this underline is for admin and policy text links. */
+a[href]:not(.osf-site a):hover { text-decoration: underline; text-underline-offset: 3px; }
 a[href]:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--color-dos); outline-offset: 3px; }
 
 .admin-area main a[href]:not([class*="bg-"]) { text-decoration: underline; text-underline-offset: 3px; }
@@ -136,13 +149,14 @@ a[href]:focus-visible, button:focus-visible, summary:focus-visible { outline: 2p
 /* One shared action hierarchy: primary, secondary and destructive. */
 .admin-action, .admin-primary, .admin-danger {
   display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  min-height: 2.25rem; border: 1px solid #e2e8f0; border-radius: .5rem;
-  padding: .45rem .85rem; font-size: .8125rem; font-weight: 600; line-height: 1.25rem;
-  background: white; color: #475569; text-decoration: none !important; white-space: nowrap;
+  min-height: 2.5rem; border: 1px solid var(--color-slate-300); border-radius: 999px;
+  padding: .5rem 1rem; font-family: var(--font-mono); font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; line-height: 1.25rem;
+  background: white; color: var(--color-slate-900); text-decoration: none !important; white-space: nowrap;
 }
-.admin-action:hover { background: #f8fafc; border-color: #cbd5e1; }
+.admin-action:hover { background: var(--color-slate-50); border-color: var(--color-slate-900); }
 .admin-primary { color: white; background: var(--color-dos); border-color: var(--color-dos); }
-.admin-primary:hover { filter: brightness(.95); }
+.admin-primary:hover { background: var(--color-dos-dark); border-color: var(--color-dos-dark); }
 .admin-danger { color: #be123c; border-color: #fecdd3; }
 .admin-danger:hover { background: #fff1f2; }
 .admin-action:disabled, .admin-primary:disabled, .admin-danger:disabled { opacity: .45; cursor: not-allowed; }
@@ -160,3 +174,13 @@ a.admin-danger, a.admin-danger:hover, a.admin-danger:focus-visible {
 }
 
 .admin-area .student-link { color: var(--color-dos); text-decoration: underline !important; text-underline-offset: 3px; }
+
+/* v2.0 admin canvas: the public site's blueprint grid behind every admin screen. */
+.admin-area {
+  min-height: 100vh;
+  color: var(--color-slate-900);
+  background-color: var(--color-slate-50);
+  background-image: linear-gradient(rgba(16, 34, 43, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 34, 43, 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+.admin-area h1, .admin-area h2 { letter-spacing: -0.02em; }

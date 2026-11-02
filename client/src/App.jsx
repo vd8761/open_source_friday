@@ -13,6 +13,10 @@ import AttendeesPage from './components/AttendeesPage';
 import Login from './Login';
 import PwaInstallPrompt from './PwaInstallPrompt';
 import AdminEpisodeForm from './components/AdminEpisodeForm';
+import SpeakersAdminPage from './components/SpeakersAdminPage';
+import TipsAdminPage from './components/TipsAdminPage';
+import SpeakerApplicationsPage from './components/SpeakerApplicationsPage';
+import SiteSettingsPage from './components/SiteSettingsPage';
 import { subscribeToPush, getNotificationPermission } from './utils/pushNotifications';
 import './App.css';
 
@@ -54,6 +58,10 @@ function App() {
           {/* Admin Routes */}
           <Route path="/admin/students/:studentId" element={<ProtectedRoute><StudentActivityPage /></ProtectedRoute>} />
           <Route path="/admin/contacts" element={<ProtectedRoute><ContactsPage /></ProtectedRoute>} />
+          <Route path="/admin/speakers" element={<ProtectedRoute><SpeakersAdminPage /></ProtectedRoute>} />
+          <Route path="/admin/tips" element={<ProtectedRoute><TipsAdminPage /></ProtectedRoute>} />
+          <Route path="/admin/speaker-applications" element={<ProtectedRoute><SpeakerApplicationsPage /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute><SiteSettingsPage /></ProtectedRoute>} />
           <Route path="/admin/trash" element={<ProtectedRoute><EventHistoryPage mode="trash" /></ProtectedRoute>} />
           <Route path="/admin/past-events" element={<ProtectedRoute><PastEventsPage /></ProtectedRoute>} />
           <Route path="/admin/archived-events" element={<ProtectedRoute><PastEventsPage archivedOnly /></ProtectedRoute>} />

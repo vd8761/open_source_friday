@@ -1,8 +1,33 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import AdminAccount from './AdminAccount';
+
+// v2.0 look: mono uppercase links with a green underline for the active section, as on the public site.
+const links = [
+  ['/dashboard', 'Dashboard', true],
+  ['/admin/past-events', 'Past events'],
+  ['/admin/speakers', 'Speakers'],
+  ['/admin/invitations', 'Email invitations'],
+  ['/admin/contacts', 'Attendee contacts'],
+  ['/admin/speaker-applications', 'Speaker pitches'],
+  ['/admin/tips', 'Tips'],
+  ['/admin/settings', 'Site settings'],
+];
+
 export default function AdminNavigation(){
   const {pathname}=useLocation();
-  const item=({isActive})=>`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold ${isActive?'bg-dos/10 text-dos':'text-slate-600 hover:bg-slate-50'}`;
-  return <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3 sm:px-8"><NavLink to="/dashboard" aria-label="Open Source Friday admin home" className="flex shrink-0 items-center gap-3"><img src="/dos_logo.png" alt="Descience Open Source Club" className="h-9 w-auto"/><span className="hidden text-sm font-semibold text-slate-700 2xl:block">Open Source Friday</span></NavLink><nav aria-label="Admin navigation" className="order-3 flex w-full gap-1 overflow-x-auto sm:order-none sm:w-auto"><NavLink to="/dashboard" end className={item}>Dashboard</NavLink><NavLink to="/admin/past-events" className={item}>Past events</NavLink><NavLink to="/admin/invitations" className={item}>Email invitations</NavLink><NavLink to="/admin/contacts" className={({isActive})=>item({isActive:isActive||pathname.startsWith('/admin/students/')})}>Attendee contacts</NavLink><NavLink to="/admin/trash" className="whitespace-nowrap px-3 py-2 text-sm text-slate-500 sm:hidden">Event trash</NavLink></nav><div className="ml-auto flex shrink-0 items-center gap-4"><NavLink to="/admin/trash" className={({isActive})=>`hidden text-sm sm:inline ${isActive?'font-semibold text-slate-900':'text-slate-500 hover:text-slate-800'}`}>Event trash</NavLink><AdminAccount/></div></div></header>;
+  const item=({isActive})=>`whitespace-nowrap border-b-2 px-2.5 py-2.5 font-mono text-xs uppercase tracking-[0.08em] no-underline ${isActive?'border-dos font-bold text-dos':'border-transparent font-medium text-slate-900 hover:text-dos'}`;
+  return <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/[0.92] backdrop-blur-md">
+    <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 sm:px-8">
+      <NavLink to="/dashboard" aria-label="Open Source Fridays admin home" className="flex shrink-0 items-center gap-3 no-underline">
+        <img src="/dos_logo.png" alt="Descience Open Source Club" className="h-9 w-auto"/>
+        <span className="rounded-full bg-dos/10 px-2.5 py-1.5 font-mono text-[11px] font-bold leading-none tracking-[0.08em] text-dos">OSF ADMIN</span>
+      </NavLink>
+      <nav aria-label="Admin navigation" className="order-3 flex w-full gap-1 overflow-x-auto xl:order-none xl:w-auto">
+        {links.map(([to,label,end])=><NavLink key={to} to={to} end={end} className={({isActive})=>item({isActive:isActive||(to==='/admin/contacts'&&pathname.startsWith('/admin/students/'))})}>{label}</NavLink>)}
+        <NavLink to="/admin/trash" className={item}>Event trash</NavLink>
+      </nav>
+      <div className="ml-auto flex shrink-0 items-center gap-4"><AdminAccount/></div>
+    </div>
+  </header>;
 }

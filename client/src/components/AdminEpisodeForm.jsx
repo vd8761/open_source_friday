@@ -10,6 +10,8 @@ import 'react-quill-new/dist/quill.snow.css';
 import { format, parse } from 'date-fns';
 import Cropper from 'react-easy-crop';
 import getCroppedImg from '../utils/cropImage';
+import EpisodeSpeakersFields from './EpisodeSpeakersFields';
+import { emptyEpisodeV2, loadEpisodeV2, saveEpisodeV2 } from '../utils/episodeV2';
 import './AdminEpisodeForm.css';
 
 const fonts = ['arial', 'comic-sans', 'courier-new', 'georgia', 'helvetica', 'lucida', 'tahoma', 'times-new-roman', 'trebuchet', 'verdana'];
@@ -58,6 +60,7 @@ const AdminEpisodeForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
+  const [v2, setV2] = useState(emptyEpisodeV2);
   useEffect(() => {
     if (id) {
       const fetchEpisode = async () => {
@@ -87,6 +90,7 @@ const AdminEpisodeForm = () => {
               is_test: ep.is_test === true,
               is_registration_open: ep.is_registration_open !== undefined ? ep.is_registration_open : true
             });
+            loadEpisodeV2(ep.episode_number).then(setV2).catch(() => {});
             if (ep.event_date) setEventDate(calendarInputDate(ep.event_date));
             if (ep.event_time) {
               const [startStr, endStr] = ep.event_time.split(' - ');
@@ -244,6 +248,12 @@ const AdminEpisodeForm = () => {
 
       const data = await response.json();
       if (response.ok && data.success) {
+        try { await saveEpisodeV2(id || data.episode.id, v2); }
+        catch (v2Error) {
+          setMessage(`The episode was saved, but its speakers and website details were not: ${v2Error.message}`);
+          setIsSubmitting(false);
+          return;
+        }
         navigate('/dashboard');
       } else {
         setMessage(data.error || 'Failed to save episode');
@@ -440,6 +450,7 @@ const AdminEpisodeForm = () => {
 
             {currentStep === 3 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                <EpisodeSpeakersFields value={v2} onChange={setV2} onPresenter={(fields) => setFormData(prev => ({ ...prev, ...fields }))} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Name</label>
