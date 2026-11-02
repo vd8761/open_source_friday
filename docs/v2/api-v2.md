@@ -40,10 +40,10 @@ v1.0 endpoints are unchanged. List responses never embed base64 images; photos h
 ## Speaker backfill
 
 ```sh
-node server/scripts/backfill-speakers.js docs/v2/speakers-approved-draft.csv --episodes docs/v2/episode-domains-draft.csv
+node server/scripts/backfill-speakers.js docs/v2/speakers-approved.csv --episodes docs/v2/episode-domains-approved.csv
 ```
 
-This is a dry run that prints the plan. Add `--apply` only after the owner approves the CSV. Production also needs `--confirm-production` and a Neon snapshot first.
+This is a dry run that prints the plan. Add `--apply` only (owner approved both CSVs on 2 Nov 2026; loaded into v2-dev the same day). Production also needs `--confirm-production` and a Neon snapshot first.
 
 ## Local development
 

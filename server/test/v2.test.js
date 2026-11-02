@@ -208,8 +208,8 @@ test('speaker backfill dry-runs by default and applies the owner-approved CSV in
   await db.exec(`CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,presenter_name TEXT,presenter_designation TEXT,presenter_photo_url TEXT);
     INSERT INTO episodes(episode_number,title,presenter_name,presenter_photo_url) VALUES ${Object.entries(names).map(([n, name]) => `(${n},'Ep ${n}','${name}','data:image/jpeg;base64,${n}')`).join(',')};`);
   await initV2DB(db);
-  const speakers = read(path.join(__dirname, '../../docs/v2/speakers-approved-draft.csv'));
-  const episodes = read(path.join(__dirname, '../../docs/v2/episode-domains-draft.csv'));
+  const speakers = read(path.join(__dirname, '../../docs/v2/speakers-approved.csv'));
+  const episodes = read(path.join(__dirname, '../../docs/v2/episode-domains-approved.csv'));
   const dry = await backfill(db, speakers, episodes);
   assert.deepEqual(dry.errors, []);
   assert.deepEqual(dry.plan.find(p => p.speaker === 'Ariyappan P').names_on_episodes, ['Ariyappan P', 'Ariyappan']);
