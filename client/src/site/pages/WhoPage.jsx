@@ -53,7 +53,7 @@ export default function WhoPage() {
                 ))}
               </ul>
               <div className="mt-1 flex flex-wrap gap-2.5">
-                {next?.registrationOpen && <Button to={next.registerPath}>RESERVE YOUR SEAT -&gt;</Button>}
+                {next?.registrationOpen && <Button to={next.registerPath}>BOOK MY SEAT</Button>}
                 <Button to={sitePaths.episodes} variant="outline">ALL EPISODES</Button>
               </div>
             </div>

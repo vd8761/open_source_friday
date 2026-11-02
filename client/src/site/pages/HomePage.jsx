@@ -36,7 +36,7 @@ function Hero() {
           <h1 className="m-0 text-[clamp(44px,6.2vw,84px)] font-semibold leading-[1.02] tracking-[-0.03em]">Your Friday night just got a <GradientText>commit history.</GradientText></h1>
           <p className="m-0 max-w-[580px] text-lg leading-[1.55] text-osf-muted sm:text-xl">One hour, every Friday. Working engineers and leads show you how they build, ship and get hired — then take your questions live. Free, online, and built for students and aspirants.</p>
           <div className="flex flex-wrap gap-3">
-            {ep && <Button to={ep.registerPath} size="lg">RESERVE YOUR SEAT -&gt;</Button>}
+            {ep && <Button to={ep.registerPath} size="lg">BOOK MY SEAT</Button>}
             <Button to={sitePaths.episodes} size="lg" variant={ep ? 'frost' : 'primary'}>BROWSE ALL {episodes.length || ''} EPISODES</Button>
           </div>
           {stats && (
@@ -91,7 +91,7 @@ function WhoSection() {
   return (
     <section id="who" className="px-4 py-20 sm:px-6 sm:py-[104px]">
       <Container className="flex flex-col gap-11">
-        <SectionHeading eyebrow="/ 01 — WHO IT'S FOR" title="Wherever you are in the grind, there's a seat for you." action={<ArrowLink to={sitePaths.who}>FIND YOUR PATH -&gt;</ArrowLink>} />
+        <SectionHeading eyebrow="/ 01 — WHO IT'S FOR" title="Wherever you are in the grind, there's a seat for you." action={<ArrowLink to={sitePaths.who}>FIND YOUR PATH</ArrowLink>} />
         <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4">
           {audiences.map((a) => (
             <Link key={a.num} to={sitePaths.who} className="flex flex-col gap-3.5 rounded-3xl border border-osf-line bg-white p-7 text-osf-ink no-underline transition-colors hover:border-osf-leaf">
@@ -113,7 +113,7 @@ function EpisodesSection() {
   return (
     <section id="episodes" className="px-4 pb-20 sm:px-6 sm:pb-[104px]">
       <Container className="flex flex-col gap-10">
-        <SectionHeading eyebrow="/ 02 — EPISODES" title="The Friday lineup." action={<ArrowLink to={sitePaths.episodes}>VIEW ALL {episodes.length || ''} EPISODES -&gt;</ArrowLink>} />
+        <SectionHeading eyebrow="/ 02 — EPISODES" title="The Friday lineup." action={<ArrowLink to={sitePaths.episodes}>VIEW ALL {episodes.length || ''} EPISODES</ArrowLink>} />
         <DataState loading={loading} error={error} />
         {!loading && !error && <div className="flex flex-wrap items-stretch gap-5">
           {ep ? <Card as="article" className="flex min-w-0 flex-[999_1_520px] flex-wrap gap-7 p-6 sm:p-8">
@@ -128,7 +128,7 @@ function EpisodesSection() {
                 {ep.time && <span>{ep.time}</span>}<span>{ep.mode}</span>{lead && <span>{ep.speakers.map((s) => s.name).join(' & ')}{lead.company && ` · ${lead.company}`}</span>}
               </div>
               <div className="mt-1.5 flex flex-wrap gap-2.5">
-                {ep.registrationOpen && <Button to={ep.registerPath} size="sm">RESERVE YOUR SEAT -&gt;</Button>}
+                {ep.registrationOpen && <Button to={ep.registerPath} size="sm">BOOK MY SEAT</Button>}
                 <Button to={ep.recapPath} size="sm" variant="outline">AGENDA &amp; DETAILS</Button>
               </div>
             </div>
@@ -147,7 +147,7 @@ function EpisodesSection() {
                 <span className="flex min-w-0 flex-col gap-0.5"><span className="font-osf-mono text-[10px] tracking-[0.1em] text-osf-muted">EP {e.num} · COMPLETED</span><span className="text-[15px] font-semibold">{e.title}</span></span>
               </Link>
             ))}
-            {past.length > recent.length && <Link to={sitePaths.episodes} className="osf-link rounded-2xl border border-dashed border-osf-line-strong p-3.5 text-center font-osf-mono text-xs font-bold tracking-[0.08em] no-underline">{past.length - recent.length} MORE ON THE FULL TIMELINE -&gt;</Link>}
+            {past.length > recent.length && <Link to={sitePaths.episodes} className="osf-link rounded-2xl border border-dashed border-osf-line-strong p-3.5 text-center font-osf-mono text-xs font-bold tracking-[0.08em] no-underline">{past.length - recent.length} MORE ON THE FULL TIMELINE</Link>}
           </div>
         </div>}
       </Container>
@@ -167,7 +167,7 @@ function SpeakersSection() {
   return (
     <section id="speakers" className="border-y border-osf-line bg-white px-4 py-20 sm:px-6 sm:py-[104px]">
       <Container className="flex flex-col gap-10">
-        <SectionHeading eyebrow="/ 03 — SPEAKERS" title="The people behind the mic." intro={companies.length ? `Engineers and leads from teams like ${joinNames(companies)} — sharing what they wish they'd known earlier.` : null} action={<ArrowLink to={sitePaths.speakers}>MEET ALL {speakers.length} SPEAKERS -&gt;</ArrowLink>} />
+        <SectionHeading eyebrow="/ 03 — SPEAKERS" title="The people behind the mic." intro={companies.length ? `Engineers and leads from teams like ${joinNames(companies)} — sharing what they wish they'd known earlier.` : null} action={<ArrowLink to={sitePaths.speakers}>MEET ALL {speakers.length} SPEAKERS</ArrowLink>} />
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
           {picked.map((s, i) => {
             const highlight = nextIds.has(s.id);
@@ -218,7 +218,7 @@ function RegisterSection() {
             <label htmlFor="osf-id" className="text-sm font-semibold">Email or WhatsApp number</label>
             <input id="osf-id" name="identifier" type="text" required autoComplete="email" placeholder="you@example.com or 98765 43210" className="osf-field" />
           </div>
-          <Button type="submit" block className="py-[17px]">CONTINUE -&gt;</Button>
+          <Button type="submit" block className="py-[17px]">CONTINUE</Button>
         </form>}
       </Container>
     </section>
@@ -234,7 +234,7 @@ function SpeakBanner() {
           <h2 className="m-0 text-[clamp(32px,3.8vw,48px)] font-semibold leading-[1.05] tracking-[-0.02em]">Got an hour of real-world experience? Bring it to Friday.</h2>
           <p className="m-0 text-lg leading-[1.55] text-osf-fog">Engineers, maintainers, recruiters, founders — pitch a session for a room full of people who want to learn.</p>
         </div>
-        <Button to={sitePaths.speak} variant="light" size="lg">PITCH A SESSION -&gt;</Button>
+        <Button to={sitePaths.speak} variant="light" size="lg">PITCH A SESSION</Button>
       </Container>
     </section>
   );

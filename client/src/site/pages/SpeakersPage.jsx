@@ -40,7 +40,7 @@ export default function SpeakersPage() {
                 {featured.role && <span className="text-lg text-osf-muted">{featured.role}</span>}
                 {featured.bio && <p className="m-0 max-w-[640px] text-[17px] leading-relaxed">{featured.bio}</p>}
                 <div className="mt-1 flex flex-wrap gap-2.5">
-                  {ep.registrationOpen && <Button to={ep.registerPath} size="sm">RESERVE YOUR SEAT FOR EP {ep.num} -&gt;</Button>}
+                  {ep.registrationOpen && <Button to={ep.registerPath} size="sm">BOOK MY SEAT FOR EP {ep.num}</Button>}
                   {featured.linkedin && <Button href={featured.linkedin} target="_blank" rel="noopener noreferrer" size="sm" variant="outline">LINKEDIN ↗</Button>}
                 </div>
               </div>
@@ -90,7 +90,7 @@ export default function SpeakersPage() {
               <span aria-hidden="true" className="flex h-[72px] w-[72px] items-center justify-center rounded-full border border-dashed border-osf-leaf font-osf-mono text-[28px] text-osf-leaf">+</span>
               <span className="text-[22px] font-semibold">Could be you.</span>
               <span className="text-[15px] leading-normal text-osf-muted">Got something worth an hour? We're booking Fridays now.</span>
-              <span className="font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-leaf">PITCH A SESSION -&gt;</span>
+              <span className="font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-leaf">PITCH A SESSION</span>
             </Link>
           </div>
         </Container>

@@ -27,7 +27,7 @@ export default function OsfFooter() {
             <h2 className="m-0 text-[clamp(32px,4vw,52px)] font-semibold leading-[1.05] tracking-[-0.02em] text-white">Learn. Build.<br /><span className="text-osf-mint">Ship in the open.</span></h2>
           </div>
           <div className="flex flex-wrap gap-2.5">
-            {next?.registrationOpen && <Button to={next.registerPath}>RESERVE YOUR SEAT -&gt;</Button>}
+            {next?.registrationOpen && <Button to={next.registerPath}>BOOK MY SEAT</Button>}
             <Button href={CLUB_URL} target="_blank" rel="noopener noreferrer" variant="outlineDark">JOIN THE CLUB ↗</Button>
           </div>
         </div>

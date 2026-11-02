@@ -83,7 +83,7 @@ export default function PoliciesPage({ slug }) {
           {slug === 'request-data' && (
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-osf-leaf-edge bg-osf-leaf-wash p-6">
               <span className="text-[17px] font-semibold">Ready to send a request?</span>
-              <Button href={`mailto:${CONTACT_EMAIL}?subject=Data%20request`} size="sm">EMAIL A REQUEST -&gt;</Button>
+              <Button href={`mailto:${CONTACT_EMAIL}?subject=Data%20request`} size="sm">EMAIL A REQUEST</Button>
             </div>
           )}
         </article>

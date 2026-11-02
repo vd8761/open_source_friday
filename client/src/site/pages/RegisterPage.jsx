@@ -61,7 +61,7 @@ function EpisodePanel({ ep, details }) {
         </div>
         <h1 className="m-0 text-[clamp(26px,2.6vw,32px)] font-semibold leading-[1.1] tracking-[-0.01em]">{ep.title}</h1>
         <SpeakerLine ep={ep} />
-        <Link to={ep.recapPath} className="self-start py-1 font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-mint no-underline">FULL DETAILS &amp; AGENDA -&gt;</Link>
+        <Link to={ep.recapPath} className="self-start py-1 font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-mint no-underline">FULL DETAILS &amp; AGENDA</Link>
       </div>
       <div className="flex flex-col gap-6 p-6 sm:p-7">
         <div className="grid grid-cols-2 gap-2.5">
@@ -105,7 +105,7 @@ function ClosedNotice({ details, concluded }) {
             <p className="m-0 text-[17px] leading-[1.55] text-osf-muted">This episode is scheduled for <strong className="text-osf-ink">{formatEpisodeDate(details.event_date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {details.event_time}</strong>.</p>
           </>}
       <div className="flex flex-wrap gap-2.5">
-        {concluded && <Button to={`/episodes/${details.episode_number}`} className="self-start">SEE WHAT HAPPENED -&gt;</Button>}
+        {concluded && <Button to={`/episodes/${details.episode_number}`} className="self-start">SEE WHAT HAPPENED</Button>}
         <Button to={sitePaths.episodes} variant="outline" className="self-start">BROWSE UPCOMING EPISODES</Button>
       </div>
       <div className="flex flex-col gap-2 rounded-[20px] border border-osf-leaf-edge bg-osf-leaf-wash p-5">
@@ -157,7 +157,7 @@ function IdentifyStep({ ep, reg }) {
             {phone && <span className="text-[13px] text-osf-muted">{identifier.length}/{max} digits</span>}
           </Field>
           {lookupError && <p id="r1-err" role="alert" className="m-0 text-[15px] font-semibold text-osf-danger">{lookupError}</p>}
-          <Button type="submit" block disabled={isSubmitting} className="py-[18px] disabled:opacity-60">{isSubmitting ? 'CHECKING…' : 'CONTINUE ->'}</Button>
+          <Button type="submit" block disabled={isSubmitting} className="py-[18px] disabled:opacity-60">{isSubmitting ? 'CHECKING…' : 'CONTINUE'}</Button>
         </form>
       )}
       <div className="flex flex-wrap gap-2">
@@ -204,7 +204,7 @@ function DetailsStep({ reg }) {
   const actions = (
     <div className="flex flex-wrap gap-3">
       <Button variant="outline" onClick={returnToLookup} disabled={isSubmitting} className="flex-[1_1_140px] py-[17px]">GO BACK</Button>
-      <Button type="submit" disabled={isSubmitting || checkingEmail} className="flex-[999_1_260px] py-[18px] disabled:opacity-60">{isSubmitting ? 'RESERVING…' : 'RESERVE YOUR SEAT ->'}</Button>
+      <Button type="submit" disabled={isSubmitting || checkingEmail} className="flex-[999_1_260px] py-[18px] disabled:opacity-60">{isSubmitting ? 'BOOKING…' : 'BOOK MY SEAT'}</Button>
     </div>
   );
   const errorBox = registerError && <p role="alert" className="m-0 rounded-2xl border border-osf-danger/40 bg-red-50 p-4 text-[15px] text-osf-danger">{registerError}</p>;
@@ -365,7 +365,7 @@ function DoneStep({ ep, reg }) {
             ? <><span className="font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-leaf">UP NEXT · EP {following.num} · {following.weekday.toUpperCase()} {Number(following.day)} {following.mon}</span>
                 <span className="flex-[999_1_240px] text-lg font-semibold">{following.title}{following.speakers[0] && ` — ${following.speakers.map((s) => s.name).join(' & ')}`}</span></>
             : <span className="flex-[999_1_240px] text-lg font-semibold">Catch up on past episodes</span>}
-          <span className="font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-leaf">ALL EPISODES -&gt;</span>
+          <span className="font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-leaf">ALL EPISODES</span>
         </Link>
       </main>
     </div>

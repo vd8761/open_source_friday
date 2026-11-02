@@ -91,7 +91,7 @@ function SpeakerPromise({ ep, lead }) {
             <h2 className="m-0 text-[clamp(32px,4vw,52px)] font-semibold leading-[1.05] tracking-[-0.02em]">You bring the insight. <GradientText>We put your name everywhere.</GradientText></h2>
             <p className="m-0 text-lg leading-[1.55] text-osf-muted">Every OSF speaker gets a designed launch kit and a week-long promotion run.{lead ? ` This is what goes out for ${lead.name}.` : ''}</p>
           </div>
-          <Button to={sitePaths.speak} variant="outline">PITCH A SESSION -&gt;</Button>
+          <Button to={sitePaths.speak} variant="outline">PITCH A SESSION</Button>
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] items-start gap-6">
           {kit.map((k) => (
@@ -123,7 +123,7 @@ function SpeakerPromise({ ep, lead }) {
 export default function EventDetails({ ep }) {
   const calendar = googleCalendarUrl(ep);
   const lead = ep.speakers[0];
-  const reserve = ep.registrationOpen && <Button to={ep.registerPath} size="lg" block>RESERVE YOUR SEAT -&gt;</Button>;
+  const reserve = ep.registrationOpen && <Button to={ep.registerPath} size="lg" block>BOOK MY SEAT</Button>;
   return (
     <>
       <section className="border-b border-osf-line bg-osf-mist px-4 pb-14 pt-8 sm:px-6 sm:pt-10" style={heroBackground([['sky', '85% 20%', 0.14, 30], ['leaf', '10% 90%', 0.12, 30]])}>
@@ -208,7 +208,7 @@ export default function EventDetails({ ep }) {
             )}
             <Card className="flex flex-col gap-3 p-6 sm:p-8">
               <span className="font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-muted">HOW IT WORKS</span>
-              {['Reserve your seat — it takes under a minute.', 'Zoom emails your personal meeting link. Keep it private, it\'s yours.', 'Join live and bring your questions to the Q&A.'].map((t) => (
+              {['Book your seat — it takes under a minute.', 'Zoom emails your personal meeting link. Keep it private, it\'s yours.', 'Join live and bring your questions to the Q&A.'].map((t) => (
                 <span key={t} className="flex items-start gap-3 text-[16px] leading-normal"><Check aria-hidden="true" className="mt-1 h-[18px] w-[18px] flex-none text-osf-leaf" strokeWidth={2.6} />{t}</span>
               ))}
             </Card>
@@ -217,7 +217,7 @@ export default function EventDetails({ ep }) {
             <Card className="flex flex-col gap-4 p-6 shadow-osf-card">
               <span className="font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-muted">SAVE YOUR SEAT</span>
               <span className="text-xl font-semibold leading-snug">{ep.dateLong}{ep.time && ` · ${ep.time}`}</span>
-              <span className="text-[15px] text-osf-muted">Free and online. Zoom emails your personal link after you reserve.</span>
+              <span className="text-[15px] text-osf-muted">Free and online. Zoom emails your personal link after you book.</span>
               {reserve}
             </Card>
           </aside>
@@ -233,7 +233,7 @@ export default function EventDetails({ ep }) {
               {lead && <SpeakerAvatar speaker={lead} tone="gradient" className="hidden h-20 w-20 text-2xl sm:flex" />}
               <span className="flex flex-col gap-1"><span className="text-[clamp(24px,3vw,34px)] font-semibold leading-tight">{lead ? `Learn from ${lead.name.replace(/^(dr|prof)\.?\s+/i, '').split(' ')[0]} live.` : 'Join us live.'}</span><span className="font-osf-mono text-[13px] text-osf-fog">{ep.dateLong.toUpperCase()}{ep.start ? ` · ${ep.start} IST` : ''} · FREE</span></span>
             </div>
-            <Button to={ep.registerPath} variant="light" size="lg">RESERVE YOUR SEAT -&gt;</Button>
+            <Button to={ep.registerPath} variant="light" size="lg">BOOK MY SEAT</Button>
           </Container>
         </section>
       )}

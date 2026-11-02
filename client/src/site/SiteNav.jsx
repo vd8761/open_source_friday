@@ -40,7 +40,7 @@ export default function SiteNav() {
           <a href={CLUB_URL} target="_blank" rel="noopener noreferrer" className="hidden min-h-11 items-center rounded-full border border-osf-line-strong px-4 font-osf-mono text-xs font-bold tracking-[0.08em] text-osf-ink no-underline hover:border-osf-ink sm:inline-flex">
             DOS CLUB ↗<span className="sr-only"> (opens in a new tab)</span>
           </a>
-          {next?.registrationOpen && <Link to={next.registerPath} className="inline-flex min-h-11 items-center rounded-full bg-osf-leaf px-3.5 font-osf-mono sm:px-[18px] text-xs font-bold tracking-[0.08em] text-white no-underline hover:bg-osf-leaf-dark">RESERVE<span className="hidden min-[400px]:inline">&nbsp;YOUR SEAT</span><span className="hidden sm:inline">&nbsp;-&gt;</span></Link>}
+          {next?.registrationOpen && <Link to={next.registerPath} className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full bg-osf-leaf px-3.5 font-osf-mono sm:px-[18px] text-xs font-bold tracking-[0.08em] text-white no-underline hover:bg-osf-leaf-dark">BOOK MY SEAT</Link>}
           <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="osf-mobile-menu" aria-label={open ? 'Close menu' : 'Open menu'}
             className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-osf-line-strong bg-white text-osf-ink lg:hidden">
             {open ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}

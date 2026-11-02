@@ -53,13 +53,13 @@ function UnlockDialog({ episode, onClose, onUnlocked }) {
             <p className="m-0 text-[15px] leading-normal text-osf-muted">Use the email you registered with. If you joined this episode live, we'll send a 6-digit code to confirm it's you. Each episode's lounge is unlocked separately.</p>
             <Field id="lounge-email" label="Email"><input id="lounge-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="osf-field" placeholder="you@example.com" /></Field>
             {error && <p role="alert" className="m-0 text-[15px] font-semibold text-osf-danger">{error}</p>}
-            <Button type="submit" block disabled={busy} className="disabled:opacity-60">{busy ? 'SENDING…' : 'SEND MY CODE ->'}</Button>
+            <Button type="submit" block disabled={busy} className="disabled:opacity-60">{busy ? 'SENDING…' : 'SEND MY CODE'}</Button>
             <p className="m-0 text-xs text-osf-muted">Protected by reCAPTCHA.</p>
           </form>
         ) : step === 'denied' ? (
           <div className="flex flex-col gap-4">
             <p role="status" className="m-0 flex gap-3 rounded-2xl border border-osf-leaf-edge bg-osf-leaf-wash p-4 text-[16px] leading-normal"><Lock aria-hidden="true" className="mt-0.5 h-5 w-5 flex-none text-osf-leaf" />{note}</p>
-            <Button to={sitePaths.episodes} block onClick={onClose}>SEE UPCOMING EPISODES -&gt;</Button>
+            <Button to={sitePaths.episodes} block onClick={onClose}>SEE UPCOMING EPISODES</Button>
             <button type="button" onClick={() => { setStep('email'); setNote(''); }} className="osf-link cursor-pointer self-start border-0 bg-transparent p-0 py-2 font-osf-mono text-xs font-bold tracking-[0.08em]">TRY A DIFFERENT EMAIL</button>
           </div>
         ) : (
@@ -67,7 +67,7 @@ function UnlockDialog({ episode, onClose, onUnlocked }) {
             <p className="m-0 text-[15px] leading-normal text-osf-muted">{note}</p>
             <Field id="lounge-code" label="6-digit code"><input id="lounge-code" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} className="osf-field text-center font-osf-mono text-2xl tracking-[0.4em]" /></Field>
             {error && <p role="alert" className="m-0 text-[15px] font-semibold text-osf-danger">{error}</p>}
-            <Button type="submit" block disabled={busy || code.length !== 6} className="disabled:opacity-60">{busy ? 'CHECKING…' : 'UNLOCK ->'}</Button>
+            <Button type="submit" block disabled={busy || code.length !== 6} className="disabled:opacity-60">{busy ? 'CHECKING…' : 'UNLOCK'}</Button>
             <button type="button" onClick={() => { setStep('email'); setCode(''); setError(''); }} className="osf-link cursor-pointer self-start border-0 bg-transparent p-0 py-2 font-osf-mono text-xs font-bold tracking-[0.08em]">USE A DIFFERENT EMAIL</button>
           </form>
         )}
@@ -163,7 +163,7 @@ export default function EpisodeRecapPage() {
                   <div className="absolute inset-0 flex flex-col items-center justify-end gap-3 bg-linear-to-b from-white/10 via-white/80 to-white p-6 text-center sm:p-8">
                     <Lock aria-hidden="true" className="h-6 w-6 text-osf-leaf" />
                     <p className="m-0 max-w-md text-[17px] leading-normal"><strong>For members who joined Episode {ep.num} live.</strong> {teaser.map(([, l]) => l.toLowerCase()).join(', ')}.</p>
-                    <Button onClick={() => setDialog(true)}>UNLOCK THE LOUNGE -&gt;</Button>
+                    <Button onClick={() => setDialog(true)}>UNLOCK THE LOUNGE</Button>
                   </div>
                 </div>
               )}

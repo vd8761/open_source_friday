@@ -50,7 +50,7 @@ export default function EpisodesPage() {
               </div>
             </div>
             <div className="flex flex-[1_1_200px] flex-col gap-2.5">
-              {ep.registrationOpen && <Button to={ep.registerPath} size="lg">RESERVE YOUR SEAT -&gt;</Button>}
+              {ep.registrationOpen && <Button to={ep.registerPath} size="lg">BOOK MY SEAT</Button>}
               <Button to={ep.recapPath} size="sm" variant="outlineDark">AGENDA &amp; DETAILS</Button>
             </div>
           </article>}
@@ -68,7 +68,7 @@ export default function EpisodesPage() {
             )}
             <Link to={sitePaths.speak} className="flex items-center gap-4 rounded-[20px] border border-dashed border-osf-leaf bg-osf-leaf-soft p-5 text-osf-ink no-underline">
               <span aria-hidden="true" className="flex h-12 w-14 flex-none items-center justify-center font-osf-mono text-[22px] font-bold text-osf-leaf">+</span>
-              <span className="flex min-w-0 flex-col gap-0.5"><span className="font-osf-mono text-[10px] tracking-[0.1em] text-osf-leaf">EP {total + (ep ? 1 : 2)}+ · OPEN SLOT</span><span className="text-base font-semibold">Your session could go here -&gt;</span></span>
+              <span className="flex min-w-0 flex-col gap-0.5"><span className="font-osf-mono text-[10px] tracking-[0.1em] text-osf-leaf">EP {total + (ep ? 1 : 2)}+ · OPEN SLOT</span><span className="text-base font-semibold">Your session could go here</span></span>
             </Link>
           </div>}
         </Container>

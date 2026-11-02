@@ -71,7 +71,7 @@ function PitchForm() {
         </div>
       </fieldset>
       <p className="m-0 text-xs leading-relaxed text-osf-muted">Up to four Fridays; leave them unselected if you're flexible. Protected by reCAPTCHA.</p>
-      <Button type="submit" block disabled={status.state === 'sending'} className="min-h-[52px] py-[18px] disabled:opacity-60">{status.state === 'sending' ? 'SENDING…' : 'SEND MY PITCH ->'}</Button>
+      <Button type="submit" block disabled={status.state === 'sending'} className="min-h-[52px] py-[18px] disabled:opacity-60">{status.state === 'sending' ? 'SENDING…' : 'SEND MY PITCH'}</Button>
       {status.state === 'sent' && <p role="status" className="m-0 rounded-2xl border border-osf-leaf-edge bg-osf-leaf-wash p-4 text-[15px]">{status.message} We'll reply from <a className="osf-link" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>}
       {status.state === 'error' && <p role="alert" className="m-0 rounded-2xl border border-osf-danger/40 bg-red-50 p-4 text-[15px] text-osf-danger">{status.message}</p>}
     </form>
@@ -90,7 +90,7 @@ export default function SpeakPage() {
             <h1 className="m-0 text-[clamp(44px,6vw,80px)] font-semibold leading-[1.02] tracking-[-0.03em]">Got an hour of real-world experience? <span className="text-osf-mint">Bring it to Friday.</span></h1>
             <p className="m-0 max-w-[620px] text-lg leading-[1.55] text-osf-fog sm:text-xl">Engineers, maintainers, researchers, recruiters and founders — teach what you wish someone had taught you, to a room full of people who actually want to learn.</p>
             <div className="flex flex-wrap gap-3">
-              <Button variant="light" size="lg" onClick={() => document.getElementById('apply')?.scrollIntoView({ behavior: 'smooth' })}>PITCH A SESSION -&gt;</Button>
+              <Button variant="light" size="lg" onClick={() => document.getElementById('apply')?.scrollIntoView({ behavior: 'smooth' })}>PITCH A SESSION</Button>
               <Button to={sitePaths.speakers} variant="ghostDark" size="lg">SEE PAST SPEAKERS</Button>
             </div>
           </div>
