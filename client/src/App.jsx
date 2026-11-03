@@ -10,6 +10,7 @@ import AttendanceTool from './components/AttendanceTool';
 import EventHistoryPage from './components/EventHistoryPage';
 import PastEventsPage from './components/PastEventsPage';
 import AttendeesPage from './components/AttendeesPage';
+import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import Login from './Login';
 import AdminEpisodeForm from './components/AdminEpisodeForm';
 import SpeakersAdminPage from './components/SpeakersAdminPage';
@@ -52,7 +53,7 @@ function App() {
       <Router>
         {/* Install-app prompt hidden until the app launch (owner, 2 Nov 2026). */}
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}><Login /></GoogleReCaptchaProvider>} />
           
           {/* Admin Routes */}
           <Route path="/admin/students/:studentId" element={<ProtectedRoute><StudentActivityPage /></ProtectedRoute>} />

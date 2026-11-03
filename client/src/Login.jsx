@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { Lock, User, KeyRound, ArrowRight, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 
 export default function Login() {
@@ -11,6 +12,7 @@ export default function Login() {
   const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -37,7 +39,7 @@ export default function Login() {
       const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, recaptcha_token: executeRecaptcha ? await executeRecaptcha('login') : '' }),
       });
 
       const result = await response.json();

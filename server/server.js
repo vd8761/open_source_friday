@@ -28,6 +28,7 @@ const { runtimeFlags, guardZoom, guardSender, pushAllowed, dryRun } = require('.
 const { initV2DB } = require('./v2-data');
 const { createV2PublicRouter, createV2AdminRouter, rateLimit } = require('./v2-routes');
 const { createLoungeRouter, createCodeMailer } = require('./lounge');
+const { corsOptions, securityHeaders, createLoginGuard } = require('./security');
 const flags = runtimeFlags();
 const sender = guardSender(createSenderClient(), flags);
 const zoom = guardZoom(createZoomClient(), flags);
@@ -37,9 +38,18 @@ app.set('json replacer', episodeJsonReplacer);
 app.set('trust proxy', 1);
 // Keep development and preview APIs out of search results.
 if (!flags.production) app.use((req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofollow'); next(); });
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.disable('x-powered-by');
+app.use(securityHeaders(flags));
+// Only the OSF website, its previews and the app may call the API from a browser.
+app.use(cors(corsOptions(process.env, flags)));
+// Episode forms carry cropped photos as base64; 10 MB covers a banner, a cover and a profile photo.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
+// Per-IP limits for the forms people can submit without signing in.
+const perMinute = (name, fallback) => Number(process.env[name]) || fallback;
+const loginLimit = rateLimit({ limit: perMinute('LOGIN_LIMIT_PER_MINUTE', 5), windowMs: 60000 });
+const lookupLimit = rateLimit({ limit: perMinute('LOOKUP_LIMIT_PER_MINUTE', 10), windowMs: 60000 });
+const registerLimit = rateLimit({ limit: perMinute('REGISTER_LIMIT_PER_MINUTE', 10), windowMs: 60000 });
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -237,6 +247,8 @@ function getEpisodeNumber(timestampStr) {
 // ─── reCAPTCHA Verifier ───────────────────────────────────────────────────────
 // When an action is given, the token must have been issued for that action (v2.0 forms).
 async function verifyRecaptchaToken(token, action) {
+  // A local machine without reCAPTCHA keys skips the check so developers can sign in; production never does.
+  if (!flags.production && !process.env.RECAPTCHA_SECRET_KEY) { dryRun('reCAPTCHA', `${action || 'request'} not verified (no secret key)`); return true; }
   if (!token) return false;
   try {
     const formData = new URLSearchParams();
@@ -320,19 +332,26 @@ app.post('/api/push/unsubscribe', async (req, res) => {
 // AUTH ENDPOINTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
+const loginGuard = createLoginGuard(pool);
+app.post('/api/login', loginLimit, async (req, res) => {
+  const { username, password, recaptcha_token } = req.body;
   try {
+    if (typeof username !== 'string' || typeof password !== 'string' || username.length > 100 || password.length > 200)
+      return res.status(400).json({ success: false, error: 'Enter your username and password.' });
+    if (!await verifyRecaptchaToken(recaptcha_token, 'login'))
+      return res.status(400).json({ success: false, error: 'Security check failed. Please refresh the page and try again.' });
+    const locked = await loginGuard.lockedMinutes(username);
+    if (locked) return res.status(429).json({ success: false, error: `Too many failed sign-in attempts. Try again in ${locked} minute${locked > 1 ? 's' : ''}.` });
     const result = await pool.query('SELECT * FROM admins WHERE username = $1', [username]);
-    if (result.rows.length === 0) {
-      return res.status(401).json({ success: false, error: 'Invalid username or password' });
-    }
     const admin = result.rows[0];
-    const isMatch = await bcrypt.compare(password, admin.password_hash);
-    if (isMatch) {
+    // Compare against a dummy hash for unknown usernames so response time does not reveal which exist.
+    const isMatch = await bcrypt.compare(password, admin?.password_hash || '$2b$10$CwTycUXWue0Thq9StjUM0uJ8.0qkDjQwA6bYjRjkI3OhA0wG1E3a.');
+    if (admin && isMatch) {
+      await loginGuard.succeeded(username);
       const token = jwt.sign({ username: admin.username, id: admin.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
       res.json({ success: true, token });
     } else {
+      await loginGuard.failed(username);
       res.status(401).json({ success: false, error: 'Invalid username or password' });
     }
   } catch (error) {
@@ -364,9 +383,10 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
 // STUDENT ENDPOINTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-app.post('/api/students/lookup', async (req, res) => {
-  const { identifier, countryCode, episode_id } = req.body;
+app.post('/api/students/lookup', lookupLimit, async (req, res) => {
+  const { identifier, countryCode, episode_id, recaptcha_token } = req.body;
   if (typeof identifier !== 'string' || !identifier.trim() || identifier.length > 255) return res.status(400).json({ success: false, error: 'Please enter your email or WhatsApp number.' });
+  if (!await verifyRecaptchaToken(recaptcha_token, 'lookup')) return res.status(400).json({ success: false, error: 'Security check failed. Please refresh the page and try again.' });
   try {
     const result = await pool.query(
       `SELECT ${profileColumns} FROM students WHERE LOWER(BTRIM(email)) = $1 OR (whatsapp_number = $1 AND country_code = $2)`,
@@ -617,7 +637,7 @@ app.get('/api/episodes/:episode_number/cover', async (req, res) => {
 // REGISTRATION ENDPOINT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', registerLimit, async (req, res) => {
   const {
     episode_id, recaptcha_token
   } = req.body;
@@ -626,7 +646,7 @@ app.post('/api/register', async (req, res) => {
   let committed = false;
   try {
     const whatsappChoice = registrationConsent(req.body);
-    const isTokenValid = await verifyRecaptchaToken(recaptcha_token);
+    const isTokenValid = await verifyRecaptchaToken(recaptcha_token, 'register');
     if (!isTokenValid) {
       return res.status(400).json({ success: false, error: 'Security check failed. Please refresh and try again.' });
     }

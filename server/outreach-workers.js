@@ -42,10 +42,13 @@ async function syncRecentAttendance(pool, zoom, now = Date.now()) {
     locked = (await db.query("SELECT pg_try_advisory_lock(7410628) AS locked"))
       .rows[0].locked;
     if (!locked) return;
+    // The 7-day window uses the same clock as the end-time check below (IST calendar date of `now`),
+    // not the database's own date, so the two never disagree.
+    const today = new Date(now + 330 * 60000).toISOString().slice(0, 10);
     const episodes = (
       await db.query(`SELECT e.* FROM episodes e WHERE e.zoom_meeting_id IS NOT NULL
-      AND e.event_date>=CURRENT_DATE-INTERVAL '7 days' AND e.event_date<=CURRENT_DATE
-      AND NOT EXISTS(SELECT 1 FROM attendance_syncs s WHERE s.episode_id=e.id AND s.report_complete=TRUE)`)
+      AND e.event_date>=$1::date-INTERVAL '7 days' AND e.event_date<=$1::date
+      AND NOT EXISTS(SELECT 1 FROM attendance_syncs s WHERE s.episode_id=e.id AND s.report_complete=TRUE)`, [today])
     ).rows;
     for (const e of episodes) {
       const end = episodeEnd(e);

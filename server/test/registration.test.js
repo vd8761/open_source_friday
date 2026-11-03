@@ -15,6 +15,8 @@ process.env.OSF_ENV = 'production';
 // Pre-set so a developer's local server/.env (loaded by dotenv, which never overrides) cannot switch these off.
 for (const name of ['ENABLE_WORKERS', 'ENABLE_ZOOM', 'ENABLE_SENDER', 'ENABLE_PUSH']) process.env[name] = '';
 process.env.CRON_SECRET = 'test-cron-secret';
+// This file sends many requests from one address; the per-minute form limits are tested in security.test.js.
+process.env.LOGIN_LIMIT_PER_MINUTE = process.env.LOOKUP_LIMIT_PER_MINUTE = process.env.REGISTER_LIMIT_PER_MINUTE = '1000';
 let closed = false;
 let queueFailure = false;
 let firstTimeStudent = false;
@@ -87,7 +89,8 @@ let base;
 const nativeFetch = global.fetch;
 before(async () => {
   global.fetch = async (url, options) => url === 'https://www.google.com/recaptcha/api/siteverify'
-    ? { json: async () => ({ success: options.body.get('response') === 'valid', score: 0.9 }) }
+    // Tokens look like 'valid' (action register) or 'valid:<action>'; Google echoes the action the token was made for.
+    ? { json: async () => { const [ok, action = 'register'] = String(options.body.get('response')).split(':'); return { success: ok === 'valid', score: 0.9, action }; } }
     : nativeFetch(url, options);
   server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
@@ -380,7 +383,7 @@ test('lookup distinguishes imported incomplete profiles without publishing acade
     for (const incomplete of [true, false]) {
       storedStudent = incomplete ? { id: 7, full_name: 'Imported Student', email: 'stored@example.com' } : { ...completeStudent };
       queries.length = 0;
-      const response = await nativeFetch(`${base}/api/students/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: ' STORED@EXAMPLE.COM ', countryCode: '+91', episode_id: 1 }) });
+      const response = await nativeFetch(`${base}/api/students/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recaptcha_token: 'valid:lookup', identifier: ' STORED@EXAMPLE.COM ', countryCode: '+91', episode_id: 1 }) });
       const result = await response.json();
       assert.equal(response.status, 200); assert.equal(result.profile_complete, !incomplete);
       assert.equal(result.missing_fields.includes('whatsapp_number'), incomplete);

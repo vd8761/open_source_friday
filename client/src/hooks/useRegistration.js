@@ -32,6 +32,8 @@ export default function useRegistration(episodeParam) {
   const lastEmailChecked = useRef('');
   const lookupVersion = useRef(0);
   const { executeRecaptcha } = useGoogleReCaptcha();
+  // The API checks this token; on a local machine without keys it is empty and the API skips the check.
+  const lookupToken = async () => (executeRecaptcha ? await executeRecaptcha('lookup') : '');
 
   // Returns true if the episode event has already completed based on its date and end time
   useEffect(() => {
@@ -107,7 +109,7 @@ export default function useRegistration(episodeParam) {
     setRegisterError('');
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const res = await fetch(`${API_URL}/api/students/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: email, countryCode, episode_id: episodeDetails?.id }) });
+      const res = await fetch(`${API_URL}/api/students/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: email, countryCode, episode_id: episodeDetails?.id, recaptcha_token: await lookupToken() }) });
       const data = await res.json();
       if (version !== lookupVersion.current) return;
       if (!res.ok) throw new Error(data.error || 'Please check your email and try again.');
@@ -142,7 +144,8 @@ export default function useRegistration(episodeParam) {
         body: JSON.stringify({ 
           identifier,
           countryCode,
-          episode_id: episodeDetails?.id 
+          episode_id: episodeDetails?.id,
+          recaptcha_token: await lookupToken(),
         })
       });
       const data = await res.json();
