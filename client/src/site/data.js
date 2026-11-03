@@ -1,7 +1,5 @@
 // Fixed copy from the approved v2.0 design. Episodes, speakers and numbers come from the API (api.js).
 
-export const DOMAINS = ['ALL', 'AI ENGINEER', 'CLOUD COMPUTING', 'OPEN SOURCE', 'DIGITAL SKILLS'];
-
 export const CONTACT_EMAIL = 'info@descienceosclub.com';
 export const CLUB_URL = 'https://descienceosclub.com/';
 

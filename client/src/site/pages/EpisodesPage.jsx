@@ -2,19 +2,18 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Card, Container, DataState, DateBadge, Eyebrow, GradientText, Tag, ToggleChip } from '../ui';
 import { heroBackground } from '../utils';
-import { DOMAINS } from '../data';
 import { useSiteData } from '../api';
 import { sitePaths } from '../paths';
 
 export default function EpisodesPage() {
   const [domain, setDomain] = useState('ALL');
-  const { episodes: all, past, upcoming, next: ep, stats, loading, error } = useSiteData();
+  const { episodes: all, past, upcoming, next: ep, stats, domains, loading, error } = useSiteData();
   const total = all.length;
   const countFor = (d) => (d === 'ALL' ? total : all.filter((e) => e.domain === d).length);
   const episodes = domain === 'ALL' ? past : past.filter((e) => e.domain === domain);
   const later = upcoming.slice(1);
   const lead = ep?.speakers[0];
-  const heroStats = [[total, 'EPISODES'], [stats?.speakers_count ?? '—', 'SPEAKERS'], [DOMAINS.length - 1, 'DOMAINS'], ['₹0', 'TO JOIN']];
+  const heroStats = [[total, 'EPISODES'], [stats?.speakers_count ?? '—', 'SPEAKERS'], [domains.length || '—', 'DOMAINS'], ['₹0', 'TO JOIN']];
 
   return (
     <>
@@ -85,7 +84,7 @@ export default function EpisodesPage() {
           </div>
 
           <div role="group" aria-label="Filter by domain" className="flex flex-wrap gap-2">
-            {DOMAINS.map((d) => <ToggleChip key={d} pressed={d === domain} onClick={() => setDomain(d)} className="px-[18px]">{d} · {countFor(d)}</ToggleChip>)}
+            {['ALL', ...domains.map((x) => x.label)].map((d) => <ToggleChip key={d} pressed={d === domain} onClick={() => setDomain(d)} className="px-[18px]">{d} · {countFor(d)}</ToggleChip>)}
           </div>
 
           <div className="flex flex-col gap-3">

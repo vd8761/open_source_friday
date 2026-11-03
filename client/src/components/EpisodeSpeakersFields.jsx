@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi, fieldClass } from '../utils/adminApi';
-import { DOMAIN_OPTIONS } from '../utils/episodeV2';
+import { domainOptions, useAdminDomains } from '../utils/domains';
 
 export default function EpisodeSpeakersFields({ value, onChange, onPresenter }) {
+  const { domains } = useAdminDomains();
   const [speakers, setSpeakers] = useState([]), [error, setError] = useState(''), [pick, setPick] = useState('');
   useEffect(() => { adminApi('/speakers').then(r => setSpeakers(r.speakers)).catch(e => setError(e.message)); }, []);
   const byId = (id) => speakers.find(s => s.id === id);
@@ -33,7 +34,7 @@ export default function EpisodeSpeakersFields({ value, onChange, onPresenter }) 
       </div>
     </div>
     <div className="grid gap-4 md:grid-cols-2">
-      <label className="block text-xs font-semibold text-slate-600">Domain<select className={fieldClass} value={value.domain} onChange={e => onChange({ ...value, domain: e.target.value })}><option value="">Not set</option>{DOMAIN_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+      <label className="block text-xs font-semibold text-slate-600">Domain<select className={fieldClass} value={value.domain} onChange={e => onChange({ ...value, domain: e.target.value })}><option value="">Not set</option>{domainOptions(domains, value.domain).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select></label>
       <label className="block text-xs font-semibold text-slate-600">One-line blurb for cards <span className="font-normal text-slate-500">({value.short_blurb.length}/200)</span><input className={fieldClass} maxLength={200} value={value.short_blurb} onChange={e => onChange({ ...value, short_blurb: e.target.value })}/></label>
     </div>
     <fieldset className="space-y-2"><legend className="text-xs font-semibold text-slate-600">What we'll cover <span className="font-normal text-slate-500">(up to 12 points)</span></legend>

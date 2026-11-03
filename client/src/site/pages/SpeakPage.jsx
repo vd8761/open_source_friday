@@ -23,6 +23,7 @@ const h2 = 'm-0 text-[clamp(32px,3.8vw,52px)] font-semibold leading-[1.05] track
 const specRows = [['slot', '"Friday, 19:00–20:00 IST"'], ['length', '"~45 min talk + Q&A"'], ['where', '"Online · Zoom"'], ['slides', '"optional"'], ['audience', '["students", "aspirants", "early devs"]'], ['vibe', '"no theory dumps"']];
 
 function PitchForm() {
+  const { domains } = useSiteData();
   const [fridays] = useState(() => upcomingFridays());
   const [picked, setPicked] = useState({});
   const [status, setStatus] = useState({ state: 'idle', message: '' });
@@ -59,7 +60,7 @@ function PitchForm() {
       <Field id="sp-domain" label="Domain">
         <select id="sp-domain" name="domain" required defaultValue="" className="osf-field">
           <option value="" disabled>Select…</option>
-          <option value="ai_engineer">AI Engineer</option><option value="cloud_computing">Cloud Computing</option><option value="open_source">Open Source</option><option value="digital_skills">Digital Skills &amp; careers</option>
+          {domains.map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
         </select>
       </Field>
       <Field id="sp-abs" label="What will people walk away with?"><textarea id="sp-abs" name="abstract" rows={4} required maxLength={2000} placeholder="3–5 lines is perfect" className="osf-field resize-y" /></Field>

@@ -1,6 +1,5 @@
 import { adminApi } from './adminApi';
 
-export const DOMAIN_OPTIONS = [['ai_engineer', 'AI Engineer'], ['cloud_computing', 'Cloud Computing'], ['open_source', 'Open Source'], ['digital_skills', 'Digital Skills']];
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 export const emptyEpisodeV2 = { speaker_ids: [], domain: '', agenda: [], short_blurb: '' };
 

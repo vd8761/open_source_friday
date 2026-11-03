@@ -3,7 +3,7 @@ const { InputError } = require('./outreach-csv');
 const { pageOptions } = require('./table-query');
 const { registerStudentImportRoutes } = require('./student-import');
 const { registerLoungeAdminRoutes } = require('./lounge');
-const { DOMAINS, loadEpisodes, computeStats, syncPresenterColumns, publicSpeaker, sendDataImage, validate: v } = require('./v2-data');
+const { domainKeys, domainKey, loadEpisodes, computeStats, syncPresenterColumns, publicSpeaker, sendDataImage, validate: v } = require('./v2-data');
 
 const route = (fn, message = 'Unable to complete this request. Please try again.') => async (req, res) => {
   try { res.json({ success: true, ...await fn(req, res) }); }
@@ -64,14 +64,12 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
     } catch { res.status(404).json({ success: false, error: 'Photo not found' }); }
   });
 
-  router.get('/speakers', route(async () => {
-    const { rows } = await pool.query(`SELECT s.*, COALESCE(json_agg(json_build_object('episode_number',e.episode_number,'title',e.title,
-        'event_date',e.event_date::date,'domain',e.domain) ORDER BY e.episode_number) FILTER (WHERE e.id IS NOT NULL), '[]') AS episodes
-      FROM speakers s LEFT JOIN episode_speakers es ON es.speaker_id=s.id
-      LEFT JOIN episodes e ON e.id=es.episode_id AND e.is_test IS NOT TRUE
-      WHERE s.is_published GROUP BY s.id ORDER BY s.name`);
-    return { speakers: rows.map(s => ({ ...publicSpeaker(s), episodes: s.episodes, episode_count: s.episodes.length, is_repeat: s.episodes.length > 1 })) };
-  }));
+  // Speakers are listed by domain only; which episodes they spoke at is not shown.
+  router.get('/speakers', route(async () => ({
+    speakers: (await pool.query('SELECT * FROM speakers WHERE is_published ORDER BY name')).rows.map(publicSpeaker),
+  })));
+  router.get('/domains', route(async () => ({ domains: (await pool.query('SELECT key,label FROM domains WHERE is_active ORDER BY sort,label')).rows })));
+
   router.get('/speakers/:id/photo', async (req, res) => {
     try {
       const { rows } = await pool.query('SELECT photo_url FROM speakers WHERE id=$1 AND is_published', [intId(req.params.id)]);
@@ -82,7 +80,7 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
   router.get('/stats', route(async () => {
     if (!statsCache || now() - statsCache.at > 60000) {
       const settings = (await pool.query("SELECT value FROM site_settings WHERE key='club_stats'")).rows[0];
-      statsCache = { at: now(), stats: { ...computeStats(await loadEpisodes(pool), now()), club_stats: settings?.value || [] } };
+      statsCache = { at: now(), stats: { ...computeStats(await loadEpisodes(pool), now(), await domainKeys(pool)), club_stats: settings?.value || [] } };
     }
     return { stats: statsCache.stats };
   }));
@@ -106,7 +104,7 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
     const link = v.text(b.link, 'Link', 300);
     if (link && !/^https?:\/\/\S+$/.test(link)) throw new InputError('Link must start with http:// or https://.', 400);
     const row = [v.text(b.name, 'Name', 120, { required: true }), email, v.text(b.role_company, 'Role and company', 160, { required: true }),
-      link, v.text(b.title, 'Session title', 160, { required: true }), v.domain(b.domain), v.text(b.abstract, 'Abstract', 2000, { required: true }),
+      link, v.text(b.title, 'Session title', 160, { required: true }), v.domain(b.domain, await domainKeys(pool, { activeOnly: true })), v.text(b.abstract, 'Abstract', 2000, { required: true }),
       futureFridays(b.preferred_fridays, now())];
     await pool.query(`INSERT INTO speaker_applications(name,email,role_company,link,title,domain,abstract,preferred_fridays)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8::date[])`, row);
@@ -118,16 +116,16 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
 
 function createV2AdminRouter({ pool, authenticateToken }) {
   const router = express.Router();
-  router.use(['/speakers', '/episodes/:id/speakers', '/episodes/:id/v2-details', '/episodes/:id/lounge', '/tips', '/speaker-applications', '/site-settings', '/contacts'], authenticateToken);
+  router.use(['/speakers', '/episodes/:id/speakers', '/episodes/:id/v2-details', '/episodes/:id/lounge', '/tips', '/speaker-applications', '/site-settings', '/contacts', '/domains'], authenticateToken);
   const transaction = async fn => {
     const db = await pool.connect();
     try { await db.query('BEGIN'); const result = await fn(db); await db.query('COMMIT'); return result; }
     catch (e) { await db.query('ROLLBACK').catch(() => {}); throw e; }
     finally { db.release(); }
   };
-  const speakerFields = b => {
+  const speakerFields = (b, keys) => {
     const domains = b.domains == null ? [] : b.domains;
-    if (!Array.isArray(domains) || domains.some(d => !DOMAINS.includes(d))) throw new InputError('Choose valid domains.', 400);
+    if (!Array.isArray(domains) || domains.some(d => !keys.includes(d))) throw new InputError('Choose valid domains.', 400);
     const linkedin = v.text(b.linkedin_url, 'LinkedIn URL', 300);
     if (linkedin && !/^https:\/\/([a-z]+\.)?linkedin\.com\//.test(linkedin)) throw new InputError('LinkedIn URL must start with https://www.linkedin.com/.', 400);
     return [v.text(b.name, 'Name', 120, { required: true }), v.text(b.honorific, 'Honorific', 20), v.text(b.designation, 'Designation', 160),
@@ -136,18 +134,16 @@ function createV2AdminRouter({ pool, authenticateToken }) {
   const duplicateName = e => { if (e.code === '23505') throw new InputError('A speaker with this name already exists.', 409); throw e; };
 
   router.get('/speakers', route(async () => ({ speakers: (await pool.query(`SELECT s.id,s.name,s.honorific,s.designation,s.company,s.bio,s.linkedin_url,
-      s.domains,s.is_published,s.updated_at,(s.photo_url IS NOT NULL) AS has_photo,
-      COALESCE(array_agg(e.episode_number ORDER BY e.episode_number) FILTER (WHERE e.id IS NOT NULL),'{}') AS episode_numbers
-    FROM speakers s LEFT JOIN episode_speakers es ON es.speaker_id=s.id LEFT JOIN episodes e ON e.id=es.episode_id
-    GROUP BY s.id ORDER BY s.name`)).rows })));
+      s.domains,s.is_published,s.updated_at,(s.photo_url IS NOT NULL) AS has_photo
+    FROM speakers s ORDER BY s.name`)).rows })));
   router.post('/speakers', route(async req => {
     const { rows } = await pool.query(`INSERT INTO speakers(name,honorific,designation,company,bio,photo_url,linkedin_url,domains,is_published)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, speakerFields(req.body || {})).catch(duplicateName);
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, speakerFields(req.body || {}, await domainKeys(pool))).catch(duplicateName);
     return { id: rows[0].id };
   }));
   // A photo change here updates every page, and is written through to linked episodes for v1.0.
   router.put('/speakers/:id', route(async req => transaction(async db => {
-    const fields = speakerFields(req.body || {});
+    const fields = speakerFields(req.body || {}, await domainKeys(db));
     const keepPhoto = req.body?.photo_url === undefined;
     const { rows } = await db.query(`UPDATE speakers SET name=$2,honorific=$3,designation=$4,company=$5,bio=$6,
         photo_url=CASE WHEN $11 THEN photo_url ELSE $7 END,linkedin_url=$8,domains=$9,is_published=$10,updated_at=NOW()
@@ -178,16 +174,16 @@ function createV2AdminRouter({ pool, authenticateToken }) {
     if (!Array.isArray(agenda) || agenda.length > 12 || agenda.some(item => typeof item !== 'string' || !item.trim() || item.length > 200))
       throw new InputError('Agenda must be up to 12 items of 200 characters or fewer.', 400);
     const { rows } = await pool.query('UPDATE episodes SET domain=$2,agenda=$3::jsonb,short_blurb=$4 WHERE id=$1 RETURNING id',
-      [intId(req.params.id), v.domain(b.domain), JSON.stringify(agenda.map(s => s.trim())), v.text(b.short_blurb, 'Short blurb', 200)]);
+      [intId(req.params.id), v.domain(b.domain, await domainKeys(pool)), JSON.stringify(agenda.map(s => s.trim())), v.text(b.short_blurb, 'Short blurb', 200)]);
     if (!rows.length) throw new InputError('Episode not found.', 404);
     return { id: rows[0].id };
   }));
 
-  const tipFields = b => {
+  const tipFields = (b, keys) => {
     const publishedAt = b.published_at == null || b.published_at === '' ? null : new Date(b.published_at);
     if (publishedAt && Number.isNaN(publishedAt.getTime())) throw new InputError('Use a valid publish date.', 400);
     const optionalId = value => value == null || value === '' ? null : intId(value);
-    return [v.text(b.text, 'Tip', 500, { required: true }), optionalId(b.episode_id), optionalId(b.speaker_id), v.domain(b.domain),
+    return [v.text(b.text, 'Tip', 500, { required: true }), optionalId(b.episode_id), optionalId(b.speaker_id), v.domain(b.domain, keys),
       b.is_tip_of_week === true, publishedAt];
   };
   const tipRefs = e => { if (e.code === '23503') throw new InputError('The linked episode or speaker does not exist.', 400); throw e; };
@@ -201,9 +197,9 @@ function createV2AdminRouter({ pool, authenticateToken }) {
     return { id: rows[0].id };
   });
   router.post('/tips', route(async req => saveTip(`INSERT INTO tips(text,episode_id,speaker_id,domain,is_tip_of_week,published_at)
-    VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, tipFields(req.body || {}))));
+    VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, tipFields(req.body || {}, await domainKeys(pool)))));
   router.put('/tips/:id', route(async req => saveTip(`UPDATE tips SET text=$2,episode_id=$3,speaker_id=$4,domain=$5,is_tip_of_week=$6,
-    published_at=$7,updated_at=NOW() WHERE id=$1 RETURNING id`, tipFields(req.body || {}), intId(req.params.id))));
+    published_at=$7,updated_at=NOW() WHERE id=$1 RETURNING id`, tipFields(req.body || {}, await domainKeys(pool)), intId(req.params.id))));
   router.delete('/tips/:id', route(async req => {
     const { rows } = await pool.query('DELETE FROM tips WHERE id=$1 RETURNING id', [intId(req.params.id)]);
     if (!rows.length) throw new InputError('Tip not found.', 404);
@@ -238,6 +234,27 @@ function createV2AdminRouter({ pool, authenticateToken }) {
     await pool.query(`UPDATE site_settings SET value=$1::jsonb,updated_at=NOW(),updated_by=$2 WHERE key='club_stats'`,
       [JSON.stringify(value.map(s => ({ label: s.label.trim(), value: s.value.trim() }))), req.user?.id ?? null]);
     return {};
+  }));
+  // Domains: add, rename or hide. Keys never change, so speakers, episodes and tips keep their links.
+  router.get('/domains', route(async () => ({ domains: (await pool.query(`SELECT d.key,d.label,d.sort,d.is_active,
+      (SELECT count(*)::int FROM speakers s WHERE d.key = ANY(s.domains)) AS speaker_count,
+      (SELECT count(*)::int FROM episodes e WHERE e.domain = d.key) AS episode_count
+    FROM domains d ORDER BY d.sort,d.label`)).rows })));
+  const domainLabel = b => v.text(b.label, 'Domain name', 40, { required: true });
+  const duplicateDomain = e => { if (e.code === '23505') throw new InputError('A domain with this name already exists.', 409); throw e; };
+  router.post('/domains', route(async req => {
+    const label = domainLabel(req.body || {}), key = domainKey(label);
+    if (!key) throw new InputError('Use letters or numbers in the domain name.', 400);
+    const { rows } = await pool.query(`INSERT INTO domains(key,label,sort) VALUES($1,$2,(SELECT COALESCE(MAX(sort),0)+1 FROM domains))
+      RETURNING key,label,sort,is_active`, [key, label]).catch(duplicateDomain);
+    return { domain: rows[0] };
+  }));
+  router.put('/domains/:key', route(async req => {
+    const b = req.body || {};
+    const { rows } = await pool.query('UPDATE domains SET label=$2,is_active=$3 WHERE key=$1 RETURNING key,label,sort,is_active',
+      [String(req.params.key), domainLabel(b), b.is_active !== false]).catch(duplicateDomain);
+    if (!rows.length) throw new InputError('Domain not found.', 404);
+    return { domain: rows[0] };
   }));
   registerStudentImportRoutes(router, { pool, route });
   registerLoungeAdminRoutes(router, { pool, route });

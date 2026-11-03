@@ -6,7 +6,9 @@ export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 // API paths for images are relative to the API host.
 const absolute = (url) => (url && url.startsWith('/') ? `${API_URL}${url}` : url || null);
 
-export const DOMAIN_LABELS = { ai_engineer: 'AI ENGINEER', cloud_computing: 'CLOUD COMPUTING', open_source: 'OPEN SOURCE', digital_skills: 'DIGITAL SKILLS' };
+// Domain names come from /api/domains (admins can add more). Until they load, a key reads as its words.
+let domainLabels = { ai_engineer: 'AI ENGINEER', cloud_computing: 'CLOUD COMPUTING', open_source: 'OPEN SOURCE', digital_skills: 'DIGITAL SKILLS' };
+const domainLabel = (key) => (key ? domainLabels[key] || key.replace(/_/g, ' ').toUpperCase() : null);
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -48,7 +50,7 @@ export function speakerView(s) {
     bio: s.bio || null,
     linkedin: s.linkedin_url || null,
     photo: absolute(s.photo_url),
-    domains: (s.domains || []).map((d) => DOMAIN_LABELS[d]).filter(Boolean),
+    domains: (s.domains || []).map(domainLabel),
   };
 }
 
@@ -64,7 +66,7 @@ export function episodeView(e, now = Date.now()) {
     blurb: e.short_blurb || null,
     description: e.description || null,
     agenda: e.agenda || [],
-    domain: DOMAIN_LABELS[e.domain] || null,
+    domain: domainLabel(e.domain),
     isoDay: day,
     day: valid ? String(date.getUTCDate()).padStart(2, '0') : '',
     mon: valid ? MONTHS[date.getUTCMonth()] : '',
@@ -97,17 +99,20 @@ const SiteData = createContext(null);
 
 // Loads the public data once per visit. Every number and name on the site comes from here.
 export function SiteDataProvider({ children }) {
-  const [state, setState] = useState({ loading: true, error: null, episodes: [], speakers: [], stats: null });
+  const [state, setState] = useState({ loading: true, error: null, episodes: [], speakers: [], stats: null, domains: [] });
   useEffect(() => {
     let alive = true;
-    Promise.all([getJson('/api/v2/episodes'), getJson('/api/speakers'), getJson('/api/stats')])
-      .then(([e, s, st]) => {
+    Promise.all([getJson('/api/v2/episodes'), getJson('/api/speakers'), getJson('/api/stats'), getJson('/api/domains')])
+      .then(([e, s, st, d]) => {
         if (!alive) return;
+        domainLabels = { ...domainLabels, ...Object.fromEntries(d.domains.map((x) => [x.key, x.label.toUpperCase()])) };
         const now = Date.now();
         // Test events stay out of the public site in production builds.
         const episodes = e.episodes.map((x) => episodeView(x, now)).filter((x) => !x.isTest || import.meta.env.DEV || import.meta.env.VITE_SHOW_TEST_EVENTS === 'true');
-        const speakers = s.speakers.map((x) => ({ ...speakerView(x), episodes: x.episodes, episodeCount: x.episode_count, isRepeat: x.is_repeat }));
-        setState({ loading: false, error: null, episodes, speakers, stats: st.stats });
+        const speakers = s.speakers.map(speakerView);
+        // Shown domains, in admin order, for filters and the Speak at OSF form.
+        const domains = d.domains.map((x) => ({ key: x.key, label: x.label.toUpperCase(), name: x.label }));
+        setState({ loading: false, error: null, episodes, speakers, stats: st.stats, domains });
       })
       .catch((err) => alive && setState((prev) => ({ ...prev, loading: false, error: err.message })));
     return () => { alive = false; };

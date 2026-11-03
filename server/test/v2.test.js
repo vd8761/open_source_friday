@@ -102,8 +102,8 @@ test('speakers are one record shared by many episodes; a photo change is written
     const pub = (await call('GET', '/speakers')).body.speakers;
     const ari = pub.find(s => s.name === 'Ariyappan P');
     assert.match(ari.photo_url, new RegExp(`^/api/speakers/${a.body.id}/photo\\?v=\\d+$`));
-    assert.deepEqual(ari.episodes.map(e => e.episode_number), [1, 2, 3]);
-    assert.equal(ari.is_repeat, true);
+    // Public speakers are listed by domain only, without their episodes.
+    assert.equal(ari.episodes, undefined);
     assert.equal((await call('GET', `/speakers/${a.body.id}/photo`)).body.toString(), 'png-bytes');
     const list = (await call('GET', '/v2/episodes')).body.episodes;
     assert.deepEqual(list.find(e => e.episode_number === 3).speakers.map(s => s.name), ['Arumugam V', 'Ariyappan P']);
@@ -268,4 +268,35 @@ test('adding old student records fills blanks only, never overwrites, and previe
     assert.equal((await db.query("SELECT year_of_study FROM students WHERE email='ravi@example.com'")).rows[0].year_of_study, '1st Year');
     assert.equal((await call('POST', '/contacts/import', { csv: 'foo,bar\n1,2\n' })).status, 400);
   } finally { await new Promise(r => server.close(r)); }
+});
+
+test('admins add, rename and hide domains; speakers, episodes, tips and pitches accept new ones', async () => {
+  const { db, call, close } = await setup();
+  try {
+    await initV2DB(db);
+    assert.deepEqual((await call('GET', '/domains')).body.domains.map(d => d.key), ['ai_engineer', 'cloud_computing', 'open_source', 'digital_skills']);
+    assert.equal((await call('POST', '/admin/domains', { label: 'Data & Analytics' })).status, 401);
+    const added = await call('POST', '/admin/domains', { label: ' Data & Analytics ' }, true);
+    assert.deepEqual(added.body.domain, { key: 'data_and_analytics', label: 'Data & Analytics', sort: 5, is_active: true });
+    assert.equal((await call('POST', '/admin/domains', { label: 'data & analytics' }, true)).status, 409);
+    assert.equal((await call('POST', '/admin/domains', { label: '!!!' }, true)).status, 400);
+    assert.equal((await call('POST', '/admin/domains', { label: 'x'.repeat(41) }, true)).status, 400);
+
+    const sp = await call('POST', '/admin/speakers', { name: 'New Person', domains: ['data_and_analytics', 'open_source'] }, true);
+    assert.equal(sp.status, 200);
+    assert.equal((await call('POST', '/admin/speakers', { name: 'Other', domains: ['not_a_domain'] }, true)).status, 400);
+    const ep = (await db.query('SELECT id FROM episodes WHERE episode_number=4')).rows[0].id;
+    assert.equal((await call('PUT', `/admin/episodes/${ep}/v2-details`, { domain: 'data_and_analytics' }, true)).status, 200);
+    assert.equal((await call('POST', '/admin/tips', { text: 'Tip', domain: 'data_and_analytics' }, true)).status, 200);
+
+    const admin = (await call('GET', '/admin/domains', null, true)).body.domains.find(d => d.key === 'data_and_analytics');
+    assert.equal(admin.speaker_count, 1); assert.equal(admin.episode_count, 1);
+
+    // Renaming keeps the key; hiding removes it from the website and from new pitches, but existing links stay.
+    const hidden = await call('PUT', '/admin/domains/data_and_analytics', { label: 'Data and AI', is_active: false }, true);
+    assert.deepEqual([hidden.body.domain.key, hidden.body.domain.label, hidden.body.domain.is_active], ['data_and_analytics', 'Data and AI', false]);
+    assert.ok(!(await call('GET', '/domains')).body.domains.some(d => d.key === 'data_and_analytics'));
+    assert.deepEqual((await db.query("SELECT domains FROM speakers WHERE name='New Person'")).rows[0].domains, ['data_and_analytics', 'open_source']);
+    assert.equal((await call('PUT', '/admin/domains/missing', { label: 'X' }, true)).status, 404);
+  } finally { await close(); }
 });

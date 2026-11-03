@@ -3,7 +3,13 @@ const path = require('node:path');
 const { episodeStart, episodeEnd } = require('./episode-time');
 const { InputError } = require('./outreach-csv');
 
+// The four original domains. Admins can add more; the domains table is the list in use (see domainKeys).
 const DOMAINS = ['ai_engineer', 'cloud_computing', 'open_source', 'digital_skills'];
+async function domainKeys(db, { activeOnly = false } = {}) {
+  return (await db.query(`SELECT key FROM domains${activeOnly ? ' WHERE is_active' : ''}`)).rows.map(r => r.key);
+}
+// "Data & Analytics" -> "data_and_analytics"
+const domainKey = label => String(label).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
 const migrationDir = path.join(__dirname, 'db/migrations');
 // Every *.up.sql in order (001_, 002_, …). Each is idempotent, so running them on every start is safe.
 const migrations = fs.readdirSync(migrationDir).filter(f => f.endsWith('.up.sql')).sort().map(f => fs.readFileSync(path.join(migrationDir, f), 'utf8'));
@@ -74,7 +80,7 @@ async function loadEpisodes(db, { episodeNumber, withDescription = false } = {})
 }
 
 // Every number shown on the site is computed from episodes and speakers; nothing is hand-edited.
-function computeStats(episodes, now = Date.now()) {
+function computeStats(episodes, now = Date.now(), keys = DOMAINS) {
   // Past episodes count even when deactivated (v1.0 deactivates old episodes); only test events are excluded.
   const counted = episodes.filter(e => !e.is_test);
   const shipped = counted.filter(e => episodeEnd(e) !== null && episodeEnd(e) <= now);
@@ -82,8 +88,8 @@ function computeStats(episodes, now = Date.now()) {
     .sort((a, b) => episodeStart(a) - episodeStart(b));
   const appearances = new Map();
   for (const e of [...shipped, ...upcoming]) for (const key of new Set(e.speaker_keys)) appearances.set(key, (appearances.get(key) || 0) + 1);
-  const domains = Object.fromEntries([...DOMAINS, 'unassigned'].map(d => [d, 0]));
-  for (const e of shipped) domains[e.domain || 'unassigned']++;
+  const domains = Object.fromEntries([...keys, 'unassigned'].map(d => [d, 0]));
+  for (const e of shipped) domains[e.domain || 'unassigned'] = (domains[e.domain || 'unassigned'] || 0) + 1;
   const next = upcoming[0];
   return {
     episodes_shipped: shipped.length,
@@ -117,9 +123,9 @@ const text = (value, label, max, { required = false } = {}) => {
   if (required && !trimmed) throw new InputError(`${label} is required.`, 400);
   return trimmed || null;
 };
-const domain = value => {
+const domain = (value, keys = DOMAINS) => {
   if (value == null || value === '') return null;
-  if (!DOMAINS.includes(value)) throw new InputError('Choose a valid domain.', 400);
+  if (!keys.includes(value)) throw new InputError('Choose a valid domain.', 400);
   return value;
 };
 const photo = value => {
@@ -132,6 +138,6 @@ const photo = value => {
 };
 
 module.exports = {
-  DOMAINS, initV2DB, nameKey, loadEpisodes, computeStats, syncPresenterColumns, publicSpeaker, sendDataImage,
+  DOMAINS, domainKeys, domainKey, initV2DB, nameKey, loadEpisodes, computeStats, syncPresenterColumns, publicSpeaker, sendDataImage,
   validate: { text, domain, photo },
 };

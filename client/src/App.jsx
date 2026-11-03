@@ -17,6 +17,7 @@ import SpeakersAdminPage from './components/SpeakersAdminPage';
 import TipsAdminPage from './components/TipsAdminPage';
 import SpeakerApplicationsPage from './components/SpeakerApplicationsPage';
 import SiteSettingsPage from './components/SiteSettingsPage';
+import DomainsAdminPage from './components/DomainsAdminPage';
 import { subscribeToPush, getNotificationPermission } from './utils/pushNotifications';
 import './App.css';
 
@@ -62,6 +63,7 @@ function App() {
           <Route path="/admin/tips" element={<ProtectedRoute><TipsAdminPage /></ProtectedRoute>} />
           <Route path="/admin/speaker-applications" element={<ProtectedRoute><SpeakerApplicationsPage /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute><SiteSettingsPage /></ProtectedRoute>} />
+          <Route path="/admin/domains" element={<ProtectedRoute><DomainsAdminPage /></ProtectedRoute>} />
           <Route path="/admin/trash" element={<ProtectedRoute><EventHistoryPage mode="trash" /></ProtectedRoute>} />
           <Route path="/admin/past-events" element={<ProtectedRoute><PastEventsPage /></ProtectedRoute>} />
           <Route path="/admin/archived-events" element={<ProtectedRoute><PastEventsPage archivedOnly /></ProtectedRoute>} />

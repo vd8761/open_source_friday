@@ -216,10 +216,11 @@ function EpisodesSection() {
 
 // Four faces: the next episode's speaker first, then the most recent speakers.
 function SpeakersSection() {
-  const { speakers, next } = useSiteData();
+  const { speakers, next, episodes } = useSiteData();
   if (!speakers.length) return null;
   const nextIds = new Set(next?.speakers.map((s) => s.id));
-  const latest = (s) => Math.max(...s.episodes.map((e) => e.episode_number), 0);
+  // Most recent first; the card itself shows domains, not episodes.
+  const latest = (s) => Math.max(0, ...episodes.filter((e) => !e.upcoming && e.speakers.some((x) => x.id === s.id)).map((e) => e.num));
   const picked = [...speakers].sort((a, b) => Number(nextIds.has(b.id)) - Number(nextIds.has(a.id)) || latest(b) - latest(a)).slice(0, 4);
   const companies = [...new Set(picked.map((s) => s.company).filter(Boolean))].slice(0, 3);
   const tones = ['sky', 'leaf'];
@@ -230,11 +231,10 @@ function SpeakersSection() {
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
           {picked.map((s, i) => {
             const highlight = nextIds.has(s.id);
-            const eps = s.episodes.map((e) => `EP ${e.episode_number}`).join(' · ');
             return (
               <Link key={s.id} to={sitePaths.speakers} className="flex flex-col gap-3.5 rounded-3xl border border-osf-line bg-osf-mist p-6 text-osf-ink no-underline hover:border-osf-leaf">
                 <SpeakerAvatar speaker={s} tone={highlight ? 'solid' : tones[i % 2]} className="h-16 w-16 text-[22px]" />
-                <span className={`font-osf-mono text-[11px] font-bold tracking-[0.08em] ${highlight ? 'text-osf-leaf' : 'text-osf-muted'}`}>{highlight ? `THIS FRIDAY · EP ${next.num}` : eps}</span>
+                <span className={`font-osf-mono text-[11px] font-bold tracking-[0.08em] ${highlight ? 'text-osf-leaf' : 'text-osf-muted'}`}>{highlight ? `THIS FRIDAY · EP ${next.num}` : s.domains.join(' · ')}</span>
                 <span className="text-[19px] font-semibold leading-[1.2]">{s.name}</span>
                 {s.role && <span className="text-[15px] text-osf-muted">{s.role}</span>}
               </Link>

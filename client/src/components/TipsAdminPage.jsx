@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { adminApi, fieldClass } from '../utils/adminApi';
 import { formatIST } from '../utils/dateTime';
-import { DOMAIN_OPTIONS } from '../utils/episodeV2';
+import { domainOptions, useAdminDomains } from '../utils/domains';
 import ConfirmDialog from './ConfirmDialog';
 
 const empty = { text: '', episode_id: '', speaker_id: '', domain: '', is_tip_of_week: false, published: false };
 
 // Tips appear on the website and app only once published. Marking a tip of the week replaces the previous one.
 export default function TipsAdminPage() {
+  const { domains } = useAdminDomains();
   const [tips, setTips] = useState([]), [episodes, setEpisodes] = useState([]), [speakers, setSpeakers] = useState([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState(''), [form, setForm] = useState(null), [busy, setBusy] = useState(false), [deleting, setDeleting] = useState(null);
   const load = useCallback(() => {
@@ -40,7 +41,7 @@ export default function TipsAdminPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="block text-xs font-semibold text-slate-600">From episode<select className={fieldClass} value={form.episode_id} onChange={set('episode_id')}><option value="">None</option>{episodes.map(e => <option key={e.id} value={e.id}>EP {e.episode_number} · {e.title}</option>)}</select></label>
         <label className="block text-xs font-semibold text-slate-600">Speaker<select className={fieldClass} value={form.speaker_id} onChange={set('speaker_id')}><option value="">None</option>{speakers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-        <label className="block text-xs font-semibold text-slate-600">Domain<select className={fieldClass} value={form.domain} onChange={set('domain')}><option value="">None</option>{DOMAIN_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+        <label className="block text-xs font-semibold text-slate-600">Domain<select className={fieldClass} value={form.domain} onChange={set('domain')}><option value="">None</option>{domainOptions(domains, form.domain).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select></label>
       </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-dos" checked={form.published} onChange={set('published')}/>Published</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-dos" checked={form.is_tip_of_week} onChange={set('is_tip_of_week')}/>Tip of the week (replaces the current one)</label>

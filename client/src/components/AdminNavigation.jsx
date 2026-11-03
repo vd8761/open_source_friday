@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import AdminAccount from './AdminAccount';
 
 // v2.0 look: mono uppercase links with a green underline for the active section, as on the public site.
-// Email invitations, Site settings and Event trash live in the Account menu (AdminAccount).
+// Email invitations, Site settings, Domains and Event trash live in the Account menu (AdminAccount).
 const links = [
   ['/dashboard', 'Dashboard', true],
   ['/admin/past-events', 'Past events'],

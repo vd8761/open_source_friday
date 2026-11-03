@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Card, Container, DataState, Eyebrow, GradientText, SpeakerAvatar, Tag, ToggleChip } from '../ui';
 import { heroBackground } from '../utils';
-import { DOMAINS } from '../data';
 import { useSiteData } from '../api';
 import { sitePaths } from '../paths';
 
 export default function SpeakersPage() {
   const [domain, setDomain] = useState('ALL');
-  const { speakers, next: ep, stats, loading, error } = useSiteData();
+  const { speakers, next: ep, stats, domains, loading, error } = useSiteData();
   const list = domain === 'ALL' ? speakers : speakers.filter((s) => s.domains.includes(domain));
   const featured = ep && speakers.find((s) => s.id === ep.speakers[0]?.id);
 
@@ -22,7 +21,7 @@ export default function SpeakersPage() {
             <p className="m-0 max-w-[620px] text-lg leading-[1.55] text-osf-muted sm:text-xl">Delivery leads, principal engineers, researchers and founders — giving an hour of their Friday so you don't have to learn it the hard way.</p>
           </div>
           <div className="grid flex-[1_1_320px] grid-cols-2 gap-3">
-            {[[stats?.speakers_count ?? speakers.length, 'SPEAKERS'], [stats?.repeat_speakers ?? speakers.filter((s) => s.isRepeat).length, 'CAME BACK FOR MORE']].map(([v, l]) => (
+            {[[stats?.speakers_count ?? speakers.length, 'SPEAKERS'], [stats?.repeat_speakers ?? '—', 'CAME BACK FOR MORE']].map(([v, l]) => (
               <div key={l} className="flex flex-col gap-0.5 rounded-2xl border border-osf-line bg-white p-[18px]"><span className="text-[32px] font-bold">{v}</span><span className="font-osf-mono text-[11px] tracking-[0.1em] text-osf-muted">{l}</span></div>
             ))}
           </div>
@@ -57,7 +56,7 @@ export default function SpeakersPage() {
               <h2 className="m-0 text-[clamp(32px,3.6vw,48px)] font-semibold leading-[1.05] tracking-[-0.02em]">Find someone in your lane.</h2>
             </div>
             <div role="group" aria-label="Filter by domain" className="flex flex-wrap gap-2">
-              {DOMAINS.map((d) => <ToggleChip key={d} pressed={d === domain} onClick={() => setDomain(d)}>{d}</ToggleChip>)}
+              {['ALL', ...domains.map((d) => d.label)].map((d) => <ToggleChip key={d} pressed={d === domain} onClick={() => setDomain(d)}>{d}</ToggleChip>)}
             </div>
           </div>
 
@@ -65,25 +64,12 @@ export default function SpeakersPage() {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(280px,100%),1fr))] gap-4">
             {list.map((s, i) => (
               <Card as="article" key={s.id} className="flex flex-col gap-4 p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <SpeakerAvatar speaker={s} tone={i % 2 ? 'sky' : 'leaf'} className="h-[72px] w-[72px] text-2xl" />
-                  {s.episodeCount > 1 && <Tag variant="sky" className="text-[10px]">×{s.episodeCount} EPISODES</Tag>}
-                </div>
+                <SpeakerAvatar speaker={s} tone={i % 2 ? 'sky' : 'leaf'} className="h-[72px] w-[72px] text-2xl" />
                 <div className="flex flex-col gap-1">
                   <h3 className="m-0 text-[21px] font-semibold leading-[1.2]">{s.name}</h3>
                   {s.role && <span className="text-[15px] text-osf-muted">{s.role}</span>}
                 </div>
                 {s.domains.length > 0 && <div className="flex flex-wrap gap-1.5">{s.domains.map((d) => <Tag key={d} variant="outline" className="text-[10px]">{d}</Tag>)}</div>}
-                {s.episodes.length > 0 && (
-                  <div className="flex flex-col gap-2 border-t border-osf-hairline pt-3.5">
-                    {[...s.episodes].sort((a, b) => b.episode_number - a.episode_number).map((e) => (
-                      <Link key={e.episode_number} to={sitePaths.episodes} className="flex items-baseline gap-2.5 text-osf-ink no-underline hover:text-osf-leaf">
-                        <span className="flex-none font-osf-mono text-[11px] font-bold text-osf-leaf">EP{e.episode_number}</span>
-                        <span className="text-sm leading-[1.4]">{e.title}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
               </Card>
             ))}
             <Link to={sitePaths.speak} className="flex min-h-[280px] flex-col justify-center gap-3.5 rounded-3xl border border-dashed border-osf-leaf bg-osf-leaf-soft p-6 text-osf-ink no-underline">
