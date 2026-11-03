@@ -41,9 +41,9 @@ test(`an admin username locks after ${MAX_FAILURES} wrong passwords and unlocks 
   await db.exec('CREATE TABLE students(id SERIAL PRIMARY KEY); CREATE TABLE episodes(id SERIAL PRIMARY KEY, episode_number INTEGER);');
   await initV2DB(db);
   const guard = createLoginGuard({ query: (...a) => db.query(...a) });
-  for (let i = 0; i < MAX_FAILURES - 1; i++) await guard.failed('Admin');
+  for (let i = 1; i < MAX_FAILURES; i++) assert.equal(await guard.failed('Admin'), i);
   assert.equal(await guard.lockedMinutes('admin'), 0);
-  await guard.failed(' ADMIN ');
+  assert.equal(await guard.failed(' ADMIN '), MAX_FAILURES);
   const minutes = await guard.lockedMinutes('admin');
   assert.ok(minutes >= 14 && minutes <= 15, String(minutes));
   assert.equal(await guard.lockedMinutes('someone-else'), 0);

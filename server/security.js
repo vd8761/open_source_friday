@@ -55,8 +55,12 @@ function createLoginGuard(pool) {
         ON CONFLICT(username_key) DO UPDATE SET
           failures = CASE WHEN admin_login_attempts.first_failure_at < NOW() - INTERVAL '${WINDOW_MINUTES} minutes' THEN 1 ELSE admin_login_attempts.failures + 1 END,
           first_failure_at = CASE WHEN admin_login_attempts.first_failure_at < NOW() - INTERVAL '${WINDOW_MINUTES} minutes' THEN NOW() ELSE admin_login_attempts.first_failure_at END`, [key(username)]);
-      await pool.query(`UPDATE admin_login_attempts SET locked_until = NOW() + INTERVAL '${LOCK_MINUTES} minutes', failures = 0
-        WHERE username_key=$1 AND failures >= ${MAX_FAILURES}`, [key(username)]);
+      // Returns the failed attempt number in the current window, or MAX_FAILURES once the username is locked.
+      const row = (await pool.query(`UPDATE admin_login_attempts SET
+          locked_until = CASE WHEN failures >= ${MAX_FAILURES} THEN NOW() + INTERVAL '${LOCK_MINUTES} minutes' ELSE locked_until END,
+          failures = CASE WHEN failures >= ${MAX_FAILURES} THEN 0 ELSE failures END
+        WHERE username_key=$1 RETURNING failures, locked_until > NOW() AS locked`, [key(username)])).rows[0];
+      return row.locked ? MAX_FAILURES : row.failures;
     },
     async succeeded(username) {
       await pool.query('DELETE FROM admin_login_attempts WHERE username_key=$1', [key(username)]);

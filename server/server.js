@@ -28,7 +28,7 @@ const { runtimeFlags, guardZoom, guardSender, pushAllowed, dryRun } = require('.
 const { initV2DB } = require('./v2-data');
 const { createV2PublicRouter, createV2AdminRouter, rateLimit } = require('./v2-routes');
 const { createLoungeRouter, createCodeMailer } = require('./lounge');
-const { corsOptions, securityHeaders, createLoginGuard } = require('./security');
+const { corsOptions, securityHeaders, createLoginGuard, MAX_FAILURES, LOCK_MINUTES } = require('./security');
 const flags = runtimeFlags();
 const sender = guardSender(createSenderClient(), flags);
 const zoom = guardZoom(createZoomClient(), flags);
@@ -351,8 +351,11 @@ app.post('/api/login', loginLimit, async (req, res) => {
       const token = jwt.sign({ username: admin.username, id: admin.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
       res.json({ success: true, token });
     } else {
-      await loginGuard.failed(username);
-      res.status(401).json({ success: false, error: 'Invalid username or password' });
+      const attempt = await loginGuard.failed(username);
+      const error = attempt >= MAX_FAILURES
+        ? `Invalid username or password. Attempt ${MAX_FAILURES}/${MAX_FAILURES}: sign-in is locked for ${LOCK_MINUTES} minutes.`
+        : `Invalid username or password. Attempt ${attempt}/${MAX_FAILURES}: you will be locked out for ${LOCK_MINUTES} minutes after ${MAX_FAILURES} failed attempts.`;
+      res.status(401).json({ success: false, error, attempt, max_attempts: MAX_FAILURES });
     }
   } catch (error) {
     console.error('Login error:', error);
