@@ -9,7 +9,7 @@ const eventClockSql = part => {
   return `CASE WHEN array_length(string_to_array(replace(e.event_time,'–','-'),'-'),1)=2 AND ${clock} ~* '^((0?[1-9]|1[0-2]):[0-5][0-9][[:space:]]*[AP]M|([01]?[0-9]|2[0-3]):[0-5][0-9])$' THEN (e.event_date::date + ${clock}::time) AT TIME ZONE 'Asia/Kolkata' END`;
 };
 const eventEndSql=eventClockSql(2),eventStartSql=eventClockSql(1);
-const eventFields = 'e.id,e.episode_number,e.title,e.event_date,e.event_time,e.presenter_name,e.event_mode,e.is_active,e.is_registration_open,e.is_test,e.is_silent,e.archived_at';
+const eventFields = 'e.id,e.episode_number,e.title,e.event_date,e.event_time,e.presenter_name,e.event_mode,e.zoom_meeting_id,e.is_active,e.is_registration_open,e.is_test,e.is_silent,e.archived_at';
 async function initAdminEvents(db) {
   await initWhatsAppConsent(db);
   await db.query('CREATE INDEX IF NOT EXISTS students_email_normalized_idx ON students(LOWER(TRIM(email)))');

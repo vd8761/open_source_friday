@@ -18,6 +18,7 @@ import TipsAdminPage from './components/TipsAdminPage';
 import SpeakerApplicationsPage from './components/SpeakerApplicationsPage';
 import SiteSettingsPage from './components/SiteSettingsPage';
 import DomainsAdminPage from './components/DomainsAdminPage';
+import HallOfFamePage from './components/HallOfFamePage';
 import { subscribeToPush, getNotificationPermission } from './utils/pushNotifications';
 import './App.css';
 
@@ -34,6 +35,11 @@ const ProtectedRoute = ({ children }) => {
 function AttendeesRoute() {
   const {id}=useParams();
   return <AttendeesPage key={id}/>;
+}
+
+function HallOfFameRoute() {
+  const {id}=useParams();
+  return <HallOfFamePage key={id}/>;
 }
 
 function AttendanceRoute() {
@@ -71,6 +77,7 @@ function App() {
           {['/admin/invitations/new','/admin/invitations/trash','/admin/invitations/:campaignId','/admin/invitations/:campaignId/edit'].map(path=><Route key={path} path={path} element={<ProtectedRoute><OutreachTool key={path}/></ProtectedRoute>} />)}
           <Route path="/admin/invitations" element={<ProtectedRoute><OutreachTool /></ProtectedRoute>} />
           <Route path="/admin/episodes/:id/attendance" element={<ProtectedRoute><AttendanceRoute /></ProtectedRoute>} />
+          <Route path="/admin/episodes/:id/hall-of-fame" element={<ProtectedRoute><HallOfFameRoute /></ProtectedRoute>} />
           <Route 
             path="/dashboard" 
             element={

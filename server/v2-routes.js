@@ -3,6 +3,8 @@ const { InputError } = require('./outreach-csv');
 const { pageOptions } = require('./table-query');
 const { registerStudentImportRoutes } = require('./student-import');
 const { registerLoungeAdminRoutes } = require('./lounge');
+const { registerParticipantRoutes } = require('./participants');
+const { registerHallOfFameAdminRoutes, registerHallOfFamePublicRoutes } = require('./hall-of-fame');
 const { domainKeys, domainKey, loadEpisodes, computeStats, syncPresenterColumns, publicSpeaker, sendDataImage, validate: v } = require('./v2-data');
 
 const route = (fn, message = 'Unable to complete this request. Please try again.') => async (req, res) => {
@@ -46,7 +48,7 @@ const futureFridays = (value, now = Date.now()) => {
   });
 };
 
-function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicationLimit = rateLimit({ limit: 5, windowMs: 3600000 }) }) {
+function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicationLimit = rateLimit({ limit: 5, windowMs: 3600000 }), alertPitch = async () => 0 }) {
   const router = express.Router();
   let statsCache = null;
 
@@ -95,6 +97,8 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
     return { settings: Object.fromEntries(rows.map(r => [r.key, r.value])) };
   }));
 
+  registerHallOfFamePublicRoutes(router, { pool, route });
+
   router.post('/speaker-applications', applicationLimit, route(async req => {
     const b = req.body || {};
     if (!await verifyRecaptcha(b.recaptcha_token, 'speaker_application'))
@@ -108,15 +112,20 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
       futureFridays(b.preferred_fridays, now())];
     await pool.query(`INSERT INTO speaker_applications(name,email,role_company,link,title,domain,abstract,preferred_fridays)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8::date[])`, row);
+    // Alert the team by email without making the speaker wait for it.
+    const [name, , role_company, , title, domain, abstract, preferred_fridays] = row;
+    pool.query('SELECT label FROM domains WHERE key=$1', [domain])
+      .then(r => alertPitch({ name, email, role_company, link, title, domain_label: r.rows[0]?.label, abstract, preferred_fridays }))
+      .catch(e => console.error('[Pitch alert]', e.message));
     return { message: 'Thanks. Your pitch reached the OSF team.' };
   }, 'Unable to send your pitch. Please try again.'));
 
   return router;
 }
 
-function createV2AdminRouter({ pool, authenticateToken }) {
+function createV2AdminRouter({ pool, authenticateToken, onZoomQueued }) {
   const router = express.Router();
-  router.use(['/speakers', '/episodes/:id/speakers', '/episodes/:id/v2-details', '/episodes/:id/lounge', '/tips', '/speaker-applications', '/site-settings', '/contacts', '/domains'], authenticateToken);
+  router.use(['/speakers', '/episodes/:id/speakers', '/episodes/:id/v2-details', '/episodes/:id/lounge', '/tips', '/speaker-applications', '/site-settings', '/contacts', '/domains', '/students/search', '/episodes/:id/participants', '/episodes/:id/hall-of-fame'], authenticateToken);
   const transaction = async fn => {
     const db = await pool.connect();
     try { await db.query('BEGIN'); const result = await fn(db); await db.query('COMMIT'); return result; }
@@ -217,6 +226,8 @@ function createV2AdminRouter({ pool, authenticateToken }) {
       LIMIT ${page_size} OFFSET ${(page - 1) * page_size}`, values)).rows;
     return { data, total, page, page_size };
   }));
+  // New-pitch count for the admin navigation badge.
+  router.get('/speaker-applications/new-count', route(async () => ({ count: (await pool.query("SELECT COUNT(*)::int AS n FROM speaker_applications WHERE status='new'")).rows[0].n })));
   router.patch('/speaker-applications/:id', route(async req => {
     if (!STATUSES.includes(req.body?.status)) throw new InputError('Choose a valid status.', 400);
     const { rows } = await pool.query('UPDATE speaker_applications SET status=$2,updated_at=NOW() WHERE id=$1 RETURNING id,status',
@@ -258,6 +269,8 @@ function createV2AdminRouter({ pool, authenticateToken }) {
   }));
   registerStudentImportRoutes(router, { pool, route });
   registerLoungeAdminRoutes(router, { pool, route });
+  registerParticipantRoutes(router, { pool, route, onZoomQueued });
+  registerHallOfFameAdminRoutes(router, { pool, route });
   return router;
 }
 

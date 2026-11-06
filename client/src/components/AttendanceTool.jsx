@@ -7,6 +7,8 @@ import { TableFilters, TablePager, SortHeader } from './AdminDataTable';
 import { AdminBreadcrumb, EventTabs } from './AdminPageChrome';
 import StudentLink from './StudentLink';
 import ConfirmDialog from './ConfirmDialog';
+import SearchSelect from './SearchSelect';
+import AddParticipantDialog from './AddParticipantDialog';
 const defaults={sort:'newest'};
 const fields=[{key:'search',label:'Search attendees',placeholder:'Name, email or college'},{key:'college',label:'College',placeholder:'College contains…'},
   {key:'status',label:'Attendance status',options:[['','All statuses'],['present','Present'],['partial','Partial'],['absent','Absent'],['not_synced','Not synced']]},
@@ -18,7 +20,7 @@ export default function AttendanceTool(){
   const table=useAdminPage(endpoint,filters),report=table.result;
   const [threshold,setThreshold]=useState(30),[instance,setInstance]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[csv,setCsv]=useState(''),[complete,setComplete]=useState(false);
   const [matches,setMatches]=useState({}),[correction,setCorrection]=useState(null),[confirmation,setConfirmation]=useState(null);
-  const [reviewDecision,setReviewDecision]=useState(null),[provider,setProvider]=useState('zoom');
+  const [reviewDecision,setReviewDecision]=useState(null),[provider,setProvider]=useState('zoom'),[adding,setAdding]=useState(null);
   const initialized=useRef(false);
   useEffect(()=>{const controller=new AbortController();adminApi(`/episodes/${id}`,{signal:controller.signal}).then(r=>setEpisode(r.episode)).catch(e=>{if(!controller.signal.aborted)setError(e.message);});return()=>controller.abort();},[id]);
   useEffect(()=>{if(!initialized.current&&report.sync){initialized.current=true;setThreshold(report.sync.threshold_minutes);setInstance(report.sync.meeting_uuid);setProvider(report.sync.source==='google_meet_csv'?'google_meet':report.sync.source==='teams_csv'?'teams':report.sync.source==='other_csv'?'other':'zoom');}},[report.sync]);
@@ -68,7 +70,7 @@ export default function AttendanceTool(){
 
     </section>}
     {reviewActive&&<section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5"><h2 className="text-lg font-bold">Participants needing review ({report.unmatched?.length||0})</h2><p className="text-sm text-slate-500">Link genuine rejoin sessions to the same registration to combine time. Overlapping join intervals count once. Only mark a record duplicate when it should contribute no additional time. Names are never matched automatically.</p>
-      {report.unmatched?.map(p=><div key={p.id} className="grid gap-3 border-t border-slate-100 pt-3 text-sm sm:grid-cols-3"><div>{p.name||'Unnamed participant'}<p className="text-xs text-slate-500">{p.email||'No email returned'} · {Math.round(p.duration_seconds/60)} minutes</p></div><select aria-label={`Match ${p.name||'unnamed participant'}`} className={fieldClass} value={matches[p.id]||''} onChange={e=>setMatches({...matches,[p.id]:e.target.value})}><option value="">Choose registration</option>{options.map(r=><option key={r.registration_id} value={r.registration_id}>{r.full_name} · {r.email}</option>)}</select><div className="flex flex-wrap items-center gap-2"><button className={buttonClass} disabled={disabled||!matches[p.id]} onClick={()=>confirm({kind:'match',participant:p})}>Link / combine time</button><button className="admin-action" disabled={disabled} onClick={()=>{setError('');setReviewDecision({action:'exclude',participant:p,target_id:'',note:''});}}>Mark duplicate</button></div></div>)}
+      {report.unmatched?.map(p=><div key={p.id} className="grid gap-3 border-t border-slate-100 pt-3 text-sm sm:grid-cols-3"><div>{p.name||'Unnamed participant'}<p className="text-xs text-slate-500">{p.email||'No email returned'} · {Math.round(p.duration_seconds/60)} minutes</p></div><SearchSelect ariaLabel={`Match ${p.name||'unnamed participant'}`} placeholder="Search registrations by name or email" suggest={`${p.name||''} ${p.email||''}`} value={matches[p.id]||''} onChange={v=>setMatches({...matches,[p.id]:v})} options={options.map(r=>({value:r.registration_id,label:r.full_name,detail:r.email}))}/><div className="flex flex-wrap items-center gap-2"><button className={buttonClass} disabled={disabled||!matches[p.id]} onClick={()=>confirm({kind:'match',participant:p})}>Link / combine time</button><button className="admin-action" disabled={disabled} onClick={()=>{setError('');setReviewDecision({action:'exclude',participant:p,target_id:'',note:''});}}>Mark duplicate</button></div><p className="text-xs text-slate-500 sm:col-span-3">Registered directly in Zoom and not in this list? <button className="font-semibold text-dos" disabled={disabled||!episode} onClick={()=>{setError('');setMessage('');setAdding(p);}}>Add as participant</button></p></div>)}
       {!report.unmatched?.length&&<p className="text-sm text-slate-500">No participants currently need review.</p>}
       <details className="border-t border-slate-100 pt-4"><summary className="text-sm font-semibold">Excluded duplicate records ({report.excluded_duplicates?.length||0})</summary>{report.excluded_duplicates?.map(p=><div key={p.id} className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm"><div>{p.name||'Unnamed participant'}<p className="text-xs text-slate-500">{p.review_note}</p></div><button disabled={disabled} className="admin-action" onClick={()=>{setError('');setReviewDecision({action:'restore',participant:p,target_id:'',note:''});}}>Restore for review</button></div>)}</details>
     </section>}
@@ -80,6 +82,7 @@ export default function AttendanceTool(){
       {confirmation.kind==='correct'&&<p>Please review the change for <strong>{correction?.name}</strong>: <strong>{correction?.status==='clear'?'use Zoom evidence':correction?.status}</strong>. Your reason will be saved in the audit history.</p>}
       {confirmation.kind==='match'&&<p>Please confirm that <strong>{confirmation.participant.name||'this participant'}</strong> is <strong>{options.find(r=>String(r.registration_id)===String(matches[confirmation.participant.id]))?.full_name}</strong>. This combines their sessions. Overlapping timestamp intervals count once; duration-only records are estimated and may overlap.</p>}
     </ConfirmDialog>}
+    {adding&&episode&&<AddParticipantDialog episode={episode} participant={adding} upcoming={false} onClose={()=>setAdding(null)} onSaved={msg=>{setAdding(null);setMessage(msg);table.refresh();}}/>}
     {busy&&<p role="status" className="text-sm text-slate-500">Please wait…</p>}
   </main>;
 }

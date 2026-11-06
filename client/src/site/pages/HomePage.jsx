@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mic } from 'lucide-react';
+import { CalendarCheck, GraduationCap, MessagesSquare, Mic, Timer, Trophy } from 'lucide-react';
 import { ArrowLink, Button, Card, Container, DataState, DateBadge, Eyebrow, GradientText, SectionHeading, SpeakerAvatar, Tag, Terminal } from '../ui';
 import { heroBackground } from '../utils';
 import { audiences, howItWorks, tickerItems } from '../data';
-import { useSiteData } from '../api';
+import { API_URL, useSiteData } from '../api';
 import { sitePaths } from '../paths';
 
 const joinNames = (list) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`);
@@ -299,12 +299,67 @@ function SpeakBanner() {
   );
 }
 
+const awardIcons = { first_to_register: CalendarCheck, stayed_longest: Timer, most_interactive: MessagesSquare };
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+// Student Hall of Fame: the latest episode's published awards (admin-confirmed, with the student's permission).
+function HallOfFameSection() {
+  const { next } = useSiteData();
+  const [hof, setHof] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_URL}/api/hall-of-fame`).then((r) => r.json()).then((d) => { if (alive && d.success) setHof(d.hall_of_fame); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  if (!hof?.awards.length) return null;
+  const day = String(hof.event_date).slice(0, 10).split('-');
+  return (
+    <section id="hall-of-fame" className="osf-grid-dark overflow-hidden bg-osf-ink px-4 py-20 text-white sm:px-6 sm:py-[104px]">
+      <Container className="flex flex-col gap-12">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div className="flex max-w-[680px] flex-col gap-4">
+            <Eyebrow tone="mint" className="inline-flex items-center gap-2"><Trophy aria-hidden="true" className="h-4 w-4" />/ STUDENT HALL OF FAME</Eyebrow>
+            <h2 className="m-0 text-[clamp(36px,4.4vw,56px)] font-semibold leading-[1.05] tracking-[-0.02em]">Show up early. Stay till the end. <GradientText>Get featured.</GradientText></h2>
+            <p className="m-0 text-lg leading-[1.55] text-osf-fog">Every Friday we celebrate three students: the first to register, the one who stayed the longest and the one who joined in the most.</p>
+          </div>
+          {next?.registrationOpen && <Button to={next.registerPath} variant="light">BOOK MY SEAT</Button>}
+        </div>
+        <div className="flex flex-col gap-4">
+          <span className="font-osf-mono text-xs font-bold tracking-[0.1em] text-osf-mint">EP {hof.episode_number}{day.length === 3 ? ` · ${Number(day[2])} ${MONTHS[Number(day[1]) - 1]}` : ''}</span>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-4">
+            {hof.awards.map((a) => {
+              const Icon = awardIcons[a.award] || Trophy;
+              return (
+                <article key={a.award} className="flex flex-col gap-5 rounded-3xl border border-osf-rule bg-white/[0.06] p-6">
+                  <span className="inline-flex items-center gap-2 font-osf-mono text-[11px] font-bold tracking-[0.1em] text-osf-mint"><Icon aria-hidden="true" className="h-4 w-4" />{a.label.toUpperCase()}</span>
+                  <div className="flex items-center gap-4">
+                    {a.photo_url
+                      ? <img src={`${API_URL}${a.photo_url}`} alt={a.display_name} loading="lazy" className="h-20 w-20 flex-none rounded-[22px] object-cover" />
+                      : <span aria-hidden="true" className="flex h-20 w-20 flex-none items-center justify-center rounded-[22px] bg-linear-135 from-osf-leaf-soft to-osf-sky-soft text-osf-sky-dark"><GraduationCap className="h-8 w-8" strokeWidth={1.6} /></span>}
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="text-xl font-semibold leading-tight">{a.display_name}</span>
+                      {a.college && <span className="text-[15px] text-osf-fog">{a.college}</span>}
+                    </span>
+                  </div>
+                  {a.stat && <span className="border-t border-osf-rule pt-4 font-osf-mono text-[13px] text-white">{a.stat}</span>}
+                </article>
+              );
+            })}
+          </div>
+          <span className="font-osf-mono text-[11px] tracking-[0.06em] text-osf-faint">STUDENTS ARE FEATURED ONLY WITH THEIR PERMISSION.</span>
+        </div>
+      </Container>
+    </section>
+  );
+}
+
 export default function HomePage() {
   return (
     <>
       <Hero />
       <Ticker />
       <WhoSection />
+      <HallOfFameSection />
       <EpisodesSection />
       <SpeakersSection />
       <RegisterSection />

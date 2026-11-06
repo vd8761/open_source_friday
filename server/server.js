@@ -28,6 +28,7 @@ const { runtimeFlags, guardZoom, guardSender, pushAllowed, dryRun } = require('.
 const { initV2DB } = require('./v2-data');
 const { createV2PublicRouter, createV2AdminRouter, rateLimit } = require('./v2-routes');
 const { createLoungeRouter, createCodeMailer } = require('./lounge');
+const { createPitchAlert } = require('./admin-alerts');
 const { corsOptions, securityHeaders, createLoginGuard, MAX_FAILURES, LOCK_MINUTES } = require('./security');
 const flags = runtimeFlags();
 const sender = guardSender(createSenderClient(), flags);
@@ -845,8 +846,8 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
   }
 });
 
-app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: verifyRecaptchaToken }));
-app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken }));
+app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: verifyRecaptchaToken, alertPitch: createPitchAlert({ flags }) }));
+app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken, onZoomQueued: () => void runZoomWorker() }));
 app.use('/api', createLoungeRouter({ pool, secret: process.env.JWT_SECRET, verifyRecaptcha: verifyRecaptchaToken,
   sendCode: createCodeMailer({ flags }), limiter: rateLimit({ limit: 10, windowMs: 15 * 60000 }) }));
 app.use('/api/admin', createOutreachRouter({ pool, sender, zoom, authenticateToken }));

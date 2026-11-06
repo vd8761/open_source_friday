@@ -18,6 +18,7 @@ const tables = [
   // v2.0 links; speakers themselves are never deleted, so restore can always re-link them.
   ['episode_speakers', 'episode_id=$1'],
   ['tips', 'episode_id=$1'],
+  ['hall_of_fame', 'episode_id=$1'],
 ];
 async function initEpisodeTrash(db) {
   await db.query(`ALTER TABLE episodes ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`);

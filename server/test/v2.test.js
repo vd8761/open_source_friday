@@ -9,7 +9,7 @@ const { initV2DB, computeStats, nameKey } = require('../v2-data');
 const { createV2PublicRouter, createV2AdminRouter, rateLimit, futureFridays } = require('../v2-routes');
 
 const photo = 'data:image/jpeg;base64,' + Buffer.from('jpeg-bytes').toString('base64');
-async function setup({ recaptcha = true, limit = 100 } = {}) {
+async function setup({ recaptcha = true, limit = 100, alertPitch } = {}) {
   const db = new PGlite();
   await db.exec(`CREATE TABLE students(id SERIAL PRIMARY KEY,full_name TEXT,email TEXT,whatsapp_number TEXT,country_code TEXT);
     CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,description TEXT,event_date TIMESTAMP,
@@ -28,7 +28,7 @@ async function setup({ recaptcha = true, limit = 100 } = {}) {
   const auth = (req, res, next) => req.headers.authorization === 'Bearer admin' ? (req.user = { id: 1 }, next()) : res.status(401).json({ success: false });
   const actions = [];
   app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: async (token, action) => { actions.push(action); return recaptcha && token === 'ok'; },
-    now: () => Date.parse('2026-11-02T12:00:00Z'), applicationLimit: rateLimit({ limit, windowMs: 3600000 }) }));
+    now: () => Date.parse('2026-11-02T12:00:00Z'), applicationLimit: rateLimit({ limit, windowMs: 3600000 }), alertPitch }));
   app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken: auth }));
   const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
@@ -176,7 +176,8 @@ test('only published tips are public and there is one tip of the week', async ()
 });
 
 test('speaker pitches need reCAPTCHA for the right action, valid fields, upcoming Fridays and a rate limit', async () => {
-  const { call, actions, close } = await setup({ limit: 3 });
+  const alerts = [];
+  const { call, actions, close } = await setup({ limit: 3, alertPitch: async p => { alerts.push(p); return 1; } });
   const pitch = { name: 'Asha', email: 'Asha@Example.com', role_company: 'SRE, Example', title: 'On-call without tears', abstract: 'What I learned.', domain: 'cloud_computing', preferred_fridays: ['2026-11-06'], recaptcha_token: 'ok' };
   try {
     assert.equal((await call('POST', '/speaker-applications', { ...pitch, recaptcha_token: 'bad' })).status, 400);
@@ -184,6 +185,11 @@ test('speaker pitches need reCAPTCHA for the right action, valid fields, upcomin
     assert.equal((await call('POST', '/speaker-applications', { ...pitch, preferred_fridays: ['2026-11-05'] })).status, 400);
     const ok = await call('POST', '/speaker-applications', pitch);
     assert.equal(ok.status, 200);
+    // The team is alerted once per accepted pitch, with the domain's name.
+    await new Promise(r => setTimeout(r, 50));
+    assert.equal(alerts.length, 1);
+    assert.deepEqual([alerts[0].title, alerts[0].email, alerts[0].domain_label], ['On-call without tears', 'asha@example.com', 'Cloud Computing']);
+    assert.equal((await call('GET', '/admin/speaker-applications/new-count', null, true)).body.count, 1);
     const limited = await call('POST', '/speaker-applications', pitch);
     assert.equal(limited.status, 429);
     assert.ok(Number(limited.headers.get('retry-after')) > 0);
