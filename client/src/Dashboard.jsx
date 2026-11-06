@@ -30,7 +30,7 @@ export default function Dashboard() {
   const [loading,setLoading]=useState(true),[loadError,setLoadError]=useState('');
   const [viewMode,setViewMode]=useState('summary');
   const [pushHistory, setPushHistory] = useState([]);
-  const [pushStats, setPushStats] = useState({ total: 0, welcomeSent: 0 });
+  const [pushStats, setPushStats] = useState({ total: 0, welcomeSent: 0, mobileDevices: 0 });
   const [pushForm, setPushForm] = useState({ title: '', body: '', url: '' });
   const [sendingPush, setSendingPush] = useState(false);
   const [registrationChange,setRegistrationChange]=useState(null),[changingRegistration,setChangingRegistration]=useState(false),[registrationError,setRegistrationError]=useState('');
@@ -66,7 +66,7 @@ export default function Dashboard() {
       const historyData = await historyRes.json();
       const statsData = await statsRes.json();
       if (historyData.success) setPushHistory(historyData.data);
-      if (statsData.success) setPushStats({ total: statsData.total, welcomeSent: statsData.welcomeSent });
+      if (statsData.success) setPushStats({ total: statsData.total, welcomeSent: statsData.welcomeSent, mobileDevices: statsData.mobileDevices || 0 });
     } catch (error) {
       console.error('Failed to fetch push data', error);
     } finally {
@@ -198,7 +198,10 @@ export default function Dashboard() {
                 </h3>
                 <div className="ml-auto flex gap-2">
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700">
-                    {pushStats.total} Total Installs
+                    {pushStats.total} Browsers
+                  </span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-violet-50 text-violet-700">
+                    {pushStats.mobileDevices} App installs
                   </span>
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
                     {pushStats.welcomeSent} Welcome Messages Sent

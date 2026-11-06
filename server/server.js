@@ -30,6 +30,7 @@ const { createV2PublicRouter, createV2AdminRouter, rateLimit } = require('./v2-r
 const { createLoungeRouter, createCodeMailer } = require('./lounge');
 const { createPitchAlert } = require('./admin-alerts');
 const { corsOptions, securityHeaders, createLoginGuard, MAX_FAILURES, LOCK_MINUTES } = require('./security');
+const { verifyAppCheck, createMobilePushRouter, sendToMobileDevices, messagingFor } = require('./mobile-push');
 const flags = runtimeFlags();
 const sender = guardSender(createSenderClient(), flags);
 const zoom = guardZoom(createZoomClient(), flags);
@@ -163,7 +164,14 @@ async function runZoomWorker() {
 
 
 // ─── Push Helper: send to all subscribers ────────────────────────────────────
-async function sendPushToAll(payload, type = 'Automated') {
+// Browsers get Web Push; phones with the OSF app get FCM unless `mobile` is false. Automated reminders skip phones:
+// the app schedules its own reminders for the episodes each student chose.
+async function sendPushToAll(payload, type = 'Automated', { mobile = true } = {}) {
+  if (mobile && flags.push) {
+    // Outside production only allow-listed devices (PUSH_TEST_ALLOWLIST entries like "m12") receive pushes.
+    sendToMobileDevices({ pool, payload, messaging: messagingFor(), allowed: row => pushAllowed(flags, { id: `m${row.id}` }) })
+      .catch(err => console.error('[Push] FCM send failed:', err.message));
+  }
   let rows = [];
   try {
     const result = await pool.query('SELECT * FROM push_subscriptions');
@@ -218,7 +226,7 @@ async function sendPushToAll(payload, type = 'Automated') {
 
 // Reminder scheduling uses the same explicit IST clock as registration and attendance.
 async function sendEpisodeReminders(graceMinutes = 0) {
-  try { await processEpisodeReminders(pool, sendPushToAll, Date.now(), graceMinutes); }
+  try { await processEpisodeReminders(pool, payload => sendPushToAll(payload, 'Automated', { mobile: false }), Date.now(), graceMinutes); }
   catch (error) { console.error('[Cron] Reminder job error:', error); }
 }
 
@@ -265,6 +273,12 @@ async function verifyRecaptchaToken(token, action) {
     console.error('reCAPTCHA verification error:', err);
     return false;
   }
+}
+
+// Student endpoints accept either the website's reCAPTCHA token or, from the OSF app, a Firebase App Check token.
+async function verifyHuman(req, recaptchaToken, action) {
+  const appCheck = req.get('X-Firebase-AppCheck');
+  return appCheck ? verifyAppCheck(appCheck) : verifyRecaptchaToken(recaptchaToken, action);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -390,7 +404,7 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
 app.post('/api/students/lookup', lookupLimit, async (req, res) => {
   const { identifier, countryCode, episode_id, recaptcha_token } = req.body;
   if (typeof identifier !== 'string' || !identifier.trim() || identifier.length > 255) return res.status(400).json({ success: false, error: 'Please enter your email or WhatsApp number.' });
-  if (!await verifyRecaptchaToken(recaptcha_token, 'lookup')) return res.status(400).json({ success: false, error: 'Security check failed. Please refresh the page and try again.' });
+  if (!await verifyHuman(req, recaptcha_token, 'lookup')) return res.status(400).json({ success: false, error: 'Security check failed. Please refresh the page and try again.' });
   try {
     const result = await pool.query(
       `SELECT ${profileColumns} FROM students WHERE LOWER(BTRIM(email)) = $1 OR (whatsapp_number = $1 AND country_code = $2)`,
@@ -650,7 +664,7 @@ app.post('/api/register', registerLimit, async (req, res) => {
   let committed = false;
   try {
     const whatsappChoice = registrationConsent(req.body);
-    const isTokenValid = await verifyRecaptchaToken(recaptcha_token, 'register');
+    const isTokenValid = await verifyHuman(req, recaptcha_token, 'register');
     if (!isTokenValid) {
       return res.status(400).json({ success: false, error: 'Security check failed. Please refresh and try again.' });
     }
@@ -811,10 +825,12 @@ app.get('/api/admin/push/stats', authenticateToken, async (req, res) => {
   try {
     const totalResult = await pool.query('SELECT COUNT(*) as total FROM push_subscriptions');
     const welcomeResult = await pool.query('SELECT COUNT(*) as welcome_count FROM push_subscriptions WHERE welcome_sent = TRUE');
+    const mobileResult = await pool.query('SELECT COUNT(*) as total FROM mobile_devices');
     res.json({
       success: true,
       total: parseInt(totalResult.rows[0].total),
-      welcomeSent: parseInt(welcomeResult.rows[0].welcome_count)
+      welcomeSent: parseInt(welcomeResult.rows[0].welcome_count),
+      mobileDevices: parseInt(mobileResult.rows[0].total)
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Internal server error' });
@@ -847,6 +863,7 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
 });
 
 app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: verifyRecaptchaToken, alertPitch: createPitchAlert({ flags }) }));
+app.use('/api', createMobilePushRouter({ pool, limiter: rateLimit({ limit: 30, windowMs: 60000 }) }));
 app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken, onZoomQueued: () => void runZoomWorker() }));
 app.use('/api', createLoungeRouter({ pool, secret: process.env.JWT_SECRET, verifyRecaptcha: verifyRecaptchaToken,
   sendCode: createCodeMailer({ flags }), limiter: rateLimit({ limit: 10, windowMs: 15 * 60000 }) }));
