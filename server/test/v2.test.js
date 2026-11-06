@@ -104,6 +104,11 @@ test('speakers are one record shared by many episodes; a photo change is written
     assert.match(ari.photo_url, new RegExp(`^/api/speakers/${a.body.id}/photo\\?v=\\d+$`));
     // Public speakers are listed by domain only, without their episodes.
     assert.equal(ari.episodes, undefined);
+    assert.equal(ari.is_featured, false);
+    assert.equal((await call('PUT', `/admin/speakers/${a.body.id}/featured`, { is_featured: true })).status, 401);
+    assert.equal((await call('PUT', `/admin/speakers/${a.body.id}/featured`, { is_featured: 'yes' }, true)).status, 400);
+    assert.equal((await call('PUT', `/admin/speakers/${a.body.id}/featured`, { is_featured: true }, true)).body.is_featured, true);
+    assert.equal((await call('GET', '/speakers')).body.speakers.find(s => s.id === a.body.id).is_featured, true);
     assert.equal((await call('GET', `/speakers/${a.body.id}/photo`)).body.toString(), 'png-bytes');
     const list = (await call('GET', '/v2/episodes')).body.episodes;
     assert.deepEqual(list.find(e => e.episode_number === 3).speakers.map(s => s.name), ['Arumugam V', 'Ariyappan P']);

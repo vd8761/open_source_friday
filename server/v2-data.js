@@ -41,7 +41,7 @@ function publicSpeaker(row) {
   const version = row.updated_at ? new Date(row.updated_at).getTime() : 0;
   return {
     id: row.id, name: row.name, honorific: row.honorific || null, designation: row.designation || null,
-    company: row.company || null, bio: row.bio || null, linkedin_url: row.linkedin_url || null, domains: row.domains || [],
+    company: row.company || null, bio: row.bio || null, linkedin_url: row.linkedin_url || null, domains: row.domains || [], is_featured: row.is_featured === true,
     photo_url: imageUrl(row.photo_url, `/api/speakers/${row.id}/photo?v=${version}`),
   };
 }

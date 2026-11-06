@@ -145,12 +145,19 @@ function createV2AdminRouter({ pool, authenticateToken, onZoomQueued }) {
   const duplicateName = e => { if (e.code === '23505') throw new InputError('A speaker with this name already exists.', 409); throw e; };
 
   router.get('/speakers', route(async () => ({ speakers: (await pool.query(`SELECT s.id,s.name,s.honorific,s.designation,s.company,s.bio,s.linkedin_url,
-      s.domains,s.is_published,s.updated_at,(s.photo_url IS NOT NULL) AS has_photo
+      s.domains,s.is_published,s.is_featured,s.updated_at,(s.photo_url IS NOT NULL) AS has_photo
     FROM speakers s ORDER BY s.name`)).rows })));
   router.post('/speakers', route(async req => {
     const { rows } = await pool.query(`INSERT INTO speakers(name,honorific,designation,company,bio,photo_url,linkedin_url,domains,is_published)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, speakerFields(req.body || {}, await domainKeys(pool))).catch(duplicateName);
     return { id: rows[0].id };
+  }));
+  // Star a speaker for the home page. Does not touch updated_at, so photo URLs stay cached.
+  router.put('/speakers/:id/featured', route(async req => {
+    if (typeof req.body?.is_featured !== 'boolean') throw new InputError('Featured must be true or false.', 400);
+    const { rows } = await pool.query('UPDATE speakers SET is_featured=$2 WHERE id=$1 RETURNING id,is_featured', [intId(req.params.id), req.body.is_featured]);
+    if (!rows.length) throw new InputError('Speaker not found.', 404);
+    return rows[0];
   }));
   // A photo change here updates every page, and is written through to linked episodes for v1.0.
   router.put('/speakers/:id', route(async req => transaction(async db => {

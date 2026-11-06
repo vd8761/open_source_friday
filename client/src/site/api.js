@@ -51,6 +51,7 @@ export function speakerView(s) {
     linkedin: s.linkedin_url || null,
     photo: absolute(s.photo_url),
     domains: (s.domains || []).map(domainLabel),
+    featured: s.is_featured === true,
   };
 }
 
@@ -97,9 +98,17 @@ async function getJson(path) {
 
 const SiteData = createContext(null);
 
+const shuffle = (list) => {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+};
+// Home page order, new on every visit: starred (featured) speakers first, each group in random order.
+const spotlightOrder = (speakers) => [...shuffle(speakers.filter((s) => s.featured)), ...shuffle(speakers.filter((s) => !s.featured))];
+
 // Loads the public data once per visit. Every number and name on the site comes from here.
 export function SiteDataProvider({ children }) {
-  const [state, setState] = useState({ loading: true, error: null, episodes: [], speakers: [], stats: null, domains: [] });
+  const [state, setState] = useState({ loading: true, error: null, episodes: [], speakers: [], spotlight: [], stats: null, domains: [] });
   useEffect(() => {
     let alive = true;
     Promise.all([getJson('/api/v2/episodes'), getJson('/api/speakers'), getJson('/api/stats'), getJson('/api/domains')])
@@ -112,7 +121,7 @@ export function SiteDataProvider({ children }) {
         const speakers = s.speakers.map(speakerView);
         // Shown domains, in admin order, for filters and the Speak at OSF form.
         const domains = d.domains.map((x) => ({ key: x.key, label: x.label.toUpperCase(), name: x.label }));
-        setState({ loading: false, error: null, episodes, speakers, stats: st.stats, domains });
+        setState({ loading: false, error: null, episodes, speakers, spotlight: spotlightOrder(speakers), stats: st.stats, domains });
       })
       .catch((err) => alive && setState((prev) => ({ ...prev, loading: false, error: err.message })));
     return () => { alive = false; };

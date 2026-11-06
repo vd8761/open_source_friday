@@ -61,9 +61,9 @@ function SpeakerSpotlight({ ep, lead }) {
 }
 
 function Hero() {
-  const { next: ep, stats, clubStats, episodes, speakers } = useSiteData();
+  const { next: ep, stats, clubStats, episodes, spotlight } = useSiteData();
   const lead = ep?.speakers[0];
-  const faces = speakers.filter((s) => s.photo).slice(0, 5);
+  const faces = spotlight.filter((s) => s.photo).slice(0, 5);
   return (
     <section id="top" className="relative overflow-hidden bg-osf-mist px-4 pb-24 pt-14 sm:px-6 sm:pt-[72px]" style={heroBackground([['leaf', '18% 45%', 0.2, 32], ['sky', '78% 40%', 0.16, 30]])}>
       <span aria-hidden="true" className="osf-blob left-[-120px] top-[10%] h-[380px] w-[380px] bg-[rgba(76,175,80,0.22)]" />
@@ -214,14 +214,12 @@ function EpisodesSection() {
   );
 }
 
-// Four faces: the next episode's speaker first, then the most recent speakers.
+// Four faces: the next episode's speaker first, then starred speakers, then others (random order each visit).
 function SpeakersSection() {
-  const { speakers, next, episodes } = useSiteData();
+  const { speakers, spotlight, next } = useSiteData();
   if (!speakers.length) return null;
   const nextIds = new Set(next?.speakers.map((s) => s.id));
-  // Most recent first; the card itself shows domains, not episodes.
-  const latest = (s) => Math.max(0, ...episodes.filter((e) => !e.upcoming && e.speakers.some((x) => x.id === s.id)).map((e) => e.num));
-  const picked = [...speakers].sort((a, b) => Number(nextIds.has(b.id)) - Number(nextIds.has(a.id)) || latest(b) - latest(a)).slice(0, 4);
+  const picked = [...spotlight].sort((a, b) => Number(nextIds.has(b.id)) - Number(nextIds.has(a.id))).slice(0, 4);
   const companies = [...new Set(picked.map((s) => s.company).filter(Boolean))].slice(0, 3);
   const tones = ['sky', 'leaf'];
   return (

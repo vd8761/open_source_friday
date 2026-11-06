@@ -68,8 +68,14 @@ export default function SpeakersAdminPage() {
   useEffect(load, [load]);
   const saved = () => { setNotice(editing === 'new' ? 'Speaker added.' : 'Speaker updated. Every page that shows this speaker now uses the new details.'); setEditing(null); load(); };
   const current = editing && editing !== 'new' ? speakers.find(s => s.id === editing) : null;
+  // Starred speakers are shown first, in random order, on the home page.
+  async function toggleFeatured(s) {
+    setSpeakers(list => list.map(x => x.id === s.id ? { ...x, is_featured: !s.is_featured } : x));
+    try { await adminApi(`/speakers/${s.id}/featured`, { method: 'PUT', body: { is_featured: !s.is_featured } }); }
+    catch (e) { setError(e.message); load(); }
+  }
   return <main className="mx-auto max-w-7xl space-y-5 p-4 sm:p-8">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">Speakers</h1><p className="mt-2 max-w-2xl text-sm text-slate-500">One record per speaker. A change here, including the photo, updates the home page, episodes, speakers page and registration panel. Speakers are never deleted; hide them from the website instead.</p></div><button className="admin-primary" onClick={() => { setNotice(''); setEditing('new'); }}>New speaker</button></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">Speakers</h1><p className="mt-2 max-w-2xl text-sm text-slate-500">One record per speaker. A change here, including the photo, updates the home page, episodes, speakers page and registration panel. Speakers are never deleted; hide them from the website instead. Star a speaker to show them first (in random order) on the home page.</p></div><button className="admin-primary" onClick={() => { setNotice(''); setEditing('new'); }}>New speaker</button></div>
     {notice && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
     {error && <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
     {editing && <SpeakerForm key={editing} speaker={current} domains={domains} reloadDomains={reloadDomains} onSaved={saved} onCancel={() => setEditing(null)}/>}
@@ -77,7 +83,7 @@ export default function SpeakersAdminPage() {
       <thead className="bg-slate-50 text-xs text-slate-500"><tr>{['Photo', 'Name', 'Role', 'Domains', 'Website', ''].map(h => <th key={h} scope="col" className="p-4">{h}</th>)}</tr></thead>
       <tbody>{speakers.map(s => <tr key={s.id} className="border-t border-slate-100">
         <td className="p-4">{s.has_photo && s.is_published ? <img src={`${API_URL}/api/speakers/${s.id}/photo?v=${new Date(s.updated_at).getTime()}`} alt="" loading="lazy" className="h-10 w-10 rounded-full object-cover"/> : <span className="text-xs text-slate-500">{s.has_photo ? 'Saved' : '—'}</span>}</td>
-        <td className="p-4 font-semibold">{[s.honorific, s.name].filter(Boolean).join(' ')}</td>
+        <td className="p-4 font-semibold"><span className="inline-flex items-center gap-2"><button type="button" aria-pressed={s.is_featured} aria-label={`${s.is_featured ? 'Remove' : 'Mark'} ${s.name} as featured`} title={s.is_featured ? 'Featured on the home page. Click to remove.' : 'Feature on the home page'} onClick={() => toggleFeatured(s)} className={`text-xl leading-none ${s.is_featured ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}`}>{s.is_featured ? '★' : '☆'}</button>{[s.honorific, s.name].filter(Boolean).join(' ')}</span></td>
         <td className="p-4">{[s.designation, s.company].filter(Boolean).join(', ') || '—'}</td>
         <td className="p-4">{s.domains.map(d => domainLabel(domains, d)).join(', ') || '—'}</td>
         <td className="p-4">{s.is_published ? 'Shown' : 'Hidden'}</td>
