@@ -82,7 +82,9 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
   router.get('/stats', route(async () => {
     if (!statsCache || now() - statsCache.at > 60000) {
       const settings = (await pool.query("SELECT value FROM site_settings WHERE key='club_stats'")).rows[0];
-      statsCache = { at: now(), stats: { ...computeStats(await loadEpisodes(pool), now(), await domainKeys(pool)), club_stats: settings?.value || [] } };
+      // The speaker count is the admin's speaker list (published speakers), not who has spoken so far.
+      const speakers = (await pool.query('SELECT COUNT(*)::int AS n FROM speakers WHERE is_published')).rows[0].n;
+      statsCache = { at: now(), stats: { ...computeStats(await loadEpisodes(pool), now(), await domainKeys(pool)), speakers_count: speakers, club_stats: settings?.value || [] } };
     }
     return { stats: statsCache.stats };
   }));

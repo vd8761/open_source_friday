@@ -140,10 +140,12 @@ test('stats endpoint reads live data and editable club stats', async () => {
   try {
     assert.equal((await call('PUT', '/admin/site-settings/club_stats', { value: [{ label: 'Members', value: '6000+' }] }, true)).status, 200);
     assert.equal((await call('PUT', '/admin/site-settings/club_stats', { value: [{ label: '', value: '1' }] }, true)).status, 400);
+    // The count follows the admin speaker list (published only), including speakers who have not spoken yet.
+    await call('POST', '/admin/speakers', { name: 'Future Speaker' }, true);
+    await call('POST', '/admin/speakers', { name: 'Hidden Speaker', is_published: false }, true);
     const { stats } = (await call('GET', '/stats')).body;
     assert.equal(stats.episodes_shipped, 3);
-    // "Ariyappan P" and "Ariyappan" stay separate until the owner-approved backfill links them.
-    assert.equal(stats.speakers_count, 4);
+    assert.equal(stats.speakers_count, 1);
     assert.equal(stats.next_episode.episode_number, 4);
     assert.deepEqual(stats.club_stats, [{ label: 'Members', value: '6000+' }]);
     assert.deepEqual((await call('GET', '/site-settings')).body.settings, { club_stats: [{ label: 'Members', value: '6000+' }] });
