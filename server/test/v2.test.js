@@ -9,7 +9,7 @@ const { initV2DB, computeStats, nameKey } = require('../v2-data');
 const { createV2PublicRouter, createV2AdminRouter, rateLimit, futureFridays } = require('../v2-routes');
 
 const photo = 'data:image/jpeg;base64,' + Buffer.from('jpeg-bytes').toString('base64');
-async function setup({ recaptcha = true, limit = 100, alertPitch } = {}) {
+async function setup({ recaptcha = true, limit = 100, alertPitch, onSpeakerThanksQueued } = {}) {
   const db = new PGlite();
   await db.exec(`CREATE TABLE students(id SERIAL PRIMARY KEY,full_name TEXT,email TEXT,whatsapp_number TEXT,country_code TEXT);
     CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,description TEXT,event_date TIMESTAMP,
@@ -28,8 +28,8 @@ async function setup({ recaptcha = true, limit = 100, alertPitch } = {}) {
   const auth = (req, res, next) => req.headers.authorization === 'Bearer admin' ? (req.user = { id: 1 }, next()) : res.status(401).json({ success: false });
   const actions = [];
   app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: async (token, action) => { actions.push(action); return recaptcha && token === 'ok'; },
-    now: () => Date.parse('2026-11-02T12:00:00Z'), applicationLimit: rateLimit({ limit, windowMs: 3600000 }), alertPitch }));
-  app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken: auth }));
+    now: () => Date.parse('2026-11-02T12:00:00Z'), applicationLimit: rateLimit({ limit, windowMs: 3600000 }), alertPitch, onSpeakerThanksQueued }));
+  app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken: auth, onSpeakerThanksQueued }));
   const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const call = async (method, p, body, admin = false) => {
@@ -203,13 +203,14 @@ test('speaker pitches need reCAPTCHA for the right action, valid fields, upcomin
     const list = (await call('GET', '/admin/speaker-applications?status=new', null, true)).body;
     assert.equal(list.total, 1);
     assert.equal(list.data[0].email, 'asha@example.com');
-    assert.equal(list.data[0].link, pitch.link);
+    const full = (await call('GET', `/admin/speaker-applications/${list.data[0].id}`, null, true)).body.application;
+    assert.equal(full.link, pitch.link);
     assert.equal(list.data[0].mobile_number, '+919876543210');
-    assert.equal(list.data[0].preferred_call_time, pitch.preferred_call_time);
+    assert.equal(full.preferred_call_time, pitch.preferred_call_time);
     assert.equal(alerts[0].link, pitch.link);
     assert.equal(alerts[0].mobile_number, '+919876543210');
     assert.equal(alerts[0].preferred_call_time, pitch.preferred_call_time);
-    assert.deepEqual(list.data[0].preferred_fridays.map(d => new Date(d).toISOString().slice(0, 10)), ['2026-11-06']);
+    assert.deepEqual(full.preferred_fridays.map(d => new Date(d).toISOString().slice(0, 10)), ['2026-11-06']);
     assert.equal((await call('PATCH', `/admin/speaker-applications/${list.data[0].id}`, { status: 'contacted' }, true)).body.status, 'contacted');
     assert.equal((await call('PATCH', `/admin/speaker-applications/${list.data[0].id}`, { status: 'spam' }, true)).status, 400);
   } finally { await close(); }
@@ -325,10 +326,111 @@ test('speaker contact requirements reject missing details, website links and inv
   const { call, db, close } = await setup();
   const pitch = { name: 'Asha', email: 'asha@example.com', role_company: 'Engineer', title: 'Building', abstract: 'Practical ideas', domain: 'open_source', recaptcha_token: 'ok', link: 'https://www.linkedin.com/in/asha/', mobile_number: '+919876543210', preferred_call_time: '9 AM–12 PM' };
   try {
-    for (const change of [{ link: '' }, { link: 'https://example.com' }, { link: 'https://linkedin.com.evil.example/in/asha/' }, { link: 'javascript:alert(1)' }, { link: 'https://linkedin.com/company/example/' }, { mobile_number: '' }, { mobile_number: '9876543210' }, { mobile_number: '+91abc' }, { preferred_call_time: '' }, { preferred_call_time: 'midnight' }]) {
+    for (const change of [{ link: 'https://example.com' }, { link: 'https://linkedin.com.evil.example/in/asha/' }, { link: 'javascript:alert(1)' }, { link: 'https://linkedin.com/company/example/' }, { mobile_number: '' }, { mobile_number: '9876543210' }, { mobile_number: '+91abc' }, { preferred_call_time: '' }, { preferred_call_time: 'midnight' }]) {
       const result = await call('POST', '/speaker-applications', { ...pitch, ...change });
       assert.equal(result.status, 400, JSON.stringify(change));
     }
     assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM speaker_applications')).rows[0].n, 0);
   } finally { await close(); }
+});
+
+
+test('speaker enquiries deduplicate by email OR mobile, keep separate fields, and only alert on first save', async () => {
+  const alerts=[];let receiptQueues=0;
+  const {call,db,close}=await setup({alertPitch:async p=>alerts.push(p),onSpeakerThanksQueued:()=>receiptQueues++});
+  const pitch={name:'Asha',email:' ASHA@example.com ',speaker_role:'Engineer',company:'Example',link:null,title:'First idea',abstract:'Practical examples',domain:'open_source',recaptcha_token:'ok',mobile_number:'+91 98765 43210',preferred_call_time:'1 PM–4 PM'};
+  try {
+    for(const fields of [{speaker_role:''},{company:''},{mobile_number:''}]) assert.equal((await call('POST','/speaker-applications',{...pitch,...fields})).status,400);
+    assert.equal((await call('POST','/speaker-applications',pitch)).status,200);
+    assert.equal((await call('POST','/speaker-applications',{...pitch,title:'Different session',mobile_number:'+919876543211'})).body.duplicate,true);
+    assert.equal((await call('POST','/speaker-applications',{...pitch,email:'other@example.com',title:'Another session'})).body.duplicate,true);
+    await new Promise(r=>setTimeout(r,20));
+    assert.equal(alerts.length,1);assert.equal(receiptQueues,1);
+    const rows=(await db.query('SELECT * FROM speaker_applications')).rows;
+    assert.equal(rows.length,1);assert.equal(rows[0].speaker_role,'Engineer');assert.equal(rows[0].company,'Example');assert.equal(rows[0].link,null);assert.equal(rows[0].thank_you_status,'pending');
+    assert.equal(alerts[0].speaker_role,'Engineer');assert.equal(alerts[0].company,'Example');
+    await call('DELETE',`/admin/speaker-applications/${rows[0].id}`,null,true);
+    assert.equal((await call('POST','/speaker-applications',pitch)).body.duplicate,true);
+    assert.equal((await call('GET','/admin/speaker-applications/new-count',null,true)).body.count,0);
+  } finally {await close();}
+});
+
+test('speaker table filters, private preview, full filtered export, trash restore and explicit permanent removal', async () => {
+  const {call,db,close}=await setup();
+  try {
+    // Existing duplicates remain intact; migration never deletes or rewrites submitted contact data.
+    for(let i=0;i<14;i++) await db.query(`INSERT INTO speaker_applications(name,email,role_company,speaker_role,company,title,domain,abstract,status,mobile_number,preferred_call_time,created_at)
+      VALUES($1,$2,'Engineer, Studio','Engineer','Studio',$3,$4,'Detailed idea',$5,$6,'5 PM–8 PM',$7)`,[i===0?'=FORMULA':'Speaker '+i,`person${i}@example.com`,'Session '+i,i===0?'open_source':'cloud_computing',i===13?'contacted':'new',`+9198765432${String(i).padStart(2,'0')}`,i===0?'2026-11-01T20:00:00Z':'2026-11-02T12:00:00Z']);
+    assert.equal((await call('GET','/admin/speaker-applications')).status,401);
+    assert.equal((await call('GET','/admin/speaker-applications/1')).status,401);
+    assert.equal((await call('GET','/admin/speaker-applications/export')).status,401);
+    const list=(await call('GET','/admin/speaker-applications',null,true)).body;
+    assert.equal(list.total,13);assert.equal(list.data.length,10);assert.ok(list.data.every(r=>r.status==='new'));
+    assert.ok(!('abstract' in list.data[0]));
+    assert.equal((await call('GET','/admin/speaker-applications?status=',null,true)).body.total,14);
+    assert.equal((await call('GET','/admin/speaker-applications?domain=open_source&from=2026-11-02&to=2026-11-02',null,true)).body.total,1);
+    assert.equal((await call('GET','/admin/speaker-applications?search=person1%40example.com',null,true)).body.total,1);
+    assert.equal((await call('GET','/admin/speaker-applications?search=%25',null,true)).body.total,0);
+    const csv=await call('GET','/admin/speaker-applications/export?status=&sort=name',null,true);
+    assert.equal(csv.status,200);assert.equal(csv.body.toString().split('\r\n').length,15);
+    assert.ok(csv.body.toString().includes('"Role","Company"'));assert.ok(csv.body.toString().includes("'=FORMULA"));assert.ok(csv.body.toString().includes('person13@example.com'));
+    const preview=(await call('GET','/admin/speaker-applications/1',null,true)).body.application;
+    assert.equal(preview.abstract,'Detailed idea');assert.equal(preview.preferred_call_time,'5 PM–8 PM');assert.equal(preview.speaker_role,'Engineer');
+    assert.equal((await call('DELETE','/admin/speaker-applications/1/permanent',{confirm:'DELETE'},true)).status,404);
+    assert.equal((await call('DELETE','/admin/speaker-applications/1',null,true)).status,200);
+    assert.equal((await call('GET','/admin/speaker-applications?trash=true&status=',null,true)).body.total,1);
+    assert.ok((await call('GET','/admin/speaker-applications/1',null,true)).body.application.deleted_at);
+    assert.equal((await call('PATCH','/admin/speaker-applications/1',{status:'scheduled'},true)).status,404);
+    assert.equal((await call('POST','/admin/speaker-applications/1/restore',{},true)).status,200);
+    assert.equal((await call('PATCH','/admin/speaker-applications/1',{status:'scheduled'},true)).status,200);
+    await call('DELETE','/admin/speaker-applications/1',null,true);
+    const ids=(await call('GET','/admin/speaker-applications/trash-ids',null,true)).body.ids;
+    assert.deepEqual(ids,[1]);
+    await call('DELETE','/admin/speaker-applications/2',null,true);
+    assert.equal((await call('POST','/admin/speaker-applications/empty-trash',{ids},true)).status,400);
+    const empty=await call('POST','/admin/speaker-applications/empty-trash',{confirm:'EMPTY TRASH',ids:[...ids,3]},true);
+    assert.equal(empty.body.deleted,1); // Active #3 and newly trashed #2 are retained.
+    assert.equal((await call('GET','/admin/speaker-applications/1',null,true)).status,404);
+    assert.equal((await call('DELETE','/admin/speaker-applications/2/permanent',{},true)).status,400);
+    assert.equal((await call('DELETE','/admin/speaker-applications/2/permanent',{confirm:'DELETE'},true)).status,200);
+    for(const query of ['sort=DROP','status=bad','from=2026-02-30']) assert.equal((await call('GET','/admin/speaker-applications?'+query,null,true)).status,400);
+  } finally {await close();}
+});
+
+test('legacy enquiries block repeats without removing earlier duplicates; DB unique keys prevent racing inserts', async () => {
+  const {db,call,close}=await setup();
+  const {saveSpeakerPitch}=require('../speaker-applications');
+  const p={name:'Asha',email:'asha@example.com',role_company:'Engineer',speaker_role:'Engineer',company:'Studio',link:null,title:'Idea',domain:'open_source',abstract:'Notes',preferred_fridays:[],mobile_number:'+919876543210',preferred_call_time:'9 AM–12 PM'};
+  try {
+    const pool={connect:async()=>({query:(...a)=>db.query(...a),release(){}})};
+    assert.ok(await saveSpeakerPitch(pool,p));
+    assert.equal(await saveSpeakerPitch(pool,{...p,title:'New idea'}),null);
+    const row=(await db.query('SELECT * FROM speaker_applications')).rows[0];
+    await assert.rejects(db.query(`INSERT INTO speaker_applications(name,email,role_company,title,abstract,dedupe_key) VALUES('Other','other@example.com','Role','Other','Idea',$1)`,[row.dedupe_key]),e=>e.code==='23505');
+    await assert.rejects(db.query(`INSERT INTO speaker_applications(name,email,role_company,title,abstract,mobile_dedupe_key) VALUES('Other','other@example.com','Role','Other','Idea',$1)`,[row.mobile_dedupe_key]),e=>e.code==='23505');
+    await db.query(`INSERT INTO speaker_applications(name,email,role_company,title,abstract) VALUES('Legacy','legacy@example.com','Role','Old idea','Notes'),('Legacy','legacy@example.com','Role','Duplicate old idea','Notes')`);
+    const result=await call('POST','/speaker-applications',{...p,email:'LEGACY@example.com',mobile_number:'+919876543299',recaptcha_token:'ok'});
+    assert.equal(result.body.duplicate,true);
+    assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM speaker_applications')).rows[0].n,3);
+  } finally {await close();}
+});
+
+
+test('admin may queue one thank-you for an old enquiry; sent, queued, uncertain or trashed enquiries cannot be sent again', async () => {
+  let runs=0;const {db,call,close}=await setup({onSpeakerThanksQueued:()=>runs++});
+  try {
+    await db.query(`INSERT INTO speaker_applications(name,email,role_company,title,abstract) VALUES('Old speaker','old@example.com','Engineer','Idea','Notes')`);
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{})).status,401);
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,200);
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,409);
+    await new Promise(r=>setTimeout(r,10));assert.equal(runs,1);
+    for(const status of ['sent','sending','unknown']) {
+      await db.query('UPDATE speaker_applications SET thank_you_status=$1 WHERE id=1',[status]);
+      assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,409);
+    }
+    await db.query("UPDATE speaker_applications SET thank_you_status='pending' WHERE id=1");
+    await call('DELETE','/admin/speaker-applications/1',null,true);
+    assert.equal((await db.query('SELECT thank_you_status FROM speaker_applications WHERE id=1')).rows[0].thank_you_status,'skipped');
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,409);
+  } finally {await close();}
 });

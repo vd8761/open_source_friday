@@ -64,8 +64,33 @@ This is a dry run that prints the plan. Add `--apply` only (owner approved both 
 - **Render free hours.** Render's 750 free hours a month are counted **per workspace**. Before an external scheduler starts calling the production API every minute, move the dev API to its own workspace or delete it. Otherwise production can run out of hours near month end.
 
 
-### Speaker pitch contact details
+### Speaker enquiries
 
-New `POST /api/speaker-applications` submissions require `link` (an HTTPS LinkedIn `/in/` profile URL), `mobile_number` (international format including `+` country code), and `preferred_call_time` (`9 AM–12 PM`, `1 PM–4 PM`, or `5 PM–8 PM`, all IST). Mobile formatting spaces, parentheses, dots and hyphens are removed before storing. These details appear in the private admin pitch view and the team's notification email; they are not published as speaker details.
+`POST /api/speaker-applications` collects `name`, `email`, `speaker_role`, `company`, `title`, `domain`, `abstract`, `preferred_fridays`, mandatory `mobile_number` (international format including `+`), optional `link` (HTTPS LinkedIn `/in/` profile), and `preferred_call_time` (`9 AM–12 PM`, `1 PM–4 PM`, or `5 PM–8 PM`, IST). Cached clients may still send `role_company`; that original text is retained without inferring separate fields. LinkedIn is optional on both the form and API.
 
-Deploy the backend and frontend together. Migration `009_speaker_contact.up.sql` runs automatically on backend startup and adds nullable contact columns so older pitches remain intact. Existing websites remain visible as submitted profile links; new submissions accept LinkedIn only. Existing sent emails are not changed or resent. This contact collection does not opt speakers into marketing or WhatsApp messages.
+The server normalizes email and mobile formatting, then rejects a second enquiry matching **either email OR mobile**, regardless of session title or status. A duplicate returns success with `duplicate: true` and a polite acknowledgement, without updating the original or sending another team alert. Trashed enquiries also block repeat submissions until permanently removed. Unique hashed contact keys protect new submissions against concurrent retries. Historical duplicates are preserved; a lookup also checks historical rows without keys. The form displays its success state instead of offering a second submission.
+
+Admin endpoints (all require authentication):
+
+- `GET /api/admin/speaker-applications`: paginated compact rows; default status `new`. Pass `status=` for all statuses. Filters: `search` (name, contact, company, session), `status`, `domain`, `from` and `to` (inclusive IST calendar dates), `trash=true`. Sorts: `newest`, `oldest`, `name`, `name_desc`, `title`, `title_desc`, `company`, `company_desc`.
+- `GET /api/admin/speaker-applications/:id`: complete submitted enquiry for its separate preview page, including legacy combined role/company, optional profile, callback window, preferred Fridays, abstract and timestamps.
+- `GET /api/admin/speaker-applications/export`: same filters and sorting, exports **all matching rows**, not just the visible page. Includes name, role, company, original combined field, mobile, email, LinkedIn/legacy profile link, domain, session, callback window, status and received UTC timestamp. Spreadsheet formulas are escaped. Exports do not confer marketing consent.
+- `PATCH /api/admin/speaker-applications/:id`: change active enquiry status.
+- `DELETE /api/admin/speaker-applications/:id`: soft-delete into Trash.
+- `POST /api/admin/speaker-applications/:id/restore`: restore its previous status.
+- `DELETE /api/admin/speaker-applications/:id/permanent` with `{ "confirm": "DELETE" }`: only deletes already-trashed enquiries.
+- `GET /api/admin/speaker-applications/trash-ids`, then `POST /api/admin/speaker-applications/empty-trash` with `{ "confirm": "EMPTY TRASH", "ids": [...] }`: permanently delete the reviewed trash snapshot, retaining active rows and items newly trashed by another admin. Permanent actions have explicit confirmation dialogs. No automatic trash cleanup runs.
+
+Deploy frontend and backend from `v2.0-main` together. Startup migrations 009, 010 and 011 are additive and idempotent; existing data stays intact. Team alerts link directly to the saved enquiry preview and include separate role/company for new enquiries. No new environment variables are needed for these changes.
+
+### Automatic speaker thank-you email
+
+Newly saved enquiries atomically queue one branded HTML/plain-text acknowledgement with the club logo and social links. Duplicate submissions do not queue or send another. Older enquiries default to `not_requested` and are never bulk mailed by deployment. Team notifications are independent of the speaker receipt.
+
+`server/speaker-receipts.js` claims pending work atomically, records Sender's acceptance/reference and processes pending work immediately after signup, on server start, and once per minute under its own receipt switch (independent of campaign/Zoom workers). The authenticated external cron job `speaker-receipts` can also recover queued work on Render wake-up. Trashed enquiries are excluded; moving pending work to Trash cancels the pending receipt. No automatic resend occurs after explicit provider rejection or an uncertain timeout/crash, preventing duplicate emails. Failed sends can be manually retried; uncertain sends must be checked in Sender before any resend.
+
+Receipts are enabled by default in production with Sender credentials. For the public website hosted on a backend still marked `OSF_ENV=preview`, explicitly set `SPEAKER_THANK_YOU_MODE=live` to enable live transactional speaker acknowledgements only. This does not enable campaigns, Zoom, pushes, or change the overall environment. `ENABLE_SPEAKER_THANK_YOU=false` is an optional receipt kill switch. Otherwise outside production, test sending requires `ENABLE_SPEAKER_THANK_YOU=true` and the recipient in `TEST_EMAIL_ALLOWLIST` (or `ZOOM_TEST_ALLOWLIST` fallback). Like lounge codes, receipts use their own switch rather than the campaign sender flag. Sender acceptance is not a claim of inbox delivery.
+
+The enquiry preview displays `thank_you_status`, attempted/sent times, the Sender reference and a safe error summary. `POST /api/admin/speaker-applications/:id/thank-you` queues a receipt for a specific active enquiry only when it was not requested, explicitly failed, or was skipped; sent, already queued/in-flight and uncertain outcomes cannot be queued again. The UI asks for confirmation before sending. Use this for the authorised one-email test on an existing enquiry; do not delete/create duplicates to test receipts.
+
+Template: `server/speaker-thank-you.js`. Rendered example: `docs/email-previews/speaker-thank-you.html`. It acknowledges the enquiry without promising a confirmed speaker slot or subscribing the speaker to marketing/WhatsApp. The logo is served from the existing public club asset on the OSF website; email clients may require external images to be enabled.

@@ -29,6 +29,7 @@ const { initV2DB } = require('./v2-data');
 const { createV2PublicRouter, createV2AdminRouter, rateLimit } = require('./v2-routes');
 const { createLoungeRouter, createCodeMailer } = require('./lounge');
 const { createPitchAlert } = require('./admin-alerts');
+const { createSpeakerReceiptWorker } = require('./speaker-receipts');
 const { corsOptions, securityHeaders, createLoginGuard, MAX_FAILURES, LOCK_MINUTES } = require('./security');
 const { verifyAppCheck, createMobilePushRouter, sendToMobileDevices, messagingFor } = require('./mobile-push');
 const flags = runtimeFlags();
@@ -862,9 +863,19 @@ app.get('/api/admin/push/history', authenticateToken, async (req, res) => {
   }
 });
 
-app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: verifyRecaptchaToken, alertPitch: createPitchAlert({ flags }) }));
+const processSpeakerReceipts = createSpeakerReceiptWorker({ pool, flags });
+let speakerReceiptsRunning = false;
+async function runSpeakerReceipts() {
+  if (speakerReceiptsRunning) return;
+  speakerReceiptsRunning = true;
+  try { await processSpeakerReceipts(); }
+  catch { console.error('[Speaker receipts] Queued emails will be checked on the next run.'); }
+  finally { speakerReceiptsRunning = false; }
+}
+
+app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: verifyRecaptchaToken, alertPitch: createPitchAlert({ flags }), onSpeakerThanksQueued: runSpeakerReceipts }));
 app.use('/api', createMobilePushRouter({ pool, limiter: rateLimit({ limit: 30, windowMs: 60000 }) }));
-app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken, onZoomQueued: () => void runZoomWorker() }));
+app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken, onZoomQueued: () => void runZoomWorker(), onSpeakerThanksQueued: runSpeakerReceipts }));
 app.use('/api', createLoungeRouter({ pool, secret: process.env.JWT_SECRET, verifyRecaptcha: verifyRecaptchaToken,
   sendCode: createCodeMailer({ flags }), limiter: rateLimit({ limit: 10, windowMs: 15 * 60000 }) }));
 app.use('/api/admin', createOutreachRouter({ pool, sender, zoom, authenticateToken }));
@@ -890,6 +901,7 @@ const cronJobs = {
   reminders: () => sendEpisodeReminders(Math.max(0, Number(process.env.CRON_GRACE_MINUTES ?? 10)) || 0),
   'zoom-worker': runZoomWorker,
   'invite-worker': runInviteWorker,
+  'speaker-receipts': runSpeakerReceipts,
   sync: runSyncJobs,
 };
 app.all('/api/cron/:job', async (req, res) => {
@@ -900,7 +912,7 @@ app.all('/api/cron/:job', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   const job = cronJobs[req.params.job];
   if (!job) return res.status(404).json({ success: false, error: 'Unknown job' });
-  if (!flags.workers) {
+  if (!flags.workers && req.params.job !== 'speaker-receipts') {
     dryRun('Cron', `${req.params.job} skipped because ENABLE_WORKERS is off`);
     return res.json({ success: true, skipped: true });
   }
@@ -910,6 +922,9 @@ app.all('/api/cron/:job', async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 if (require.main === module) initDB().then(() => {
+  // Receipt sending has its own explicit live/test switch; never enable unrelated workers for this feature.
+  cron.schedule('* * * * *', runSpeakerReceipts);
+  void runSpeakerReceipts();
   if (flags.workers) {
     cron.schedule('* * * * *', () => sendEpisodeReminders());
     cron.schedule('* * * * *', runZoomWorker);

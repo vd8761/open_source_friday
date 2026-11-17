@@ -45,3 +45,15 @@ test('older pitches explicitly report missing contact details and never render u
   await alert({ ...pitch, link: 'javascript:alert(1)' });
   assert.ok(!calls[1].body.html.includes('href="javascript:'));
 });
+
+
+test('speaker acknowledgement is escaped, branded and includes the club logo and social links', () => {
+  const {speakerThankYou}=require('../speaker-thank-you');
+  const draft=speakerThankYou({...pitch,speaker_role:'Engineer',company:'Studio'});
+  assert.ok(draft.html.includes('https://osf.descienceosclub.com/dos_logo.png'));
+  assert.match(draft.html,/Asha &lt;b&gt;/);assert.ok(!draft.html.includes('Asha <b>'));
+  assert.ok(draft.html.includes('https://www.linkedin.com/company/descience-open-source-club/'));
+  assert.ok(draft.html.includes('https://www.youtube.com/channel/UCvF5jATxekeLcFvjLrMGjpA'));
+  assert.match(draft.text,/A session date is confirmed only after we speak with you/);
+  assert.ok(draft.html.includes('5 PM–8 PM IST'));assert.ok(draft.text.includes('https://github.com/descienceosclub'));
+});
