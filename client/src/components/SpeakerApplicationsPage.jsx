@@ -26,7 +26,8 @@ export default function SpeakerApplicationsPage() {
       {table.result.data.map(a => <article key={a.id} className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1 space-y-1"><h2 className="text-lg font-bold">{a.title}</h2>
-            <p className="text-sm text-slate-600"><strong className="text-slate-900">{a.name}</strong> · {a.role_company} · <a className="text-dos" href={`mailto:${a.email}`}>{a.email}</a>{a.link && <> · <a className="text-dos" href={a.link} target="_blank" rel="noopener noreferrer">link ↗</a></>}</p>
+            <p className="text-sm text-slate-600"><strong className="text-slate-900">{a.name}</strong> · {a.role_company} · <a className="text-dos" href={`mailto:${a.email}`}>{a.email}</a>{a.link && <> · <a className="text-dos" href={a.link} target="_blank" rel="noopener noreferrer">Submitted profile ↗</a></>}</p>
+            <p className="text-sm text-slate-600">Mobile: {a.mobile_number ? <a className="text-dos" href={`tel:${a.mobile_number}`}>{a.mobile_number}</a> : 'Not provided'} · Best time to call: {a.preferred_call_time ? `${a.preferred_call_time} IST` : 'Not provided'}</p>
             <p className="text-xs text-slate-500">Received {formatIST(a.created_at)}{a.domain && ` · ${domainLabel(domains, a.domain)}`}{a.preferred_fridays.length > 0 && ` · Prefers ${a.preferred_fridays.map(day).join(', ')}`}</p></div>
           <label className="block text-xs font-semibold text-slate-600">Status<select className={fieldClass} value={a.status} disabled={saving === a.id} onChange={e => update(a.id, e.target.value)}>{STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         </div>

@@ -185,7 +185,7 @@ test('only published tips are public and there is one tip of the week', async ()
 test('speaker pitches need reCAPTCHA for the right action, valid fields, upcoming Fridays and a rate limit', async () => {
   const alerts = [];
   const { call, actions, close } = await setup({ limit: 3, alertPitch: async p => { alerts.push(p); return 1; } });
-  const pitch = { name: 'Asha', email: 'Asha@Example.com', role_company: 'SRE, Example', title: 'On-call without tears', abstract: 'What I learned.', domain: 'cloud_computing', preferred_fridays: ['2026-11-06'], recaptcha_token: 'ok' };
+  const pitch = { link: 'https://www.linkedin.com/in/asha/', mobile_number: '+91 98765 43210', preferred_call_time: '1 PM–4 PM', name: 'Asha', email: 'Asha@Example.com', role_company: 'SRE, Example', title: 'On-call without tears', abstract: 'What I learned.', domain: 'cloud_computing', preferred_fridays: ['2026-11-06'], recaptcha_token: 'ok' };
   try {
     assert.equal((await call('POST', '/speaker-applications', { ...pitch, recaptcha_token: 'bad' })).status, 400);
     assert.equal(actions.at(-1), 'speaker_application');
@@ -203,6 +203,12 @@ test('speaker pitches need reCAPTCHA for the right action, valid fields, upcomin
     const list = (await call('GET', '/admin/speaker-applications?status=new', null, true)).body;
     assert.equal(list.total, 1);
     assert.equal(list.data[0].email, 'asha@example.com');
+    assert.equal(list.data[0].link, pitch.link);
+    assert.equal(list.data[0].mobile_number, '+919876543210');
+    assert.equal(list.data[0].preferred_call_time, pitch.preferred_call_time);
+    assert.equal(alerts[0].link, pitch.link);
+    assert.equal(alerts[0].mobile_number, '+919876543210');
+    assert.equal(alerts[0].preferred_call_time, pitch.preferred_call_time);
     assert.deepEqual(list.data[0].preferred_fridays.map(d => new Date(d).toISOString().slice(0, 10)), ['2026-11-06']);
     assert.equal((await call('PATCH', `/admin/speaker-applications/${list.data[0].id}`, { status: 'contacted' }, true)).body.status, 'contacted');
     assert.equal((await call('PATCH', `/admin/speaker-applications/${list.data[0].id}`, { status: 'spam' }, true)).status, 400);
@@ -311,5 +317,18 @@ test('admins add, rename and hide domains; speakers, episodes, tips and pitches 
     assert.ok(!(await call('GET', '/domains')).body.domains.some(d => d.key === 'data_and_analytics'));
     assert.deepEqual((await db.query("SELECT domains FROM speakers WHERE name='New Person'")).rows[0].domains, ['data_and_analytics', 'open_source']);
     assert.equal((await call('PUT', '/admin/domains/missing', { label: 'X' }, true)).status, 404);
+  } finally { await close(); }
+});
+
+
+test('speaker contact requirements reject missing details, website links and invalid callback windows without storing a pitch', async () => {
+  const { call, db, close } = await setup();
+  const pitch = { name: 'Asha', email: 'asha@example.com', role_company: 'Engineer', title: 'Building', abstract: 'Practical ideas', domain: 'open_source', recaptcha_token: 'ok', link: 'https://www.linkedin.com/in/asha/', mobile_number: '+919876543210', preferred_call_time: '9 AM–12 PM' };
+  try {
+    for (const change of [{ link: '' }, { link: 'https://example.com' }, { link: 'https://linkedin.com.evil.example/in/asha/' }, { link: 'javascript:alert(1)' }, { link: 'https://linkedin.com/company/example/' }, { mobile_number: '' }, { mobile_number: '9876543210' }, { mobile_number: '+91abc' }, { preferred_call_time: '' }, { preferred_call_time: 'midnight' }]) {
+      const result = await call('POST', '/speaker-applications', { ...pitch, ...change });
+      assert.equal(result.status, 400, JSON.stringify(change));
+    }
+    assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM speaker_applications')).rows[0].n, 0);
   } finally { await close(); }
 });
