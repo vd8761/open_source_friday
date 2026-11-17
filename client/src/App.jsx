@@ -15,7 +15,7 @@ import Login from './Login';
 import AdminEpisodeForm from './components/AdminEpisodeForm';
 import SpeakersAdminPage from './components/SpeakersAdminPage';
 import TipsAdminPage from './components/TipsAdminPage';
-import SpeakerApplicationsPage from './components/SpeakerApplicationsPage';
+import SpeakerApplicationsPage, { SpeakerApplicationPreview } from './components/SpeakerApplicationsPage';
 import SiteSettingsPage from './components/SiteSettingsPage';
 import DomainsAdminPage from './components/DomainsAdminPage';
 import HallOfFamePage from './components/HallOfFamePage';
@@ -67,6 +67,8 @@ function App() {
           <Route path="/admin/contacts" element={<ProtectedRoute><ContactsPage /></ProtectedRoute>} />
           <Route path="/admin/speakers" element={<ProtectedRoute><SpeakersAdminPage /></ProtectedRoute>} />
           <Route path="/admin/tips" element={<ProtectedRoute><TipsAdminPage /></ProtectedRoute>} />
+          <Route path="/admin/speaker-applications/trash" element={<ProtectedRoute><SpeakerApplicationsPage key="trash" trash /></ProtectedRoute>} />
+          <Route path="/admin/speaker-applications/:id" element={<ProtectedRoute><SpeakerApplicationPreview /></ProtectedRoute>} />
           <Route path="/admin/speaker-applications" element={<ProtectedRoute><SpeakerApplicationsPage /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute><SiteSettingsPage /></ProtectedRoute>} />
           <Route path="/admin/domains" element={<ProtectedRoute><DomainsAdminPage /></ProtectedRoute>} />

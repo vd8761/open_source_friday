@@ -15,8 +15,8 @@ export function TablePager({table,compact=false,pageSizes=[10,25,50]}) {
     </div>
   </footer>;
 }
-export function TableFilters({fields,defaults,onApply}) {
-  const [draft,setDraft]=useState(defaults);
+export function TableFilters({fields,defaults,initialValues=defaults,onApply}) {
+  const [draft,setDraft]=useState(initialValues);
   const first=fields[0],advanced=fields.slice(1),count=advanced.filter(f=>Boolean(draft[f.key])).length;
   function field(f){return <label key={f.key} className="block text-xs font-semibold text-slate-600">{f.label}{f.options?<select className={fieldClass} value={draft[f.key]||''} onChange={e=>setDraft({...draft,[f.key]:e.target.value})}>{f.options.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>:<input className={fieldClass} type={f.type||'text'} maxLength={150} placeholder={f.placeholder} value={draft[f.key]||''} onChange={e=>setDraft({...draft,[f.key]:e.target.value})}/>}</label>;}
   return <form className="rounded-xl border border-slate-200 bg-slate-50/60 p-4" onSubmit={e=>{e.preventDefault();onApply(draft);}}>

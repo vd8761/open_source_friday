@@ -64,8 +64,27 @@ This is a dry run that prints the plan. Add `--apply` only (owner approved both 
 - **Render free hours.** Render's 750 free hours a month are counted **per workspace**. Before an external scheduler starts calling the production API every minute, move the dev API to its own workspace or delete it. Otherwise production can run out of hours near month end.
 
 
-### Speaker pitch contact details
+### Speaker enquiries
 
-New `POST /api/speaker-applications` submissions require `link` (an HTTPS LinkedIn `/in/` profile URL), `mobile_number` (international format including `+` country code), and `preferred_call_time` (`9 AM–12 PM`, `1 PM–4 PM`, or `5 PM–8 PM`, all IST). Mobile formatting spaces, parentheses, dots and hyphens are removed before storing. These details appear in the private admin pitch view and the team's notification email; they are not published as speaker details.
+`POST /api/speaker-applications` collects `name`, `email`, `speaker_role`, `company`, `title`, `domain`, `abstract`, `preferred_fridays`, mandatory `mobile_number` (international format including `+`), optional `link` (HTTPS LinkedIn `/in/` profile), and `preferred_call_time` (`9 AM–12 PM`, `1 PM–4 PM`, or `5 PM–8 PM`, IST). Cached clients may still send `role_company`; that original text is retained without inferring separate fields. LinkedIn is optional on both the form and API.
 
-Deploy the backend and frontend together. Migration `009_speaker_contact.up.sql` runs automatically on backend startup and adds nullable contact columns so older pitches remain intact. Existing websites remain visible as submitted profile links; new submissions accept LinkedIn only. Existing sent emails are not changed or resent. This contact collection does not opt speakers into marketing or WhatsApp messages.
+The server normalizes email and mobile formatting, then rejects a second enquiry matching **either email OR mobile**, regardless of session title or status. A duplicate returns success with `duplicate: true` and a polite acknowledgement, without updating the original or sending another team alert. Trashed enquiries also block repeat submissions until permanently removed. Unique hashed contact keys protect new submissions against concurrent retries. Historical duplicates are preserved; a lookup also checks historical rows without keys. The form displays its success state instead of offering a second submission.
+
+Admin endpoints (all require authentication):
+
+- `GET /api/admin/speaker-applications`: paginated compact rows; default status `new`. Pass `status=` for all statuses. Filters: `search` (name, contact, company, session), `status`, `domain`, `from` and `to` (inclusive IST calendar dates), `trash=true`. Sorts: `newest`, `oldest`, `name`, `name_desc`, `title`, `title_desc`, `company`, `company_desc`.
+- `GET /api/admin/speaker-applications/:id`: complete submitted enquiry for its separate preview page, including legacy combined role/company, optional profile, callback window, preferred Fridays, abstract and timestamps.
+- `GET /api/admin/speaker-applications/export`: same filters and sorting, exports **all matching rows**, not just the visible page. Includes name, role, company, original combined field, mobile, email, LinkedIn/legacy profile link, domain, session, callback window, status and received UTC timestamp. Spreadsheet formulas are escaped. Exports do not confer marketing consent.
+- `PATCH /api/admin/speaker-applications/:id`: change active enquiry status.
+- `DELETE /api/admin/speaker-applications/:id`: soft-delete into Trash.
+- `POST /api/admin/speaker-applications/:id/restore`: restore its previous status.
+- `DELETE /api/admin/speaker-applications/:id/permanent` with `{ "confirm": "DELETE" }`: only deletes already-trashed enquiries.
+- `GET /api/admin/speaker-applications/trash-ids`, then `POST /api/admin/speaker-applications/empty-trash` with `{ "confirm": "EMPTY TRASH", "ids": [...] }`: permanently delete the reviewed trash snapshot, retaining active rows and items newly trashed by another admin. Permanent actions have explicit confirmation dialogs. No automatic trash cleanup runs.
+
+Deploy frontend and backend from `v2.0-main` together. Startup migrations 009 and 010 are additive and idempotent; existing data stays intact. Team alerts link directly to the saved enquiry preview and include separate role/company for new enquiries. No new environment variables are needed for these changes.
+
+### Speaker thank-you email — review draft only
+
+The application currently sends team alerts, **not speaker acknowledgement emails**. `server/speaker-thank-you.js` renders a branded HTML/plain-text draft. View `docs/email-previews/speaker-thank-you.html`. It thanks the speaker, summarizes the proposal, explains the review process and links the club social pages. It does not imply a confirmed speaker slot, subscribe anyone to marketing or WhatsApp, or promise a response deadline.
+
+The draft is not connected to the sending path; no speaker receipts are enabled or sent by this change. Approve the design/copy before adding automatic sending. Existing notifications are not changed or resent.
