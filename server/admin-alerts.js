@@ -11,11 +11,12 @@ function createPitchAlert({ env = process.env, flags, fetchImpl = fetch }) {
     const to = list(env.PITCH_ALERT_EMAIL).filter(email => flags.production || allow.includes(email));
     if (!to.length || !env.SENDER_API_TOKEN) { dryRun('Pitch alert', 'speaker pitch alert not sent'); return 0; }
     const admin = env.PUBLIC_APP_URL ? new URL('/admin/speaker-applications', env.PUBLIC_APP_URL).toString() : null;
-    const rows = [['Name', pitch.name], ['Email', pitch.email], ['Role & company', pitch.role_company], ['Link', pitch.link],
+    const rows = [['Name', pitch.name], ['Email', pitch.email], ['Role & company', pitch.role_company], ['LinkedIn profile', pitch.link || 'Not provided'], ['Mobile number', pitch.mobile_number || 'Not provided'],
+      ['Preferred callback time (IST)', pitch.preferred_call_time || 'Not provided'],
       ['Domain', pitch.domain_label], ['Preferred Fridays', (pitch.preferred_fridays || []).join(', ')]].filter(([, v]) => v);
     const text = [`New speaker pitch: ${pitch.title}`, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', pitch.abstract, '', admin ? `Review it: ${admin}` : ''].join('\n');
     const html = `<p><strong>New speaker pitch:</strong> ${escapeHtml(pitch.title)}</p>`
-      + `<table cellpadding="4">${rows.map(([k, v]) => `<tr><td><strong>${escapeHtml(k)}</strong></td><td>${escapeHtml(v)}</td></tr>`).join('')}</table>`
+      + `<table cellpadding="4">${rows.map(([k, v]) => `<tr><td><strong>${escapeHtml(k)}</strong></td><td>${k === 'LinkedIn profile' && /^https:\/\/(www\.)?linkedin\.com\/in\/[^\s]+$/.test(v) ? `<a href="${escapeHtml(v)}">${escapeHtml(v)}</a>` : escapeHtml(v)}</td></tr>`).join('')}</table>`
       + `<p style="white-space:pre-wrap">${escapeHtml(pitch.abstract)}</p>`
       + (admin ? `<p><a href="${escapeHtml(admin)}">Open speaker pitches in the admin</a></p>` : '');
     let sent = 0;

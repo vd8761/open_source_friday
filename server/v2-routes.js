@@ -107,17 +107,26 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
       throw new InputError('Security check failed. Please refresh the page and try again.', 400);
     const email = v.text(b.email, 'Email', 254, { required: true }).toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new InputError('Enter a valid email address.', 400);
-    const link = v.text(b.link, 'Link', 300);
-    if (link && !/^https?:\/\/\S+$/.test(link)) throw new InputError('Link must start with http:// or https://.', 400);
+    const link = v.text(b.link, 'LinkedIn profile URL', 300, { required: true });
+    let profile;
+    try { profile = new URL(link); } catch { /* Validated below. */ }
+    if (!profile || profile.protocol !== 'https:' || !['linkedin.com', 'www.linkedin.com'].includes(profile.hostname)
+      || profile.username || profile.password || profile.port || !/^\/in\/[^/]+\/?$/.test(profile.pathname))
+      throw new InputError('Enter your LinkedIn profile URL, like https://www.linkedin.com/in/your-name/.', 400);
+    const mobile_number = v.text(b.mobile_number, 'Mobile number', 32, { required: true }).replace(/[\s().-]/g, '');
+    if (!/^\+[1-9]\d{6,14}$/.test(mobile_number)) throw new InputError('Enter a valid mobile number with country code, for example +919876543210.', 400);
+    const preferred_call_time = v.text(b.preferred_call_time, 'Preferred callback time', 40, { required: true });
+    if (!['9 AM–12 PM', '1 PM–4 PM', '5 PM–8 PM'].includes(preferred_call_time))
+      throw new InputError('Please choose a preferred callback time.', 400);
     const row = [v.text(b.name, 'Name', 120, { required: true }), email, v.text(b.role_company, 'Role and company', 160, { required: true }),
       link, v.text(b.title, 'Session title', 160, { required: true }), v.domain(b.domain, await domainKeys(pool, { activeOnly: true })), v.text(b.abstract, 'Abstract', 2000, { required: true }),
-      futureFridays(b.preferred_fridays, now())];
-    await pool.query(`INSERT INTO speaker_applications(name,email,role_company,link,title,domain,abstract,preferred_fridays)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8::date[])`, row);
+      futureFridays(b.preferred_fridays, now()), mobile_number, preferred_call_time];
+    await pool.query(`INSERT INTO speaker_applications(name,email,role_company,link,title,domain,abstract,preferred_fridays,mobile_number,preferred_call_time)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8::date[],$9,$10)`, row);
     // Alert the team by email without making the speaker wait for it.
     const [name, , role_company, , title, domain, abstract, preferred_fridays] = row;
     pool.query('SELECT label FROM domains WHERE key=$1', [domain])
-      .then(r => alertPitch({ name, email, role_company, link, title, domain_label: r.rows[0]?.label, abstract, preferred_fridays }))
+      .then(r => alertPitch({ name, email, role_company, link, mobile_number, preferred_call_time, title, domain_label: r.rows[0]?.label, abstract, preferred_fridays }))
       .catch(e => console.error('[Pitch alert]', e.message));
     return { message: 'Thanks. Your pitch reached the OSF team.' };
   }, 'Unable to send your pitch. Please try again.'));

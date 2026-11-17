@@ -62,3 +62,10 @@ This is a dry run that prints the plan. Add `--apply` only (owner approved both 
 - **Preview variables in Vercel.** These are set for **Preview, branch `v2.0-main` only**: `VITE_API_URL`, `VITE_RECAPTCHA_SITE_KEY` (a separate test key for `localhost` and `vercel.app`) and `VITE_SHOW_TEST_EVENTS=true`. Production variables are unchanged.
 - **Dev API settings.** The dev API runs with `OSF_ENV=preview` and all `ENABLE_*` flags off, so Zoom, Sender, push and workers are dry-runs. It has its own admin login and secrets; none are shared with production.
 - **Render free hours.** Render's 750 free hours a month are counted **per workspace**. Before an external scheduler starts calling the production API every minute, move the dev API to its own workspace or delete it. Otherwise production can run out of hours near month end.
+
+
+### Speaker pitch contact details
+
+New `POST /api/speaker-applications` submissions require `link` (an HTTPS LinkedIn `/in/` profile URL), `mobile_number` (international format including `+` country code), and `preferred_call_time` (`9 AM–12 PM`, `1 PM–4 PM`, or `5 PM–8 PM`, all IST). Mobile formatting spaces, parentheses, dots and hyphens are removed before storing. These details appear in the private admin pitch view and the team's notification email; they are not published as speaker details.
+
+Deploy the backend and frontend together. Migration `009_speaker_contact.up.sql` runs automatically on backend startup and adds nullable contact columns so older pitches remain intact. Existing websites remain visible as submitted profile links; new submissions accept LinkedIn only. Existing sent emails are not changed or resent. This contact collection does not opt speakers into marketing or WhatsApp messages.

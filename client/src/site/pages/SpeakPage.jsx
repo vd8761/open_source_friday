@@ -38,7 +38,7 @@ function PitchForm() {
       if (!executeRecaptcha) throw new Error('Security check not ready. Please wait a moment and try again.');
       const recaptcha_token = await executeRecaptcha('speaker_application');
       const result = await postJson('/api/speaker-applications', {
-        name: data.name, email: data.email, role_company: data.role, link: data.link || null, title: data.title,
+        name: data.name, email: data.email, role_company: data.role, link: data.link, mobile_number: data.mobile_number, preferred_call_time: data.preferred_call_time, title: data.title,
         domain: data.domain, abstract: data.abstract, preferred_fridays: fridays.filter((f) => picked[f.value]).map((f) => f.value), recaptcha_token,
       });
       form.reset();
@@ -54,8 +54,11 @@ function PitchForm() {
         <Field id="sp-name" label="Full name"><input id="sp-name" name="name" type="text" required autoComplete="name" className="osf-field" /></Field>
         <Field id="sp-email" label="Email"><input id="sp-email" name="email" type="email" required autoComplete="email" className="osf-field" /></Field>
         <Field id="sp-role" label="Role & company"><input id="sp-role" name="role" type="text" required maxLength={160} placeholder="e.g. Principal Engineer, Fidelity" className="osf-field" /></Field>
-        <Field id="sp-li" label="LinkedIn or website"><input id="sp-li" name="link" type="url" maxLength={300} placeholder="https://" className="osf-field" /></Field>
+        <Field id="sp-li" label="LinkedIn profile URL"><input id="sp-li" name="link" type="url" required pattern="https://(www[.])?linkedin[.]com/in/[^/?#]+/?([?#].*)?" title="Please enter your LinkedIn profile URL" maxLength={300} placeholder="https://www.linkedin.com/in/your-name/" className="osf-field" /></Field>
+        <Field id="sp-mobile" label="Mobile number (with country code)"><input id="sp-mobile" name="mobile_number" type="tel" required autoComplete="tel" maxLength={32} title="Include your country code, for example +919876543210" placeholder="+91 98765 43210" className="osf-field" /></Field>
+        <Field id="sp-call" label="Best time to call (IST)"><select id="sp-call" name="preferred_call_time" required defaultValue="" className="osf-field"><option value="" disabled>Select a time window…</option>{['9 AM–12 PM', '1 PM–4 PM', '5 PM–8 PM'].map(time => <option key={time} value={time}>{time}</option>)}</select></Field>
       </div>
+      <p className="m-0 text-xs leading-relaxed text-osf-muted">We'll use these contact details to discuss your speaker pitch. Callback windows are in India Standard Time (IST).</p>
       <Field id="sp-title" label="Session title"><input id="sp-title" name="title" type="text" required maxLength={160} placeholder="Make it something you'd click on" className="osf-field" /></Field>
       <Field id="sp-domain" label="Domain">
         <select id="sp-domain" name="domain" required defaultValue="" className="osf-field">
