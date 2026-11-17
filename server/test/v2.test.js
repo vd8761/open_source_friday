@@ -9,7 +9,7 @@ const { initV2DB, computeStats, nameKey } = require('../v2-data');
 const { createV2PublicRouter, createV2AdminRouter, rateLimit, futureFridays } = require('../v2-routes');
 
 const photo = 'data:image/jpeg;base64,' + Buffer.from('jpeg-bytes').toString('base64');
-async function setup({ recaptcha = true, limit = 100, alertPitch } = {}) {
+async function setup({ recaptcha = true, limit = 100, alertPitch, onSpeakerThanksQueued } = {}) {
   const db = new PGlite();
   await db.exec(`CREATE TABLE students(id SERIAL PRIMARY KEY,full_name TEXT,email TEXT,whatsapp_number TEXT,country_code TEXT);
     CREATE TABLE episodes(id SERIAL PRIMARY KEY,episode_number INTEGER UNIQUE,title TEXT,description TEXT,event_date TIMESTAMP,
@@ -28,8 +28,8 @@ async function setup({ recaptcha = true, limit = 100, alertPitch } = {}) {
   const auth = (req, res, next) => req.headers.authorization === 'Bearer admin' ? (req.user = { id: 1 }, next()) : res.status(401).json({ success: false });
   const actions = [];
   app.use('/api', createV2PublicRouter({ pool, verifyRecaptcha: async (token, action) => { actions.push(action); return recaptcha && token === 'ok'; },
-    now: () => Date.parse('2026-11-02T12:00:00Z'), applicationLimit: rateLimit({ limit, windowMs: 3600000 }), alertPitch }));
-  app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken: auth }));
+    now: () => Date.parse('2026-11-02T12:00:00Z'), applicationLimit: rateLimit({ limit, windowMs: 3600000 }), alertPitch, onSpeakerThanksQueued }));
+  app.use('/api/admin', createV2AdminRouter({ pool, authenticateToken: auth, onSpeakerThanksQueued }));
   const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const call = async (method, p, body, admin = false) => {
@@ -336,8 +336,8 @@ test('speaker contact requirements reject missing details, website links and inv
 
 
 test('speaker enquiries deduplicate by email OR mobile, keep separate fields, and only alert on first save', async () => {
-  const alerts=[];
-  const {call,db,close}=await setup({alertPitch:async p=>alerts.push(p)});
+  const alerts=[];let receiptQueues=0;
+  const {call,db,close}=await setup({alertPitch:async p=>alerts.push(p),onSpeakerThanksQueued:()=>receiptQueues++});
   const pitch={name:'Asha',email:' ASHA@example.com ',speaker_role:'Engineer',company:'Example',link:null,title:'First idea',abstract:'Practical examples',domain:'open_source',recaptcha_token:'ok',mobile_number:'+91 98765 43210',preferred_call_time:'1 PM–4 PM'};
   try {
     for(const fields of [{speaker_role:''},{company:''},{mobile_number:''}]) assert.equal((await call('POST','/speaker-applications',{...pitch,...fields})).status,400);
@@ -345,9 +345,9 @@ test('speaker enquiries deduplicate by email OR mobile, keep separate fields, an
     assert.equal((await call('POST','/speaker-applications',{...pitch,title:'Different session',mobile_number:'+919876543211'})).body.duplicate,true);
     assert.equal((await call('POST','/speaker-applications',{...pitch,email:'other@example.com',title:'Another session'})).body.duplicate,true);
     await new Promise(r=>setTimeout(r,20));
-    assert.equal(alerts.length,1);
+    assert.equal(alerts.length,1);assert.equal(receiptQueues,1);
     const rows=(await db.query('SELECT * FROM speaker_applications')).rows;
-    assert.equal(rows.length,1);assert.equal(rows[0].speaker_role,'Engineer');assert.equal(rows[0].company,'Example');assert.equal(rows[0].link,null);
+    assert.equal(rows.length,1);assert.equal(rows[0].speaker_role,'Engineer');assert.equal(rows[0].company,'Example');assert.equal(rows[0].link,null);assert.equal(rows[0].thank_you_status,'pending');
     assert.equal(alerts[0].speaker_role,'Engineer');assert.equal(alerts[0].company,'Example');
     await call('DELETE',`/admin/speaker-applications/${rows[0].id}`,null,true);
     assert.equal((await call('POST','/speaker-applications',pitch)).body.duplicate,true);
@@ -412,5 +412,25 @@ test('legacy enquiries block repeats without removing earlier duplicates; DB uni
     const result=await call('POST','/speaker-applications',{...p,email:'LEGACY@example.com',mobile_number:'+919876543299',recaptcha_token:'ok'});
     assert.equal(result.body.duplicate,true);
     assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM speaker_applications')).rows[0].n,3);
+  } finally {await close();}
+});
+
+
+test('admin may queue one thank-you for an old enquiry; sent, queued, uncertain or trashed enquiries cannot be sent again', async () => {
+  let runs=0;const {db,call,close}=await setup({onSpeakerThanksQueued:()=>runs++});
+  try {
+    await db.query(`INSERT INTO speaker_applications(name,email,role_company,title,abstract) VALUES('Old speaker','old@example.com','Engineer','Idea','Notes')`);
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{})).status,401);
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,200);
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,409);
+    await new Promise(r=>setTimeout(r,10));assert.equal(runs,1);
+    for(const status of ['sent','sending','unknown']) {
+      await db.query('UPDATE speaker_applications SET thank_you_status=$1 WHERE id=1',[status]);
+      assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,409);
+    }
+    await db.query("UPDATE speaker_applications SET thank_you_status='pending' WHERE id=1");
+    await call('DELETE','/admin/speaker-applications/1',null,true);
+    assert.equal((await db.query('SELECT thank_you_status FROM speaker_applications WHERE id=1')).rows[0].thank_you_status,'skipped');
+    assert.equal((await call('POST','/admin/speaker-applications/1/thank-you',{},true)).status,409);
   } finally {await close();}
 });

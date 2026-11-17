@@ -47,9 +47,10 @@ test('older pitches explicitly report missing contact details and never render u
 });
 
 
-test('speaker acknowledgement draft is escaped, branded and includes the club social links without sending', () => {
+test('speaker acknowledgement is escaped, branded and includes the club logo and social links', () => {
   const {speakerThankYou}=require('../speaker-thank-you');
   const draft=speakerThankYou({...pitch,speaker_role:'Engineer',company:'Studio'});
+  assert.ok(draft.html.includes('https://osf.descienceosclub.com/dos_logo.png'));
   assert.match(draft.html,/Asha &lt;b&gt;/);assert.ok(!draft.html.includes('Asha <b>'));
   assert.ok(draft.html.includes('https://www.linkedin.com/company/descience-open-source-club/'));
   assert.ok(draft.html.includes('https://www.youtube.com/channel/UCvF5jATxekeLcFvjLrMGjpA'));

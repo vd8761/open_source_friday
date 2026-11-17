@@ -49,7 +49,7 @@ const futureFridays = (value, now = Date.now()) => {
   });
 };
 
-function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicationLimit = rateLimit({ limit: 5, windowMs: 3600000 }), alertPitch = async () => 0 }) {
+function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicationLimit = rateLimit({ limit: 5, windowMs: 3600000 }), alertPitch = async () => 0, onSpeakerThanksQueued = () => {} }) {
   const router = express.Router();
   let statsCache = null;
 
@@ -131,6 +131,7 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
       abstract: v.text(b.abstract, 'Abstract', 2000, { required: true }), preferred_fridays: futureFridays(b.preferred_fridays, now()), mobile_number, preferred_call_time };
     const id = await saveSpeakerPitch(pool, pitch);
     if (!id) return { duplicate: true, message: 'We’ve already received your enquiry. Thank you — our team will be in touch. For updates, please email info@descienceosclub.com.' };
+    Promise.resolve().then(()=>onSpeakerThanksQueued()).catch(()=>console.error('[Speaker receipts] Worker will retry queued receipts.'));
     // Only newly saved enquiries alert the team; duplicate retries never send again.
     pool.query('SELECT label FROM domains WHERE key=$1', [pitch.domain])
       .then(r => alertPitch({ ...pitch, id, domain_label: r.rows[0]?.label }))
@@ -141,7 +142,7 @@ function createV2PublicRouter({ pool, verifyRecaptcha, now = Date.now, applicati
   return router;
 }
 
-function createV2AdminRouter({ pool, authenticateToken, onZoomQueued }) {
+function createV2AdminRouter({ pool, authenticateToken, onZoomQueued, onSpeakerThanksQueued }) {
   const router = express.Router();
   router.use(['/speakers', '/episodes/:id/speakers', '/episodes/:id/v2-details', '/episodes/:id/lounge', '/tips', '/speaker-applications', '/site-settings', '/contacts', '/domains', '/students/search', '/episodes/:id/participants', '/episodes/:id/hall-of-fame'], authenticateToken);
   const transaction = async fn => {
@@ -240,7 +241,7 @@ function createV2AdminRouter({ pool, authenticateToken, onZoomQueued }) {
     return { id: rows[0].id };
   }));
 
-  registerSpeakerAdminRoutes(router, { pool, route, intId });
+  registerSpeakerAdminRoutes(router, { pool, route, intId, onSpeakerThanksQueued });
 
   router.get('/site-settings', route(async () => ({ settings: Object.fromEntries((await pool.query('SELECT key,value FROM site_settings')).rows.map(r => [r.key, r.value])) })));
   router.put('/site-settings/club_stats', route(async req => {

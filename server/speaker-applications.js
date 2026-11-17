@@ -15,8 +15,8 @@ async function saveSpeakerPitch(pool, pitch) {
       WHERE lower(btrim(email))=$1 OR (mobile_number IS NOT NULL AND regexp_replace(mobile_number,'[^0-9+]','','g')=$2) LIMIT 1`, [email, mobile]);
     if (prior.rows.length) { await db.query('COMMIT'); return null; }
     const { rows } = await db.query(`INSERT INTO speaker_applications
-      (name,email,role_company,link,title,domain,abstract,preferred_fridays,mobile_number,preferred_call_time,speaker_role,company,dedupe_key,mobile_dedupe_key)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8::date[],$9,$10,$11,$12,$13,$14)
+      (name,email,role_company,link,title,domain,abstract,preferred_fridays,mobile_number,preferred_call_time,speaker_role,company,dedupe_key,mobile_dedupe_key,thank_you_status)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8::date[],$9,$10,$11,$12,$13,$14,'pending')
       ON CONFLICT DO NOTHING RETURNING id`, [pitch.name, email, pitch.role_company, pitch.link, pitch.title, pitch.domain,
       pitch.abstract, pitch.preferred_fridays, mobile, pitch.preferred_call_time, pitch.speaker_role, pitch.company,
       fingerprint(email, 'speaker'), fingerprint(mobile, 'speaker')]);
@@ -45,7 +45,7 @@ function pitchFilters(q) {
   return { values, where: `WHERE ${clauses.join(' AND ')}`, order: sorts[q.sort || 'newest'] };
 }
 
-function registerSpeakerAdminRoutes(router, { pool, route, intId }) {
+function registerSpeakerAdminRoutes(router, { pool, route, intId, onSpeakerThanksQueued = () => {} }) {
   router.get('/speaker-applications', route(async req => {
     const { page, page_size } = pageOptions(req.query), { values, where, order } = pitchFilters(req.query);
     const total = (await pool.query(`SELECT COUNT(*)::int AS n FROM speaker_applications ${where}`, values)).rows[0].n;
@@ -69,6 +69,13 @@ function registerSpeakerAdminRoutes(router, { pool, route, intId }) {
     if (!rows.length) throw new InputError('Enquiry not found.', 404);
     return { application: rows[0] };
   }));
+  router.post('/speaker-applications/:id/thank-you', route(async req => {
+    const {rows}=await pool.query(`UPDATE speaker_applications SET thank_you_status='pending',thank_you_error=NULL
+      WHERE id=$1 AND deleted_at IS NULL AND thank_you_status IN ('not_requested','failed','skipped') RETURNING id`,[intId(req.params.id)]);
+    if(!rows.length) throw new InputError('This enquiry is missing, trashed, already queued, sent, or has an uncertain delivery outcome. Please refresh and check its email status.',409);
+    Promise.resolve().then(()=>onSpeakerThanksQueued()).catch(()=>console.error('[Speaker receipts] Worker will retry queued receipts.'));
+    return {message:'Thank-you email queued.',id:rows[0].id};
+  }));
   router.patch('/speaker-applications/:id', route(async req => {
     if (!STATUSES.includes(req.body?.status)) throw new InputError('Choose a valid status.', 400);
     const { rows } = await pool.query('UPDATE speaker_applications SET status=$2,updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL RETURNING id,status', [intId(req.params.id), req.body.status]);
@@ -76,7 +83,7 @@ function registerSpeakerAdminRoutes(router, { pool, route, intId }) {
     return rows[0];
   }));
   router.delete('/speaker-applications/:id', route(async req => {
-    const { rows } = await pool.query('UPDATE speaker_applications SET deleted_at=NOW(),updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL RETURNING id', [intId(req.params.id)]);
+    const { rows } = await pool.query(`UPDATE speaker_applications SET deleted_at=NOW(),updated_at=NOW(),thank_you_status=CASE WHEN thank_you_status='pending' THEN 'skipped' ELSE thank_you_status END,thank_you_error=CASE WHEN thank_you_status='pending' THEN 'Queued thank-you cancelled when this enquiry was moved to Trash.' ELSE thank_you_error END WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [intId(req.params.id)]);
     if (!rows.length) throw new InputError('Active enquiry not found.', 404);
     return rows[0];
   }));
